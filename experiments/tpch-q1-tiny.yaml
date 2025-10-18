@@ -1,0 +1,71 @@
+# TPC-H Query 1 Benchmark (Tiny)
+#
+# This experiment executes TPC-H Query 1 against Trino's built-in
+# TPC-H tiny catalog for quick testing.
+
+name: "tpch-q1-tiny"
+description: "TPC-H Query 1 - Pricing Summary Report on tiny dataset"
+
+# System configuration
+system: "trino"
+
+# Connection parameters
+connection:
+  host: "localhost"
+  port: 8080
+  user: "tribench"
+  catalog: "tpch"
+  schema: "tiny"  # Tiny scale factor (minimal data for testing)
+
+# Execution parameters
+runs: 3
+warmup_runs: 1
+timeout_seconds: 60
+max_retries: 2
+
+# TPC-H Query 1: Pricing Summary Report Query
+queries:
+  - |
+    SELECT
+        returnflag,
+        linestatus,
+        SUM(quantity) AS sum_qty,
+        SUM(extendedprice) AS sum_base_price,
+        SUM(extendedprice * (1 - discount)) AS sum_disc_price,
+        SUM(extendedprice * (1 - discount) * (1 + tax)) AS sum_charge,
+        AVG(quantity) AS avg_qty,
+        AVG(extendedprice) AS avg_price,
+        AVG(discount) AS avg_disc,
+        COUNT(*) AS count_order
+    FROM
+        lineitem
+    WHERE
+        shipdate <= DATE '1998-09-02'
+    GROUP BY
+        returnflag,
+        linestatus
+    ORDER BY
+        returnflag,
+        linestatus
+
+# Validation rules
+validation:
+  min_success_rate: 0.95
+  max_execution_time_variance: 0.3
+
+# Metrics to collect
+metrics:
+  - execution_time
+  - rows_returned
+  - cpu_time
+  - memory_usage
+  - data_scanned
+
+# Metadata
+metadata:
+  benchmark: "TPC-H"
+  query_number: 1
+  query_name: "Pricing Summary Report"
+  scale_factor: "tiny"
+  expected_rows: 4
+  tags: ["tpch", "aggregation", "test"]

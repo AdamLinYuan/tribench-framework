@@ -1,0 +1,73 @@
+# TPC-H Query 1 Benchmark on Custom Loaded Dataset
+#
+# This experiment executes TPC-H Query 1 against a custom-loaded
+# dataset in Trino's memory catalog.
+
+name: "tpch-q1-custom-dataset"
+description: "TPC-H Query 1 - Pricing Summary Report on custom loaded dataset"
+
+# System configuration
+system: "trino"
+
+# Connection parameters
+connection:
+  host: "localhost"
+  port: 8080
+  user: "tribench"
+  catalog: "memory"
+  schema: "benchmarks"  # Our custom loaded schema
+
+# Execution parameters
+runs: 3
+warmup_runs: 1
+timeout_seconds: 60
+max_retries: 2
+
+# TPC-H Query 1: Pricing Summary Report Query
+queries:
+  - |
+    SELECT
+        l_returnflag as returnflag,
+        l_linestatus as linestatus,
+        SUM(l_quantity) AS sum_qty,
+        SUM(l_extendedprice) AS sum_base_price,
+        SUM(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
+        SUM(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
+        AVG(l_quantity) AS avg_qty,
+        AVG(l_extendedprice) AS avg_price,
+        AVG(l_discount) AS avg_disc,
+        COUNT(*) AS count_order
+    FROM
+        lineitem
+    WHERE
+        l_shipdate <= DATE '1998-09-02'
+    GROUP BY
+        l_returnflag,
+        l_linestatus
+    ORDER BY
+        l_returnflag,
+        l_linestatus
+
+# Validation rules
+validation:
+  min_success_rate: 0.95
+  max_execution_time_variance: 0.3
+
+# Metrics to collect
+metrics:
+  - execution_time
+  - rows_returned
+  - cpu_time
+  - memory_usage
+  - data_scanned
+
+# Metadata
+metadata:
+  benchmark: "TPC-H"
+  query_number: 1
+  query_name: "Pricing Summary Report"
+  scale_factor: 0.01
+  expected_rows: 4
+  dataset: "tpch-tiny"
+  dataset_location: "memory.benchmarks"
+  tags: ["tpch", "aggregation", "custom-dataset", "loaded-data"]

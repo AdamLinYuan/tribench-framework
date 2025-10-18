@@ -1,0 +1,71 @@
+# System Definitions
+# This file defines the systems available for benchmarking
+
+systems:
+  - name: "trino-434"
+    type: "trino"
+    version: "434"
+    description: "Trino 434 with standard configuration"
+    config:
+      coordinator:
+        heap_size: "4G"
+        query_timeout: "30m"
+      catalogs:
+        - memory
+        - tpch
+        - iceberg
+    dependencies: []
+    
+  - name: "trino-430"  
+    type: "trino"
+    version: "430"
+    description: "Trino 430 for comparison testing"
+    config:
+      coordinator:
+        heap_size: "4G"
+        query_timeout: "30m"
+      catalogs:
+        - memory
+        - tpch
+        - iceberg
+    dependencies: []
+    
+  - name: "minio-storage"
+    type: "minio"
+    version: "latest"
+    description: "MinIO object storage for Iceberg"
+    config:
+      data_dir: "/data/minio"
+      console_enabled: true
+    dependencies: []
+    
+  - name: "postgresql-results"
+    type: "postgresql"
+    version: "15"
+    description: "PostgreSQL database for storing results"
+    config:
+      database: "tribench"
+      max_connections: 100
+    dependencies: []
+
+# System Groups - collections of systems that work together
+system_groups:
+  - name: "local-development"
+    description: "Single-node setup for development"
+    systems:
+      - "trino-434"
+      - "postgresql-results"
+      
+  - name: "lakehouse-stack"
+    description: "Complete lakehouse stack with object storage"
+    systems:
+      - "trino-434"
+      - "minio-storage"
+      - "postgresql-results"
+      
+  - name: "version-comparison"
+    description: "Multiple Trino versions for comparison"
+    systems:
+      - "trino-434"
+      - "trino-430"
+      - "postgresql-results"

@@ -1,0 +1,49 @@
+# Simple Test Experiment
+# 
+# This is a minimal experiment configuration that tests basic
+# query execution against Trino's built-in TPC-H catalog.
+
+name: "test-simple"
+description: "Simple test experiment with basic SELECT queries"
+
+# System configuration
+system: "trino"
+
+# Connection parameters for Trino
+connection:
+  host: "localhost"
+  port: 8080
+  user: "tribench"
+  catalog: "tpch"  # Built-in TPC-H catalog
+  schema: "tiny"   # Tiny scale factor (minimal data)
+
+# Execution parameters
+runs: 3              # Execute each query 3 times
+warmup_runs: 1       # One warmup run before measurements
+timeout_seconds: 60  # 60 second timeout per query
+max_retries: 2       # Retry up to 2 times on failure
+
+# Inline SQL queries
+queries:
+  - "SELECT COUNT(*) as row_count FROM nation"
+  - "SELECT * FROM nation LIMIT 5"
+  - name: query_3
+    sql: "SELECT name, regionkey FROM nation WHERE nationkey < 10"
+
+# Validation rules
+validation:
+  min_success_rate: 0.9         # At least 90% of runs must succeed
+  max_execution_time_variance: 0.3  # Max 30% variance in execution time
+
+# Metrics to collect
+metrics:
+  - execution_time
+  - rows_returned
+  - cpu_time
+  - memory_usage
+
+# Additional metadata
+metadata:
+  purpose: "Basic functionality test"
+  created_by: "tribench"
+  tags: ["test", "simple", "smoke-test"]

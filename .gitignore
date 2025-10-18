@@ -1,0 +1,109 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/*.egg-info/
+sdist/
+wheels/
+*.egg-info/
+*.egg
+MANIFEST
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+nosetests.xml
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# TriBench Framework Specific
+# -----------------------------
+
+# Downloaded binaries (large files)
+downloads/*.tar.gz
+downloads/*.zip
+downloads/*.jar
+
+# Keep README files in downloads
+!downloads/README.md
+
+# Runtime system installations
+systems/trino-*/
+systems/postgresql-*/
+systems/minio-*/
+systems/**/docker-compose.yml
+
+# Keep example system configs but ignore running instances
+!systems/*/README.md
+
+# Logs
+log/
+*.log
+
+# Results (comment out if you want to track results)
+results/*.json
+
+# Keep example results for documentation
+!results/README.md
+!results/*example*.json
+
+# Datasets (large generated data)
+datasets/tpch-*/
+datasets/*.csv
+datasets/*.parquet
+
+# Keep dataset metadata
+!datasets/README.md
+
+# Temporary files
+*.tmp
+*.temp
+.tribench-*
+
+# Conda
+.conda/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# Environment files with secrets (if you add any)
+.env
+.env.local
+secrets.conf

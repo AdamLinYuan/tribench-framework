@@ -1,0 +1,38 @@
+tpch-tiny:
+  name: tpch-tiny
+  type: generated
+  format: parquet
+  scale_factor: 0.01
+  size_bytes: 3242464
+  location: /Users/adamyuan/Documents/UofG/Yr 4/Dissertation/Code/tribench-framework/datasets/tpch-sf0_01/parquet
+  tables:
+  - nation
+  - region
+  - customer
+  - supplier
+  - part
+  - partsupp
+  - orders
+  - lineitem
+  row_counts:
+    nation: 25
+    region: 5
+    customer: 1500
+    supplier: 100
+    part: 2000
+    partsupp: 8000
+    orders: 15000
+    lineitem: 60175
+  checksums:
+    nation: 38d2d9e01f803fce0f60543be13d22de6896aa73632a9420d0bd8746c5cedb6d
+    region: 4d98abdc8a21b3f21e5fc0eeeacc8c901a7c7f238125c1124195b0a47a5ab45f
+    customer: c3167b1680e4b229cd179dc0e5e89a2576d2b5fe4f0dffd1260412c631ec0365
+    supplier: 96b5f5e05b201ca30e93c9499d407fed1617fd89a54a7e76b203634d13553830
+    part: 2344d527b16fd7d681076d0c52d97fa9b2d5b3060caa7c5c454cd37187437b8d
+    partsupp: 79230c2777b8c54aab2cb82ba9c84e1cb12948666bf2e19d0e055566c58a3149
+    orders: 2ccf061c05aebd22cdcde43f89ab744740ce0e732490bbef090f04f2b1cd2b00
+    lineitem: 7ecf507e57471fe0c446ca6222106d4e0d14b482aadf9f642f87339e19a923f4
+  properties:
+    tpch_version: '3.0'
+  created_at: '2025-10-17T13:05:40.119011'
+  generator: tpch-dbgen
