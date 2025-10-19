@@ -136,6 +136,7 @@ def generate(ctx, dataset, format, output, overwrite, config, dry_run, verbose):
         
         metadata = DatasetMetadata(
             name=dataset,
+            benchmark_type='tpch',  # TPC-H benchmark type
             type='generated',
             format=format,
             scale_factor=scale_factor,
@@ -233,6 +234,17 @@ def load(ctx, dataset, system, catalog, schema, validate, config, dry_run, verbo
         
         click.echo(f"Loading {dataset} into {system}...")
         
+        # Get dataset schema based on benchmark type
+        from tribench.data.dataset import BenchmarkType, SchemaFactory
+        
+        try:
+            benchmark_type = BenchmarkType(metadata.benchmark_type)
+            dataset_schema = SchemaFactory.create(benchmark_type)
+        except (ValueError, KeyError) as e:
+            click.secho(f"✗ Unsupported benchmark type: {metadata.benchmark_type}", fg='red')
+            click.echo(f"  Supported types: {', '.join([bt.value for bt in BenchmarkType])}")
+            return
+        
         # Get Trino connection parameters
         trino_config = full_config.get("tribench", {}).get("systems", {}).get("trino", {})
         coordinator_config = trino_config.get("coordinator", {})
@@ -243,11 +255,11 @@ def load(ctx, dataset, system, catalog, schema, validate, config, dry_run, verbo
             'user': 'admin'
         }
         
-        # Load data
+        # Load data using schema abstraction
         loader = TrinoDataLoader(connection_params)
         
         click.echo(f"Loading tables into {catalog}.{schema}...")
-        row_counts = loader.load_tpch_dataset(dataset_path, catalog, schema)
+        row_counts = loader.load_dataset(dataset_path, dataset_schema, catalog, schema)
         
         click.secho(f"✓ Dataset loaded successfully", fg='green')
         

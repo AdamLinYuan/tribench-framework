@@ -50,17 +50,21 @@ def run(ctx, experiment, runs, warmup, timeout, config, dry_run, verbose):
     exp_path = Path(experiment)
     
     try:
-        # Load experiment configuration
-        click.echo(f"Loading experiment: {exp_path.name}")
-        exp_config = ExperimentConfig.from_yaml(exp_path)
-        
-        # Override parameters from CLI if provided
+        # Build CLI overrides dictionary
+        cli_overrides = {}
         if runs is not None:
-            exp_config.runs = runs
+            cli_overrides['runs'] = runs
         if warmup is not None:
-            exp_config.warmup_runs = warmup
+            cli_overrides['warmup_runs'] = warmup
         if timeout is not None:
-            exp_config.timeout_seconds = timeout
+            cli_overrides['timeout_seconds'] = timeout
+        
+        # Load experiment configuration with CLI overrides
+        click.echo(f"Loading experiment: {exp_path.name}")
+        exp_config = ExperimentConfig.from_yaml(
+            exp_path,
+            cli_overrides=cli_overrides if cli_overrides else None
+        )
         
         # Display configuration
         click.echo(f"\nExperiment: {exp_config.name}")

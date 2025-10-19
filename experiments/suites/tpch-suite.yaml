@@ -1,0 +1,34 @@
+# TPC-H Experiment Suite
+# Demonstrates suite-level configuration with hierarchical merging
+
+name: tpch-suite
+description: TPC-H benchmark queries with suite-level defaults
+
+# Suite-level defaults - applied to all experiments
+# Individual experiments can override these values
+defaults:
+  system: trino
+  runs: 3
+  warmup_runs: 1
+  timeout_seconds: 300
+  validation:
+    min_success_rate: 0.95
+  metadata:
+    suite: tpch
+    benchmark_version: "3.0"
+
+# Experiments in this suite
+experiments:
+  # Simple reference - inherits all suite defaults
+  - path: ../tpch-q1-tiny.yaml
+  
+  # Override runs for this specific experiment
+  - path: ../test-simple.yaml
+    runs: 5
+    description: "Simple test with more runs"
+  
+  # Override timeout for longer-running query
+  - path: ../tpch-q1-sf1.yaml
+    timeout_seconds: 600
+    runs: 5
+

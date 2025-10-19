@@ -1,5 +1,6 @@
 tpch-tiny:
   name: tpch-tiny
+  benchmark_type: tpch
   type: generated
   format: parquet
   scale_factor: 0.01

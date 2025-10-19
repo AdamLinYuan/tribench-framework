@@ -93,7 +93,7 @@ TriBench provides a comprehensive CLI with the following command groups:
 tribench sys setup <system>      # Setup a system (trino, postgresql, minio)
 tribench sys start <system>      # Start a system
 tribench sys stop <system>       # Stop a system
-tribench sys status [system]     # Check system status
+tribench sys status <system>     # Check system status
 tribench sys teardown <system>   # Tear down a system
 ```
 
@@ -104,6 +104,13 @@ tribench exp list                # List available experiments
 tribench exp status <id>         # Check experiment status
 tribench exp cancel <id>         # Cancel running experiment
 tribench exp config <file>       # Show experiment configuration
+```
+
+### Experiment Suites (`suite`)
+```bash
+tribench suite run <file>        # Execute all experiments in a suite
+tribench suite list              # List available experiment suites
+tribench suite show <file>       # Show suite details and configuration
 ```
 
 ### Dataset Management (`data`)
@@ -144,9 +151,15 @@ tribench sys start trino --verbose
 tribench data generate tpch-sf1 --format parquet
 tribench data load tpch-sf1 --system trino --catalog iceberg
 
-# Run experiments
+# Run individual experiments
 tribench exp run experiments/tpch-sf1.yaml --runs 3
 tribench exp status exp-001 --follow
+
+# Run experiment suites
+tribench suite run experiments/suites/tpch-suite.yaml
+tribench suite run experiments/suites/tpch-suite.yaml --runs 5 --timeout 600
+tribench suite run experiments/suites/tpch-suite.yaml --filter "q1,q6" --dry-run
+tribench suite show experiments/suites/tpch-suite.yaml
 
 # Analyze results
 tribench res compare exp-001 exp-002 exp-003
@@ -171,12 +184,66 @@ tribench res export exp-001 --format json --output results.json
 
 ## Key Features
 
-- **Structured Experiment Definition**: XML/YAML-based experiment configurations
+- **Structured Experiment Definition**: YAML-based experiment configurations
+- **Experiment Suites**: Group related experiments with shared configuration defaults
+- **Configuration Hierarchy**: Suite defaults → Experiment YAML → CLI overrides
 - **Environment Management**: Host-specific configurations and system lifecycle
 - **Resource Monitoring**: CPU, memory, I/O, and network usage tracking
 - **Result Storage**: Structured storage in databases for analysis
 - **Reproducibility**: Version-controlled bundles for sharing
 - **Extensibility**: Plugin architecture for custom benchmarks
+
+## Experiment Suites
+
+TriBench supports grouping related experiments into suites with shared configuration:
+
+```yaml
+# experiments/suites/tpch-suite.yaml
+name: tpch-suite
+description: TPC-H benchmark queries with suite-level defaults
+
+defaults:
+  system: trino
+  runs: 3
+  warmup_runs: 1
+  timeout_seconds: 300
+  validation:
+    min_success_rate: 0.95
+
+experiments:
+  - path: ../tpch-q1-tiny.yaml
+    # Uses all suite defaults
+  
+  - path: ../test-simple.yaml
+    timeout_seconds: 60  # Override just this field
+  
+  - path: ../tpch-q1-sf1.yaml
+    runs: 10  # More runs for larger dataset
+    warmup_runs: 2
+```
+
+**Configuration Precedence** (highest precedence last):
+1. Global defaults (in framework)
+2. Suite defaults (from suite YAML)
+3. Experiment YAML (individual experiment file)
+4. CLI overrides (command-line flags)
+
+**Running Suites**:
+```bash
+# Run all experiments in suite
+tribench suite run experiments/suites/tpch-suite.yaml
+
+# Override suite/experiment settings via CLI (applies to all experiments)
+tribench suite run experiments/suites/tpch-suite.yaml --runs 10 --timeout 1200
+
+# Run only specific experiments from suite
+tribench suite run experiments/suites/tpch-suite.yaml --filter "q1,q6,q17"
+
+# Preview configuration without execution
+tribench suite run experiments/suites/tpch-suite.yaml --dry-run
+```
+
+See `CONFIG_HIERARCHY.md` for complete documentation on configuration merging behavior.
 
 ## Development Status
 

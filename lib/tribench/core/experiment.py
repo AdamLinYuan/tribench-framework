@@ -41,12 +41,23 @@ class ExperimentConfig:
     metadata: Dict[str, Any] = field(default_factory=dict)
     
     @classmethod
-    def from_yaml(cls, yaml_path: Path) -> "ExperimentConfig":
+    def from_yaml(cls, 
+                  yaml_path: Path,
+                  suite_config: Optional[Dict[str, Any]] = None,
+                  cli_overrides: Optional[Dict[str, Any]] = None) -> "ExperimentConfig":
         """
-        Load experiment configuration from YAML file.
+        Load experiment configuration from YAML file with hierarchical merging.
+        
+        Configuration precedence (highest to lowest):
+        1. CLI overrides (--runs, --timeout, etc.)
+        2. Experiment YAML file
+        3. Suite-level defaults
+        4. Global defaults (hardcoded)
         
         Args:
             yaml_path: Path to YAML configuration file
+            suite_config: Optional suite-level defaults to merge
+            cli_overrides: Optional CLI overrides (highest precedence)
             
         Returns:
             ExperimentConfig instance
@@ -61,35 +72,47 @@ class ExperimentConfig:
             raise FileNotFoundError(f"Experiment config not found: {yaml_path}")
         
         try:
+            # 1. Load experiment YAML
             with open(yaml_path, 'r') as f:
-                data = yaml.safe_load(f)
+                exp_data = yaml.safe_load(f)
             
-            if not data:
+            if not exp_data:
                 raise ValueError("Empty YAML configuration")
+            
+            # 2. Start with global defaults
+            config_data = {
+                "description": "",
+                "dataset": None,
+                "queries": [],
+                "query_files": [],
+                "runs": 1,
+                "warmup_runs": 0,
+                "timeout_seconds": 300,
+                "max_retries": 3,
+                "connection": {},
+                "validation": {},
+                "metrics": ["execution_time", "rows_returned"],
+                "metadata": {},
+            }
+            
+            # 3. Merge suite-level defaults (if provided)
+            if suite_config:
+                cls._deep_merge(config_data, suite_config)
+                logger.debug(f"Merged suite defaults: {list(suite_config.keys())}")
+            
+            # 4. Merge experiment YAML (overrides suite defaults)
+            cls._deep_merge(config_data, exp_data)
+            
+            # 5. Apply CLI overrides (highest precedence)
+            if cli_overrides:
+                cls._deep_merge(config_data, cli_overrides)
+                logger.debug(f"Applied CLI overrides: {list(cli_overrides.keys())}")
             
             # Validate required fields
             required_fields = ["name", "system"]
-            missing_fields = [f for f in required_fields if f not in data]
+            missing_fields = [f for f in required_fields if f not in config_data]
             if missing_fields:
                 raise ValueError(f"Missing required fields: {missing_fields}")
-            
-            # Set defaults for optional fields
-            config_data = {
-                "name": data["name"],
-                "description": data.get("description", ""),
-                "system": data["system"],
-                "dataset": data.get("dataset"),
-                "queries": data.get("queries", []),
-                "query_files": data.get("query_files", []),
-                "runs": data.get("runs", 1),
-                "warmup_runs": data.get("warmup_runs", 0),
-                "timeout_seconds": data.get("timeout_seconds", 300),
-                "max_retries": data.get("max_retries", 3),
-                "connection": data.get("connection", {}),
-                "validation": data.get("validation", {}),
-                "metrics": data.get("metrics", ["execution_time", "rows_returned"]),
-                "metadata": data.get("metadata", {}),
-            }
             
             logger.info(f"Loaded experiment config: {config_data['name']}")
             return cls(**config_data)
@@ -98,6 +121,27 @@ class ExperimentConfig:
             raise ValueError(f"Invalid YAML format in {yaml_path}: {e}") from e
         except Exception as e:
             raise ValueError(f"Failed to load experiment config: {e}") from e
+    
+    @staticmethod
+    def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> None:
+        """
+        Deep merge override dict into base dict (in-place).
+        
+        For dictionaries: recursively merge
+        For lists: override (don't append)
+        For other types: override
+        
+        Args:
+            base: Base dictionary to merge into (modified in-place)
+            override: Dictionary with values to merge in
+        """
+        for key, value in override.items():
+            if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+                # Recursively merge nested dicts
+                ExperimentConfig._deep_merge(base[key], value)
+            else:
+                # Override (including lists - don't append)
+                base[key] = value
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary."""
