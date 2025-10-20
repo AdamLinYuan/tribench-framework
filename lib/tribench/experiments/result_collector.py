@@ -124,9 +124,20 @@ class ResultCollector:
             Path to saved file
         """
         if filename is None:
-            # Generate filename: experiment-name_timestamp.json
-            timestamp_str = result.timestamp.strftime("%Y%m%d_%H%M%S")
-            filename = f"{result.experiment_name}_{timestamp_str}.json"
+            # Generate filename: experiment-name_query-name_run-number_timestamp.json
+            # Include microseconds to prevent collisions when queries execute quickly
+            timestamp_str = result.timestamp.strftime("%Y%m%d_%H%M%S_%f")
+            
+            # Add query name and run number if available in metadata
+            query_name = result.metadata.get("query_name", "")
+            run_number = result.metadata.get("run_number", "")
+            
+            if query_name and run_number:
+                filename = f"{result.experiment_name}_{query_name}_run{run_number}_{timestamp_str}.json"
+            elif query_name:
+                filename = f"{result.experiment_name}_{query_name}_{timestamp_str}.json"
+            else:
+                filename = f"{result.experiment_name}_{timestamp_str}.json"
         
         # Sanitize filename
         filename = filename.replace(" ", "_").replace("/", "-")

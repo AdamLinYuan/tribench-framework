@@ -18,8 +18,8 @@ connection:
   schema: "sf1"  # Scale factor 1 (1GB)
 
 # Execution parameters
-runs: 10              # 5 measurement runs for statistical significance
-warmup_runs: 2       # 2 warmup runs to prime caches
+runs: 1              # 5 measurement runs for statistical significance
+warmup_runs: 1       # 2 warmup runs to prime caches
 timeout_seconds: 300 # 5 minute timeout
 max_retries: 3
 
@@ -48,6 +48,11 @@ queries:
     ORDER BY
         returnflag,
         linestatus
+
+query_files:
+  - "apps/tpch/queries-builtin/q01.sql"
+  - "apps/tpch/queries-builtin/q15.sql"
+  
 
 # Validation rules
 validation:

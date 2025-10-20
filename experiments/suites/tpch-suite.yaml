@@ -23,9 +23,9 @@ experiments:
   - path: ../tpch-q1-tiny.yaml
   
   # Override runs for this specific experiment
-  - path: ../test-simple.yaml
+  - path: ../tpch-q1-memory-tiny.yaml
     runs: 5
-    description: "Simple test with more runs"
+    description: "All TPCH Queries on Memory Connector"
   
   # Override timeout for longer-running query
   - path: ../tpch-q1-sf1.yaml

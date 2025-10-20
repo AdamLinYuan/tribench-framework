@@ -18,7 +18,7 @@ connection:
   schema: "tiny"  # Tiny scale factor (minimal data for testing)
 
 # Execution parameters
-runs: 3
+runs: 1
 warmup_runs: 1
 timeout_seconds: 60
 max_retries: 2
@@ -47,6 +47,10 @@ queries:
     ORDER BY
         returnflag,
         linestatus
+
+query_files:
+  - "apps/tpch/queries-builtin/q01.sql"
+  - "apps/tpch/queries-builtin/q15.sql"
 
 # Validation rules
 validation:

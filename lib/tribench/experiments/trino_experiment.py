@@ -153,7 +153,7 @@ class TrinoExperiment(Experiment):
             
         finally:
             self.executor.disconnect()
-    
+
     def _collect_queries(self) -> List[Dict[str, Any]]:
         """
         Collect all queries from inline and file sources.
@@ -184,20 +184,40 @@ class TrinoExperiment(Experiment):
         # Add queries from files
         for query_file in self.config.query_files:
             query_path = Path(query_file)
+            
+            # If not absolute, try multiple resolution strategies
             if not query_path.is_absolute():
-                # Resolve relative to experiments directory
+                # Strategy 1: Relative to project root
                 root_path = Path(__file__).parent.parent.parent.parent
-                query_path = root_path / "experiments" / query_file
+                resolved_path = root_path / query_file
+                
+                if not resolved_path.exists():
+                    # Strategy 2: Already relative to experiments/ directory
+                    resolved_path = root_path / "experiments" / query_file
+                
+                if not resolved_path.exists():
+                    logger.error(f"Query file not found: {query_file}")
+                    logger.error(f"  Tried: {root_path / query_file}")
+                    logger.error(f"  Tried: {root_path / 'experiments' / query_file}")
+                    continue
+                
+                query_path = resolved_path
             
             if not query_path.exists():
-                logger.warning(f"Query file not found: {query_path}")
+                logger.error(f"Query file not found: {query_path}")
                 continue
             
-            queries.append({
-                "name": query_path.stem,
-                "sql": query_path.read_text(),
-                "source": str(query_path),
-            })
+            try:
+                sql_content = query_path.read_text()
+                queries.append({
+                    "name": query_path.stem,  # Filename without extension
+                    "sql": sql_content,
+                    "source": str(query_path),
+                })
+                logger.info(f"Loaded query from file: {query_path.name}")
+            except Exception as e:
+                logger.error(f"Failed to read query file {query_path}: {e}")
+                continue
         
         return queries
     

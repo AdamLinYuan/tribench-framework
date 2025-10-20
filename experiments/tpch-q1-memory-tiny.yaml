@@ -1,9 +1,7 @@
-# TPC-H Query 1 Benchmark on Custom Loaded Dataset
-#
 # This experiment executes TPC-H Query 1 against a custom-loaded
 # dataset in Trino's memory catalog.
 
-name: "tpch-q1-custom-dataset"
+name: "tpch-q1-memory-tiny"
 description: "TPC-H Query 1 - Pricing Summary Report on custom loaded dataset"
 
 # System configuration
@@ -15,38 +13,38 @@ connection:
   port: 8080
   user: "tribench"
   catalog: "memory"
-  schema: "benchmarks"  # Our custom loaded schema
+  schema: "default"  # Our custom loaded schema
 
 # Execution parameters
-runs: 3
+runs: 1
 warmup_runs: 1
 timeout_seconds: 60
-max_retries: 2
+max_retries: 0
 
 # TPC-H Query 1: Pricing Summary Report Query
-queries:
-  - |
-    SELECT
-        l_returnflag as returnflag,
-        l_linestatus as linestatus,
-        SUM(l_quantity) AS sum_qty,
-        SUM(l_extendedprice) AS sum_base_price,
-        SUM(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
-        SUM(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
-        AVG(l_quantity) AS avg_qty,
-        AVG(l_extendedprice) AS avg_price,
-        AVG(l_discount) AS avg_disc,
-        COUNT(*) AS count_order
-    FROM
-        lineitem
-    WHERE
-        l_shipdate <= DATE '1998-09-02'
-    GROUP BY
-        l_returnflag,
-        l_linestatus
-    ORDER BY
-        l_returnflag,
-        l_linestatus
+query_files:
+  - "apps/tpch/queries/q01.sql"
+  - "apps/tpch/queries/q02.sql"
+  - "apps/tpch/queries/q03.sql"
+  - "apps/tpch/queries/q04.sql"
+  - "apps/tpch/queries/q05.sql"
+  - "apps/tpch/queries/q06.sql"
+  - "apps/tpch/queries/q07.sql"
+  - "apps/tpch/queries/q08.sql"
+  - "apps/tpch/queries/q09.sql"
+  - "apps/tpch/queries/q10.sql"
+  - "apps/tpch/queries/q11.sql"
+  - "apps/tpch/queries/q12.sql"
+  - "apps/tpch/queries/q13.sql"
+  - "apps/tpch/queries/q14.sql"
+  - "apps/tpch/queries/q15.sql"
+  - "apps/tpch/queries/q16.sql"
+  - "apps/tpch/queries/q17.sql"
+  - "apps/tpch/queries/q18.sql"
+  - "apps/tpch/queries/q19.sql"
+  - "apps/tpch/queries/q20.sql"
+  - "apps/tpch/queries/q21.sql"
+  - "apps/tpch/queries/q22.sql"
 
 # Validation rules
 validation:
@@ -69,5 +67,5 @@ metadata:
   scale_factor: 0.01
   expected_rows: 4
   dataset: "tpch-tiny"
-  dataset_location: "memory.benchmarks"
+  dataset_location: "memory.default"
   tags: ["tpch", "aggregation", "custom-dataset", "loaded-data"]

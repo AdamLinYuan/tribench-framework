@@ -172,6 +172,7 @@ This document outlines the development plan for restructuring your Trino benchma
 ### 2.1 Extended Dataset Management
 - [ ] TPC-H data generation integration (SF1, SF10)
 - [ ] Iceberg table format support:
+  - [ ] PostgreSQL setup (Docker-based, for Hive Metastore backend)
   - [ ] Hive Metastore integration (Docker-based)
   - [ ] MinIO object storage setup
   - [ ] Iceberg catalog configuration
