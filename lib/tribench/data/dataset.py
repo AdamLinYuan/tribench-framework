@@ -282,6 +282,15 @@ class DatasetMetadata:
     created_at: str
     generator: Optional[str] = None
     
+    # Iceberg-specific metadata (optional, only for Iceberg format)
+    iceberg_catalog: Optional[str] = None
+    iceberg_schema: Optional[str] = None
+    snapshot_ids: Optional[Dict[str, int]] = None  # table_name -> snapshot_id
+    snapshot_timestamps: Optional[Dict[str, str]] = None  # table_name -> timestamp
+    manifest_counts: Optional[Dict[str, int]] = None  # table_name -> manifest_count
+    format_version: Optional[int] = None  # Iceberg format version (1 or 2)
+    storage_location: Optional[str] = None  # file:// or s3:// location
+    
     def to_dict(self) -> Dict:
         """Convert to dictionary."""
         return asdict(self)

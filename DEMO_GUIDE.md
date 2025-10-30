@@ -9,7 +9,7 @@
 "Today I'll demonstrate the TriBench framework prototype I've developed over the past 3 weeks. TriBench is a PEEL-inspired benchmarking framework for Apache Trino that enables systematic, reproducible SQL workload experiments on data lakehouses. I'll show you the current architecture, core features, and our progress toward the research questions."
 
 ### Research Context Reminder
-- **Primary Question**: How do Apache Iceberg features impact query performance in Trino, and what are the trade-offs?
+
 - **Framework Goal**: Systematic, reproducible benchmarking with proper lifecycle management
 - **Inspiration**: PEEL framework's proven patterns (Spring Bean Registry, ExperimentSequence, hierarchical config)
 

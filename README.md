@@ -47,14 +47,18 @@ tribench-framework/
 
 2. **Configure Systems:**
    ```bash
-   # Setup Trino system
-   tribench sys setup trino
+   # Setup infrastructure for Iceberg support
+   tribench sys setup postgresql
+   tribench sys setup minio
+   tribench sys setup hive-metastore
    
-   # Start Trino
+   # Setup and start Trino with Iceberg catalog
+   tribench sys setup trino
    tribench sys start trino
    
-   # Check status
+   # Check system status
    tribench sys status trino
+   tribench sys status hive-metastore
    ```
 
 3. **Run Benchmark:**
@@ -90,11 +94,12 @@ TriBench provides a comprehensive CLI with the following command groups:
 
 ### System Management (`sys`)
 ```bash
-tribench sys setup <system>      # Setup a system (trino, postgresql, minio)
+tribench sys setup <system>      # Setup a system (trino, postgresql, minio, hive-metastore)
 tribench sys start <system>      # Start a system
 tribench sys stop <system>       # Stop a system
 tribench sys status <system>     # Check system status
 tribench sys teardown <system>   # Tear down a system
+tribench sys logs <system>       # View system logs
 ```
 
 ### Experiment Execution (`exp`)
@@ -117,9 +122,11 @@ tribench suite show <file>       # Show suite details and configuration
 ```bash
 tribench data generate <dataset> # Generate a dataset (tpch-sf1, etc.)
 tribench data load <dataset>     # Load dataset into system
+tribench data load-iceberg <dataset>  # Load dataset into Iceberg tables
 tribench data list               # List available datasets
 tribench data info <dataset>     # Show dataset information
 tribench data validate <dataset> # Validate dataset integrity
+tribench data validate-iceberg   # Validate Iceberg tables
 ```
 
 ### Result Analysis (`res`)
@@ -143,13 +150,28 @@ tribench res delete <id>         # Delete experiment results
 ### Examples
 
 ```bash
-# Setup and start Trino
+# Setup infrastructure stack for Iceberg
+tribench sys setup postgresql --dry-run
+tribench sys setup minio
+tribench sys setup hive-metastore
+tribench sys start postgresql
+tribench sys start minio
+tribench sys start hive-metastore
+
+# Setup and start Trino with Iceberg catalog
 tribench sys setup trino --version 434 --dry-run
 tribench sys start trino --verbose
 
-# Generate and load TPC-H data
+# Generate and load TPC-H data into Iceberg
 tribench data generate tpch-sf1 --format parquet
-tribench data load tpch-sf1 --system trino --catalog iceberg
+tribench data load-iceberg tpch-sf1 --catalog iceberg --schema tpch
+tribench data load-iceberg tpch-sf1 --no-partition --validate
+tribench data validate-iceberg --scale-factor 1 --detailed
+
+# View Iceberg dataset metadata
+tribench data list
+tribench data info tpch-sf1-iceberg
+tribench data info tpch-sf1-iceberg --detailed
 
 # Run individual experiments
 tribench exp run experiments/tpch-sf1.yaml --runs 3
@@ -165,14 +187,21 @@ tribench suite show experiments/suites/tpch-suite.yaml
 tribench res compare exp-001 exp-002 exp-003
 tribench res analyze tpch-sf1 --report performance --plot
 tribench res export exp-001 --format json --output results.json
+
+# System management
+tribench sys status trino
+tribench sys logs hive-metastore --tail 50
+tribench sys stop trino
+tribench sys teardown minio
 ```
 
 ## Supported Systems
 
-- **Apache Trino**: Distributed SQL query engine
-- **Apache Iceberg**: Open table format for data lakehouses
-- **MinIO**: S3-compatible object storage (for distributed setups)
-- **PostgreSQL**: Results database for analysis
+- **Apache Trino**: Distributed SQL query engine (v434+)
+- **Apache Iceberg**: Open table format for data lakehouses with full integration
+- **Apache Hive Metastore**: Catalog service for Iceberg table metadata (v4.0.0)
+- **MinIO**: S3-compatible object storage for Iceberg table data
+- **PostgreSQL**: Metastore backend and results database (v15)
 - **Grafana**: Monitoring and visualization (optional)
 
 ## Supported Benchmarks
@@ -188,6 +217,12 @@ tribench res export exp-001 --format json --output results.json
 - **Experiment Suites**: Group related experiments with shared configuration defaults
 - **Configuration Hierarchy**: Suite defaults → Experiment YAML → CLI overrides
 - **Environment Management**: Host-specific configurations and system lifecycle
+- **Apache Iceberg Integration**: Full support for Iceberg tables with metadata tracking
+  - Automated catalog configuration with Hive Metastore
+  - Data loading from Parquet to Iceberg format
+  - Snapshot and versioning support
+  - Comprehensive validation framework
+  - Registry-based metadata persistence
 - **Resource Monitoring**: CPU, memory, I/O, and network usage tracking
 - **Result Storage**: Structured storage in databases for analysis
 - **Reproducibility**: Version-controlled bundles for sharing
@@ -244,6 +279,164 @@ tribench suite run experiments/suites/tpch-suite.yaml --dry-run
 ```
 
 See `CONFIG_HIERARCHY.md` for complete documentation on configuration merging behavior.
+
+## Apache Iceberg Integration
+
+TriBench provides comprehensive support for Apache Iceberg tables with full metadata tracking and versioning capabilities.
+
+### Infrastructure Stack
+
+The Iceberg integration consists of four interconnected systems:
+
+```
+Trino (Query Engine)
+  ↓ queries
+Iceberg Catalog (Hive Metastore)
+  ↓ metadata storage         ↓ data location
+PostgreSQL                 MinIO (S3A)
+  (table schemas,            (Parquet files,
+   partitions,               data files,
+   statistics)               manifest files)
+```
+
+### Setup Iceberg Infrastructure
+
+```bash
+# 1. Setup PostgreSQL (Metastore backend)
+tribench sys setup postgresql
+tribench sys start postgresql
+
+# 2. Setup MinIO (Object storage)
+tribench sys setup minio
+tribench sys start minio
+
+# 3. Setup Hive Metastore (Iceberg catalog)
+tribench sys setup hive-metastore
+tribench sys start hive-metastore
+
+# 4. Setup Trino (automatically configures Iceberg catalog)
+tribench sys setup trino
+tribench sys start trino
+
+# Verify all systems are running
+tribench sys status postgresql
+tribench sys status minio
+tribench sys status hive-metastore
+tribench sys status trino
+```
+
+### Loading Data into Iceberg
+
+```bash
+# Generate TPC-H dataset in Parquet format (if not already generated)
+tribench data generate tpch-sf0.01 --format parquet
+
+# Load into Iceberg tables
+tribench data load-iceberg tpch-tiny \
+  --catalog iceberg \
+  --schema tpch \
+  --no-partition \
+  --validate
+
+# Options:
+#   --catalog: Iceberg catalog name (default: iceberg)
+#   --schema: Schema/database name (default: tpch)
+#   --storage: Custom S3 location (optional)
+#   --partition: Enable partitioning for large tables (default: true)
+#   --no-partition: Disable partitioning (recommended for small datasets)
+#   --validate: Validate tables after loading
+```
+
+### Viewing Iceberg Metadata
+
+```bash
+# List all datasets (shows both Parquet and Iceberg)
+tribench data list
+
+# View Iceberg dataset metadata
+tribench data info tpch-tiny-iceberg
+
+# Output includes:
+#   - Catalog and schema information
+#   - Iceberg format version (v1 or v2)
+#   - Snapshot IDs and timestamps for each table
+#   - Manifest file counts
+#   - Storage location
+#   - Row counts per table
+
+# View detailed metadata
+tribench data info tpch-tiny-iceberg --detailed
+```
+
+### Validating Iceberg Tables
+
+```bash
+# Validate all tables for a scale factor
+tribench data validate-iceberg --scale-factor tiny
+
+# Validate specific tables
+tribench data validate-iceberg \
+  --scale-factor 1 \
+  --tables customer,orders,lineitem \
+  --detailed
+
+# Validation checks:
+#   - Table existence in catalog
+#   - Row count accuracy
+#   - Schema integrity
+#   - Iceberg metadata (snapshots, data files)
+```
+
+### Iceberg Features Supported
+
+- ✅ **Table Creation**: Automatic schema inference from Parquet
+- ✅ **Data Loading**: Batch inserts with configurable batch size
+- ✅ **Partitioning**: Optional partitioning for large tables
+- ✅ **Snapshots**: Automatic snapshot creation and tracking
+- ✅ **Metadata Tracking**: Registry-based persistence of Iceberg metadata
+- ✅ **Validation**: Comprehensive table and metadata validation
+- ✅ **Format Versions**: Support for Iceberg v1 and v2 tables
+- ✅ **Storage**: S3-compatible storage via MinIO
+
+### Iceberg Dataset Registry
+
+Iceberg datasets are registered with comprehensive metadata:
+
+```yaml
+# Example: datasets/registry.yaml
+tpch-tiny-iceberg:
+  name: tpch-tiny-iceberg
+  format: iceberg
+  benchmark_type: tpch
+  scale_factor: 0.01
+  location: iceberg.tpch
+  iceberg_catalog: iceberg
+  iceberg_schema: tpch
+  format_version: 2
+  snapshot_ids:
+    customer: 5597780913108285715
+    lineitem: 4233068895913014946
+    # ... other tables
+  snapshot_timestamps:
+    customer: '2025-10-30 22:01:20.730000+00:00'
+    lineitem: '2025-10-30 22:04:25.263000+00:00'
+    # ... other tables
+  properties:
+    source_dataset: tpch-tiny
+    partitioned: false
+    storage_location: default
+```
+
+### Future Iceberg Features
+
+Planned enhancements for upcoming releases:
+
+- 🔄 **Time Travel**: Query historical snapshots
+- 🔄 **Schema Evolution**: Track and test schema changes
+- 🔄 **Partition Evolution**: Test partition strategy changes
+- 🔄 **Compaction**: Optimize file layouts
+- 🔄 **Metadata Refresh**: Update registry with current snapshot state
+- 🔄 **Snapshot Comparison**: Diff between snapshots
 
 ## Development Status
 

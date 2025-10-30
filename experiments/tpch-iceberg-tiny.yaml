@@ -1,8 +1,7 @@
-# This experiment executes TPC-H queries against Iceberg-loaded
-# dataset in Trino.
+# This experiment executes TPC-H queries against Iceberg tables
 
-name: "tpch-q1-memory-tiny"
-description: "TPC-H Query 1 - Pricing Summary Report on Iceberg dataset"
+name: "tpch-iceberg-tiny"
+description: "TPC-H queries on Iceberg format with tiny scale factor"
 
 # System configuration
 system: "trino"
@@ -12,16 +11,16 @@ connection:
   host: "localhost"
   port: 8080
   user: "tribench"
-  catalog: "iceberg"  # Changed from memory to iceberg
-  schema: "tpch"      # Changed from default to tpch
+  catalog: "iceberg"
+  schema: "tpch"
 
 # Execution parameters
 runs: 1
-warmup_runs: 1
-timeout_seconds: 60
-max_retries: 0
+warmup_runs: 0
+timeout_seconds: 120
+max_retries: 1
 
-# TPC-H Query 1: Pricing Summary Report Query
+# TPC-H Queries
 query_files:
   - "apps/tpch/queries/q01.sql"
   - "apps/tpch/queries/q02.sql"
@@ -62,11 +61,8 @@ metrics:
 # Metadata
 metadata:
   benchmark: "TPC-H"
-  query_number: 1
-  query_name: "Pricing Summary Report"
   scale_factor: 0.01
-  expected_rows: 4
   dataset: "tpch-tiny-iceberg"
   dataset_location: "iceberg.tpch"
   format: "iceberg"
-  tags: ["tpch", "aggregation", "iceberg", "loaded-data"]
+  tags: ["tpch", "iceberg", "tiny", "all-queries"]

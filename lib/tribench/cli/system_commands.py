@@ -4,6 +4,9 @@ import click
 from pathlib import Path
 from tribench.cli.base import cli, dry_run_option, verbose_option, config_option
 from tribench.systems.trino import TrinoSystem
+from tribench.systems.postgresql import PostgreSQLSystem
+from tribench.systems.minio import MinIOSystem
+from tribench.systems.hive_metastore import HiveMetastoreSystem
 from tribench.utils.config import ConfigurationLoader
 
 
@@ -17,14 +20,14 @@ def system_group():
 
 
 @system_group.command(name="setup")
-@click.argument("system", type=click.Choice(['trino', 'postgresql', 'minio', 'all']))
+@click.argument("system", type=click.Choice(['trino', 'postgresql', 'minio', 'hive-metastore', 'all']))
 @click.option('--version', help='System version to install.')
 @config_option
 @dry_run_option
 @verbose_option
 @click.pass_context
 def setup(ctx, system, version, config, dry_run, verbose):
-    """Set up a system (trino, postgresql, minio, all).
+    """Set up a system (trino, postgresql, minio, hive-metastore, all).
     
     \b
     Examples:
@@ -47,7 +50,7 @@ def setup(ctx, system, version, config, dry_run, verbose):
         return
     
     # Implement system setup
-    systems_to_setup = ['trino', 'postgresql', 'minio'] if system == 'all' else [system]
+    systems_to_setup = ['trino', 'postgresql', 'minio', 'hive-metastore'] if system == 'all' else [system]
     
     for sys_name in systems_to_setup:
         if sys_name == 'trino':
@@ -72,13 +75,67 @@ def setup(ctx, system, version, config, dry_run, verbose):
                     import traceback
                     traceback.print_exc()
         elif sys_name == 'postgresql':
-            click.secho(f"✗ Setup for PostgreSQL not yet implemented", fg='yellow')
+            try:
+                click.echo(f"Setting up PostgreSQL...")
+                
+                # Load configuration
+                loader = ConfigurationLoader()
+                cfg = loader.load(experiment_config=config) if config else loader.load()
+                
+                # Override version if specified
+                if version:
+                    from pyhocon import ConfigFactory
+                    cfg = ConfigFactory.parse_string(f'tribench.systems.postgresql.version = "{version}"').with_fallback(cfg)
+                
+                postgresql = PostgreSQLSystem(config=cfg)
+                postgresql.setup()
+                click.secho(f"✓ PostgreSQL setup complete", fg='green')
+            except Exception as e:
+                click.secho(f"✗ Failed to setup PostgreSQL: {e}", fg='red')
+                if ctx.obj.verbose:
+                    import traceback
+                    traceback.print_exc()
         elif sys_name == 'minio':
-            click.secho(f"✗ Setup for MinIO not yet implemented", fg='yellow')
+            try:
+                click.echo(f"Setting up MinIO...")
+                
+                # Load configuration
+                loader = ConfigurationLoader()
+                cfg = loader.load(experiment_config=config) if config else loader.load()
+                
+                minio = MinIOSystem(config=cfg)
+                minio.setup()
+                click.secho(f"✓ MinIO setup complete", fg='green')
+            except Exception as e:
+                click.secho(f"✗ Failed to setup MinIO: {e}", fg='red')
+                if ctx.obj.verbose:
+                    import traceback
+                    traceback.print_exc()
+        elif sys_name == 'hive-metastore':
+            try:
+                click.echo(f"Setting up Hive Metastore...")
+                
+                # Load configuration
+                loader = ConfigurationLoader()
+                cfg = loader.load(experiment_config=config) if config else loader.load()
+                
+                # Override version if specified
+                if version:
+                    from pyhocon import ConfigFactory
+                    cfg = ConfigFactory.parse_string(f'tribench.systems.hive_metastore.version = "{version}"').with_fallback(cfg)
+                
+                hive_metastore = HiveMetastoreSystem(config=cfg)
+                hive_metastore.setup()
+                click.secho(f"✓ Hive Metastore setup complete", fg='green')
+            except Exception as e:
+                click.secho(f"✗ Failed to setup Hive Metastore: {e}", fg='red')
+                if ctx.obj.verbose:
+                    import traceback
+                    traceback.print_exc()
 
 
 @system_group.command(name="start")
-@click.argument("system", type=click.Choice(['trino', 'postgresql', 'minio', 'all']))
+@click.argument("system", type=click.Choice(['trino', 'postgresql', 'minio', 'hive-metastore', 'all']))
 @config_option
 @dry_run_option
 @verbose_option
@@ -102,7 +159,7 @@ def start(ctx, system, config, dry_run, verbose):
         return
     
     # Implement system start
-    systems_to_start = ['trino', 'postgresql', 'minio'] if system == 'all' else [system]
+    systems_to_start = ['trino', 'postgresql', 'minio', 'hive-metastore'] if system == 'all' else [system]
     
     for sys_name in systems_to_start:
         if sys_name == 'trino':
@@ -122,13 +179,57 @@ def start(ctx, system, config, dry_run, verbose):
                     import traceback
                     traceback.print_exc()
         elif sys_name == 'postgresql':
-            click.secho(f"✗ Start for PostgreSQL not yet implemented", fg='yellow')
+            try:
+                click.echo(f"Starting PostgreSQL...")
+                
+                # Load configuration
+                loader = ConfigurationLoader()
+                cfg = loader.load(experiment_config=config) if config else loader.load()
+                
+                postgresql = PostgreSQLSystem(config=cfg)
+                postgresql.start()
+                click.secho(f"✓ PostgreSQL started successfully", fg='green')
+            except Exception as e:
+                click.secho(f"✗ Failed to start PostgreSQL: {e}", fg='red')
+                if ctx.obj.verbose:
+                    import traceback
+                    traceback.print_exc()
         elif sys_name == 'minio':
-            click.secho(f"✗ Start for MinIO not yet implemented", fg='yellow')
+            try:
+                click.echo(f"Starting MinIO...")
+                
+                # Load configuration
+                loader = ConfigurationLoader()
+                cfg = loader.load(experiment_config=config) if config else loader.load()
+                
+                minio = MinIOSystem(config=cfg)
+                minio.start()
+                click.secho(f"✓ MinIO started successfully", fg='green')
+            except Exception as e:
+                click.secho(f"✗ Failed to start MinIO: {e}", fg='red')
+                if ctx.obj.verbose:
+                    import traceback
+                    traceback.print_exc()
+        elif sys_name == 'hive-metastore':
+            try:
+                click.echo(f"Starting Hive Metastore...")
+                
+                # Load configuration
+                loader = ConfigurationLoader()
+                cfg = loader.load(experiment_config=config) if config else loader.load()
+                
+                hive_metastore = HiveMetastoreSystem(config=cfg)
+                hive_metastore.start()
+                click.secho(f"✓ Hive Metastore started successfully", fg='green')
+            except Exception as e:
+                click.secho(f"✗ Failed to start Hive Metastore: {e}", fg='red')
+                if ctx.obj.verbose:
+                    import traceback
+                    traceback.print_exc()
 
 
 @system_group.command(name="stop")
-@click.argument("system", type=click.Choice(['trino', 'postgresql', 'minio', 'all']))
+@click.argument("system", type=click.Choice(['trino', 'postgresql', 'minio', 'hive-metastore', 'all']))
 @click.option('--force', is_flag=True, help='Force stop without graceful shutdown.')
 @dry_run_option
 @verbose_option
@@ -154,7 +255,7 @@ def stop(ctx, system, force, dry_run, verbose):
         return
     
     # Implement system stop
-    systems_to_stop = ['trino', 'postgresql', 'minio'] if system == 'all' else [system]
+    systems_to_stop = ['trino', 'postgresql', 'minio', 'hive-metastore'] if system == 'all' else [system]
     
     for sys_name in systems_to_stop:
         if sys_name == 'trino':
@@ -169,14 +270,43 @@ def stop(ctx, system, force, dry_run, verbose):
                     import traceback
                     traceback.print_exc()
         elif sys_name == 'postgresql':
-            click.secho(f"✗ Stop for PostgreSQL not yet implemented", fg='yellow')
+            try:
+                click.echo(f"Stopping PostgreSQL...")
+                postgresql = PostgreSQLSystem()
+                postgresql.stop(force=force)
+                click.secho(f"✓ PostgreSQL stopped successfully", fg='green')
+            except Exception as e:
+                click.secho(f"✗ Failed to stop PostgreSQL: {e}", fg='red')
+                if ctx.obj.verbose:
+                    import traceback
+                    traceback.print_exc()
         elif sys_name == 'minio':
-            click.secho(f"✗ Stop for MinIO not yet implemented", fg='yellow')
+            try:
+                click.echo(f"Stopping MinIO...")
+                minio = MinIOSystem()
+                minio.stop(force=force)
+                click.secho(f"✓ MinIO stopped successfully", fg='green')
+            except Exception as e:
+                click.secho(f"✗ Failed to stop MinIO: {e}", fg='red')
+                if ctx.obj.verbose:
+                    import traceback
+                    traceback.print_exc()
+        elif sys_name == 'hive-metastore':
+            try:
+                click.echo(f"Stopping Hive Metastore...")
+                hive_metastore = HiveMetastoreSystem()
+                hive_metastore.stop(force=force)
+                click.secho(f"✓ Hive Metastore stopped successfully", fg='green')
+            except Exception as e:
+                click.secho(f"✗ Failed to stop Hive Metastore: {e}", fg='red')
+                if ctx.obj.verbose:
+                    import traceback
+                    traceback.print_exc()
 
 
 @system_group.command(name="status")
 @click.argument("system", 
-                type=click.Choice(['trino', 'postgresql', 'minio', 'all']),
+                type=click.Choice(['trino', 'postgresql', 'minio', 'hive-metastore', 'all']),
                 required=False)
 @verbose_option
 @click.pass_context
@@ -199,7 +329,7 @@ def status(ctx, system, verbose):
         system = "all"
     
     # Implement system status check
-    systems_to_check = ['trino', 'postgresql', 'minio'] if system == 'all' else [system]
+    systems_to_check = ['trino', 'postgresql', 'minio', 'hive-metastore'] if system == 'all' else [system]
     
     for sys_name in systems_to_check:
         if sys_name == 'trino':
@@ -223,13 +353,71 @@ def status(ctx, system, verbose):
                     import traceback
                     traceback.print_exc()
         elif sys_name == 'postgresql':
-            click.secho(f"✗ Status check for PostgreSQL not yet implemented", fg='yellow')
+            try:
+                postgresql = PostgreSQLSystem()
+                status_info = postgresql.status()
+                
+                if status_info['running']:
+                    click.secho(f"✓ PostgreSQL: Running", fg='green')
+                    if status_info.get('healthy'):
+                        click.echo(f"  Health: OK")
+                    if status_info.get('port'):
+                        click.echo(f"  Port: {status_info['port']}")
+                    if status_info.get('databases'):
+                        click.echo(f"  Databases: {', '.join(status_info['databases'])}")
+                else:
+                    click.secho(f"✗ PostgreSQL: Not running", fg='yellow')
+            except Exception as e:
+                click.secho(f"✗ Failed to check PostgreSQL status: {e}", fg='red')
+                if ctx.obj.verbose:
+                    import traceback
+                    traceback.print_exc()
         elif sys_name == 'minio':
-            click.secho(f"✗ Status check for MinIO not yet implemented", fg='yellow')
+            try:
+                minio = MinIOSystem()
+                status_info = minio.status()
+                
+                if status_info['running']:
+                    click.secho(f"✓ MinIO: Running", fg='green')
+                    if status_info.get('healthy'):
+                        click.echo(f"  Health: OK")
+                    if status_info.get('api_port'):
+                        click.echo(f"  API Port: {status_info['api_port']}")
+                    if status_info.get('console_port'):
+                        click.echo(f"  Console Port: {status_info['console_port']}")
+                    if status_info.get('endpoint'):
+                        click.echo(f"  Endpoint: {status_info['endpoint']}")
+                else:
+                    click.secho(f"✗ MinIO: Not running", fg='yellow')
+            except Exception as e:
+                click.secho(f"✗ Failed to check MinIO status: {e}", fg='red')
+                if ctx.obj.verbose:
+                    import traceback
+                    traceback.print_exc()
+        elif sys_name == 'hive-metastore':
+            try:
+                hive_metastore = HiveMetastoreSystem()
+                status_info = hive_metastore.status()
+                
+                if status_info['running']:
+                    click.secho(f"✓ Hive Metastore: Running", fg='green')
+                    if status_info.get('healthy'):
+                        click.echo(f"  Health: OK")
+                    if status_info.get('port'):
+                        click.echo(f"  Thrift Port: {status_info['port']}")
+                    if status_info.get('warehouse'):
+                        click.echo(f"  Warehouse: {status_info['warehouse']}")
+                else:
+                    click.secho(f"✗ Hive Metastore: Not running", fg='yellow')
+            except Exception as e:
+                click.secho(f"✗ Failed to check Hive Metastore status: {e}", fg='red')
+                if ctx.obj.verbose:
+                    import traceback
+                    traceback.print_exc()
 
 
 @system_group.command(name="teardown")
-@click.argument("system", type=click.Choice(['trino', 'postgresql', 'minio', 'all']))
+@click.argument("system", type=click.Choice(['trino', 'postgresql', 'minio', 'hive-metastore', 'all']))
 @click.option('--keep-data', is_flag=True, help='Keep data after teardown.')
 @click.confirmation_option(prompt='Are you sure you want to tear down the system?')
 @dry_run_option
@@ -256,7 +444,7 @@ def teardown(ctx, system, keep_data, dry_run, verbose):
         return
     
     # Implement system teardown
-    systems_to_teardown = ['trino', 'postgresql', 'minio'] if system == 'all' else [system]
+    systems_to_teardown = ['trino', 'postgresql', 'minio', 'hive-metastore'] if system == 'all' else [system]
     
     for sys_name in systems_to_teardown:
         if sys_name == 'trino':
@@ -271,13 +459,42 @@ def teardown(ctx, system, keep_data, dry_run, verbose):
                     import traceback
                     traceback.print_exc()
         elif sys_name == 'postgresql':
-            click.secho(f"✗ Teardown for PostgreSQL not yet implemented", fg='yellow')
+            try:
+                click.echo(f"Tearing down PostgreSQL...")
+                postgresql = PostgreSQLSystem()
+                postgresql.teardown(keep_data=keep_data)
+                click.secho(f"✓ PostgreSQL teardown complete", fg='green')
+            except Exception as e:
+                click.secho(f"✗ Failed to teardown PostgreSQL: {e}", fg='red')
+                if ctx.obj.verbose:
+                    import traceback
+                    traceback.print_exc()
         elif sys_name == 'minio':
-            click.secho(f"✗ Teardown for MinIO not yet implemented", fg='yellow')
+            try:
+                click.echo(f"Tearing down MinIO...")
+                minio = MinIOSystem()
+                minio.teardown(keep_data=keep_data)
+                click.secho(f"✓ MinIO teardown complete", fg='green')
+            except Exception as e:
+                click.secho(f"✗ Failed to teardown MinIO: {e}", fg='red')
+                if ctx.obj.verbose:
+                    import traceback
+                    traceback.print_exc()
+        elif sys_name == 'hive-metastore':
+            try:
+                click.echo(f"Tearing down Hive Metastore...")
+                hive_metastore = HiveMetastoreSystem()
+                hive_metastore.teardown(keep_data=keep_data)
+                click.secho(f"✓ Hive Metastore teardown complete", fg='green')
+            except Exception as e:
+                click.secho(f"✗ Failed to teardown Hive Metastore: {e}", fg='red')
+                if ctx.obj.verbose:
+                    import traceback
+                    traceback.print_exc()
 
 
 @system_group.command(name="logs")
-@click.argument("system", type=click.Choice(['trino', 'postgresql', 'minio']))
+@click.argument("system", type=click.Choice(['trino', 'postgresql', 'minio', 'hive-metastore']))
 @click.option('--tail', type=int, default=100, help='Number of lines to show from the end.')
 @click.option('--follow', '-f', is_flag=True, help='Follow log output.')
 @verbose_option
@@ -308,6 +525,32 @@ def logs(ctx, system, tail, follow, verbose):
                 import traceback
                 traceback.print_exc()
     elif system == 'postgresql':
-        click.secho(f"✗ Logs for PostgreSQL not yet implemented", fg='yellow')
+        try:
+            postgresql = PostgreSQLSystem()
+            logs_output = postgresql.get_logs(tail=tail, follow=follow)
+            click.echo(logs_output)
+        except Exception as e:
+            click.secho(f"✗ Failed to get PostgreSQL logs: {e}", fg='red')
+            if ctx.obj.verbose:
+                import traceback
+                traceback.print_exc()
     elif system == 'minio':
-        click.secho(f"✗ Logs for MinIO not yet implemented", fg='yellow')
+        try:
+            minio = MinIOSystem()
+            logs_output = minio.get_logs(tail=tail, follow=follow)
+            click.echo(logs_output)
+        except Exception as e:
+            click.secho(f"✗ Failed to get MinIO logs: {e}", fg='red')
+            if ctx.obj.verbose:
+                import traceback
+                traceback.print_exc()
+    elif system == 'hive-metastore':
+        try:
+            hive_metastore = HiveMetastoreSystem()
+            logs_output = hive_metastore.get_logs(tail=tail, follow=follow)
+            click.echo(logs_output)
+        except Exception as e:
+            click.secho(f"✗ Failed to get Hive Metastore logs: {e}", fg='red')
+            if ctx.obj.verbose:
+                import traceback
+                traceback.print_exc()

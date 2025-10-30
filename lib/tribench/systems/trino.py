@@ -482,7 +482,86 @@ node.data-dir=/data/trino
         tpch_catalog = catalog_dir / "tpch.properties"
         tpch_catalog.write_text("connector.name=tpch\ntpch.splits-per-node=4\n")
         
+        # Iceberg catalog (using Hive Metastore)
+        iceberg_catalog = catalog_dir / "iceberg.properties"
+        iceberg_content = self._generate_iceberg_catalog_config()
+        iceberg_catalog.write_text(iceberg_content)
+        
         logger.debug(f"Generated catalog configs in: {catalog_dir}")
+    
+    def _generate_iceberg_catalog_config(self) -> str:
+        """
+        Generate Iceberg catalog configuration.
+        
+        Configures Iceberg connector to use Hive Metastore for catalog metadata
+        and MinIO (S3-compatible) for data storage.
+        
+        Returns:
+            Iceberg catalog properties as string
+        """
+        # Get configuration values
+        hive_metastore_host = get_config_value(
+            self.config, 
+            "tribench.systems.hive_metastore.docker.service_name",
+            "tribench-hive-metastore"
+        )
+        hive_metastore_port = get_config_value(
+            self.config, 
+            "tribench.systems.hive_metastore.port", 
+            9083
+        )
+        
+        # MinIO configuration
+        minio_endpoint = get_config_value(
+            self.config,
+            "tribench.systems.minio.docker.service_name",
+            "tribench-minio"
+        )
+        minio_port = get_config_value(
+            self.config,
+            "tribench.systems.minio.port",
+            9000
+        )
+        minio_access_key = get_config_value(
+            self.config,
+            "tribench.systems.minio.access_key",
+            "minioadmin"
+        )
+        minio_secret_key = get_config_value(
+            self.config,
+            "tribench.systems.minio.secret_key",
+            "minioadmin"
+        )
+        
+        # Build the configuration
+        config_lines = [
+            "# Iceberg Catalog Configuration",
+            "# Connector type",
+            "connector.name=iceberg",
+            "",
+            "# Catalog type - use Hive Metastore",
+            "iceberg.catalog.type=hive_metastore",
+            f"hive.metastore.uri=thrift://{hive_metastore_host}:{hive_metastore_port}",
+            "",
+            "# S3-compatible storage (MinIO) - using Trino native S3",
+            "fs.native-s3.enabled=true",
+            f"s3.endpoint=http://{minio_endpoint}:{minio_port}",
+            f"s3.aws-access-key={minio_access_key}",
+            f"s3.aws-secret-key={minio_secret_key}",
+            "s3.path-style-access=true",
+            "s3.region=us-east-1",
+            "",
+            "# Iceberg format settings",
+            "iceberg.file-format=PARQUET",
+            "iceberg.compression-codec=SNAPPY",
+            "",
+            "# Performance tuning",
+            "iceberg.max-partitions-per-writer=100",
+            "iceberg.target-max-file-size=1GB",
+            ""
+        ]
+        
+        return "\n".join(config_lines)
     
     def _generate_docker_compose(self):
         """Generate Docker Compose configuration."""
@@ -499,6 +578,7 @@ services:
     volumes:
       - ./etc:/etc/trino
       - trino-data:/data
+      - hive-warehouse:/user/hive/warehouse
     networks:
       - {self.network_name}
     environment:
@@ -513,6 +593,9 @@ services:
 volumes:
   trino-data:
     driver: local
+  hive-warehouse:
+    external: true
+    name: hive-metastore-400_hive-warehouse
 
 networks:
   {self.network_name}:
