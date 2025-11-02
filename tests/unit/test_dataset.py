@@ -23,6 +23,7 @@ class TestDatasetMetadata:
         """Test creating dataset metadata."""
         metadata = DatasetMetadata(
             name="test-dataset",
+            benchmark_type="tpch",
             type="generated",
             format="parquet",
             scale_factor=1.0,
@@ -37,15 +38,52 @@ class TestDatasetMetadata:
         )
         
         assert metadata.name == "test-dataset"
+        assert metadata.benchmark_type == "tpch"
         assert metadata.type == "generated"
         assert metadata.format == "parquet"
         assert metadata.scale_factor == 1.0
         assert len(metadata.tables) == 2
     
+    def test_metadata_creation_iceberg(self):
+        """Test creating Iceberg dataset metadata with Iceberg-specific fields."""
+        metadata = DatasetMetadata(
+            name="test-iceberg",
+            benchmark_type="tpch",
+            type="static",
+            format="iceberg",
+            scale_factor=0.01,
+            size_bytes=None,
+            location="iceberg.tpch",
+            tables=["customer", "orders"],
+            row_counts={"customer": 1500, "orders": 15000},
+            checksums={},
+            properties={"partitioned": False},
+            created_at="2025-10-30T12:00:00",
+            generator="iceberg_loader",
+            # Iceberg-specific fields
+            iceberg_catalog="iceberg",
+            iceberg_schema="tpch",
+            snapshot_ids={"customer": 123456, "orders": 789012},
+            snapshot_timestamps={"customer": "2025-10-30 12:00:00", "orders": "2025-10-30 12:01:00"},
+            manifest_counts={"customer": 5, "orders": 10},
+            format_version=2,
+            storage_location="s3://warehouse/tpch"
+        )
+        
+        assert metadata.format == "iceberg"
+        assert metadata.iceberg_catalog == "iceberg"
+        assert metadata.iceberg_schema == "tpch"
+        assert metadata.snapshot_ids["customer"] == 123456
+        assert metadata.snapshot_timestamps["customer"] == "2025-10-30 12:00:00"
+        assert metadata.manifest_counts["orders"] == 10
+        assert metadata.format_version == 2
+        assert metadata.storage_location == "s3://warehouse/tpch"
+    
     def test_metadata_to_dict(self):
         """Test converting metadata to dictionary."""
         metadata = DatasetMetadata(
             name="test",
+            benchmark_type="tpch",
             type="static",
             format="csv",
             scale_factor=None,
@@ -77,12 +115,14 @@ class TestDatasetMetadata:
             'checksums': {'t1': 'hash'},
             'properties': {},
             'created_at': '2025-01-01',
-            'generator': 'dbgen'
+            'generator': 'dbgen',
+            'benchmark_type': 'tpch'
         }
         
         metadata = DatasetMetadata.from_dict(data)
         assert metadata.name == 'test'
         assert metadata.generator == 'dbgen'
+        assert metadata.benchmark_type == 'tpch'
 
 
 class TestDatasetValidator:
@@ -166,14 +206,17 @@ class TestTPCHGenerator:
         """Test that TPC-H schemas are properly defined."""
         with tempfile.TemporaryDirectory() as tmpdir:
             generator = TPCHGenerator(Path(tmpdir))
-            schemas = generator._get_tpch_schemas()
+            # Access schema property
+            schema = generator.schema
             
             expected_tables = ['nation', 'region', 'customer', 'supplier',
                              'part', 'partsupp', 'orders', 'lineitem']
             
             for table in expected_tables:
-                assert table in schemas
-                assert len(schemas[table]) > 0  # Has fields
+                # Use get_schema method
+                table_schema = schema.get_schema(table)
+                assert table_schema is not None
+                assert len(table_schema) > 0  # Has fields
     
     @patch('tribench.data.dataset.subprocess.run')
     def test_run_dbgen_success(self, mock_run):
@@ -257,9 +300,10 @@ class TestTrinoDataLoader:
         ddl = loader._generate_create_table_ddl('test_table', schema)
         
         assert 'CREATE TABLE test_table' in ddl
-        assert 'id INTEGER' in ddl
-        assert 'name VARCHAR' in ddl
-        assert 'value DECIMAL' in ddl
+        # Column names are quoted in the implementation
+        assert '"id" INTEGER' in ddl
+        assert '"name" VARCHAR' in ddl
+        assert '"value" DECIMAL' in ddl
 
 
 class TestDatasetRegistry:
@@ -291,7 +335,8 @@ class TestDatasetRegistry:
                 row_counts={"t1": 100},
                 checksums={"t1": "hash"},
                 properties={},
-                created_at=datetime.now().isoformat()
+                created_at=datetime.now().isoformat(),
+                benchmark_type="tpch"
             )
             
             registry.register(metadata)
@@ -320,7 +365,8 @@ class TestDatasetRegistry:
                     row_counts={"t1": 100},
                     checksums={"t1": "hash"},
                     properties={},
-                    created_at=datetime.now().isoformat()
+                    created_at=datetime.now().isoformat(),
+                    benchmark_type="tpch"
                 )
                 registry.register(metadata)
             
@@ -344,7 +390,8 @@ class TestDatasetRegistry:
                 row_counts={"t1": 100},
                 checksums={"t1": "hash"},
                 properties={},
-                created_at=datetime.now().isoformat()
+                created_at=datetime.now().isoformat(),
+                benchmark_type="tpch"
             )
             
             registry.register(metadata)
@@ -371,7 +418,8 @@ class TestDatasetRegistry:
                 row_counts={"t1": 100},
                 checksums={"t1": "hash"},
                 properties={},
-                created_at=datetime.now().isoformat()
+                created_at=datetime.now().isoformat(),
+                benchmark_type="tpch"
             )
             
             registry.register(metadata)
@@ -401,7 +449,8 @@ class TestDatasetRegistry:
                 row_counts={"t1": 100},
                 checksums={"t1": "hash"},
                 properties={},
-                created_at=datetime.now().isoformat()
+                created_at=datetime.now().isoformat(),
+                benchmark_type="tpch"
             )
             registry1.register(metadata)
             

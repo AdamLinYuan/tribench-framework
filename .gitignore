@@ -48,41 +48,50 @@ nosetests.xml
 # TriBench Framework Specific
 # -----------------------------
 
-# Downloaded binaries (large files)
+# Downloaded binaries (large files - should be downloaded by users)
 downloads/*.tar.gz
 downloads/*.zip
 downloads/*.jar
+downloads/*.tgz
+downloads/*.gz
 
 # Keep README files in downloads
 !downloads/README.md
 
-# Runtime system installations
+# Runtime system installations (should NOT be committed)
+# These are large, generated, and contain runtime-specific configs
 systems/trino-*/
 systems/postgresql-*/
-systems/minio-*/
-systems/**/docker-compose.yml
+systems/minio/
+systems/hive-metastore-*/
 
-# Keep example system configs but ignore running instances
+# Keep system README files and templates
+!systems/README.md
 !systems/*/README.md
+!systems/**/templates/
 
-# Logs
+# Logs (runtime-generated, should NOT be committed)
 log/
 *.log
 
-# Results (comment out if you want to track results)
+# Results (runtime-generated, should NOT be committed by default)
+# Uncomment the line below if you want to track specific results
 results/*.json
 
-# Keep example results for documentation
+# Keep example results and README for documentation
 !results/README.md
 !results/*example*.json
 
-# Datasets (large generated data)
+# Datasets (large generated data, should NOT be committed)
+# Users should generate these locally using the framework
 datasets/tpch-*/
 datasets/*.csv
 datasets/*.parquet
+datasets/*.tbl
 
-# Keep dataset metadata
+# Keep dataset metadata and registry
 !datasets/README.md
+!datasets/registry.yaml
 
 # Temporary files
 *.tmp
@@ -95,7 +104,7 @@ datasets/*.parquet
 # mypy
 .mypy_cache/
 .dmypy.json
-dmypy.json
+dmyp.json
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -107,3 +116,12 @@ dmypy.json
 .env
 .env.local
 secrets.conf
+
+# System-specific files
+.DS_Store
+Thumbs.db
+
+# Backup files
+*.bak
+*.backup
+*~
