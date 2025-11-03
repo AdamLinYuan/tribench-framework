@@ -16,7 +16,7 @@
     <!-- Warehouse Directory -->
     <property>
         <name>metastore.warehouse.dir</name>
-        <value>/user/hive/warehouse</value>
+        <value>s3a://warehouse/</value>
     </property>
     
     <!-- PostgreSQL Backend Configuration -->

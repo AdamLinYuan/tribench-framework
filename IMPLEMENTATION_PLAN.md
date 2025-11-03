@@ -235,14 +235,14 @@ This document outlines the development plan for restructuring your Trino benchma
 **Status**: **SIMPLIFIED** - Focus on essential secrets management only. Full hybrid configuration system deferred to Phase 7.
 
 ### 2.4.1 Environment-Based Configuration
-- [ ] Create `.env.example` template for sensitive configuration
-- [ ] Add `.env` to `.gitignore`
-- [ ] Implement python-dotenv integration
-- [ ] Support for:
-  - [ ] Database passwords (PostgreSQL, Trino)
-  - [ ] Object storage credentials (MinIO access keys)
-  - [ ] API tokens
-- [ ] Documentation for secrets management
+- [x] Create `.env.example` template for sensitive configuration
+- [x] Add `.env` to `.gitignore`
+- [x] Implement python-dotenv integration
+- [x] Support for:
+  - [x] Database passwords (PostgreSQL, Trino)
+  - [x] Object storage credentials (MinIO access keys)
+  - [x] API tokens
+- [x] Documentation for secrets management
 
 **Deliverables**:
 - `.env.example` template with all secrets documented

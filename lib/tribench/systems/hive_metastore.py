@@ -55,7 +55,7 @@ class HiveMetastoreSystem(System):
         # Load Hive-specific configuration
         hive_config = self.config.get('tribench.systems.hive_metastore', {})
         
-        self.version = hive_config.get('version', '3.1.3')
+        self.version = hive_config.get('version', '4.0.0')
         self.port = hive_config.get('port', 9083)
         self.warehouse_dir = hive_config.get('warehouse_dir', 's3a://warehouse/')
         
@@ -433,11 +433,14 @@ class HiveMetastoreSystem(System):
         logger.info(f"Generated core-site.xml: {config_file}")
     
     def _generate_dockerfile(self) -> None:
-        """Generate Dockerfile that adds PostgreSQL JDBC driver to Hive image."""
+        """Generate Dockerfile that adds PostgreSQL JDBC driver and Hadoop AWS libraries to Hive image."""
         
+        # Match the exact working configuration format, with added S3A support
         dockerfile = f"""FROM alpine:latest as downloader
-RUN apk add --no-cache wget && \
-    wget https://jdbc.postgresql.org/download/postgresql-42.7.1.jar -O /postgresql-42.7.1.jar
+RUN apk add --no-cache wget && \\
+    wget https://jdbc.postgresql.org/download/postgresql-42.7.1.jar -O /postgresql-42.7.1.jar && \\
+    wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar -O /hadoop-aws-3.3.4.jar && \\
+    wget https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar -O /aws-java-sdk-bundle-1.12.262.jar
 
 FROM apache/hive:{self.version}
 
@@ -447,12 +450,19 @@ USER root
 COPY --from=downloader /postgresql-42.7.1.jar /opt/hive/lib/postgresql-42.7.1.jar
 RUN chmod 644 /opt/hive/lib/postgresql-42.7.1.jar
 
+# Add Hadoop AWS libraries for S3A support (MinIO compatibility)
+# These are required for accessing s3a:// URIs from Hive Metastore
+COPY --from=downloader /hadoop-aws-3.3.4.jar /opt/hive/lib/hadoop-aws-3.3.4.jar
+COPY --from=downloader /aws-java-sdk-bundle-1.12.262.jar /opt/hive/lib/aws-java-sdk-bundle-1.12.262.jar
+RUN chmod 644 /opt/hive/lib/hadoop-aws-3.3.4.jar && \\
+    chmod 644 /opt/hive/lib/aws-java-sdk-bundle-1.12.262.jar
+
 # Install netcat for health checks
 RUN apt-get update && apt-get install -y netcat-openbsd && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Create warehouse directory and set permissions
-RUN mkdir -p /user/hive/warehouse && \
-    chown -R hive:hive /user/hive/warehouse && \
+RUN mkdir -p /user/hive/warehouse && \\
+    chown -R hive:hive /user/hive/warehouse && \\
     chmod -R 755 /user/hive/warehouse
 
 USER hive

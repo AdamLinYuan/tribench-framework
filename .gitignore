@@ -112,10 +112,15 @@ dmyp.json
 # pyenv
 .python-version
 
-# Environment files with secrets (if you add any)
+# Environment files with secrets
+# SECURITY: Never commit .env files - they contain sensitive credentials!
 .env
 .env.local
+.env.*.local
 secrets.conf
+
+# Keep .env.example as a template
+!.env.example
 
 # System-specific files
 .DS_Store

@@ -556,7 +556,7 @@ node.data-dir=/data/trino
             "iceberg.compression-codec=SNAPPY",
             "",
             "# Performance tuning",
-            "iceberg.max-partitions-per-writer=100",
+            "iceberg.max-partitions-per-writer=1000",
             "iceberg.target-max-file-size=1GB",
             ""
         ]

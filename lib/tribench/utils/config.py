@@ -4,6 +4,9 @@ Configuration management for TriBench.
 This module provides hierarchical configuration loading using HOCON format,
 supporting multiple configuration layers (reference → host → experiment)
 with validation and template generation capabilities.
+
+Additionally supports loading sensitive configuration from .env files
+using python-dotenv for secure secrets management.
 """
 
 import os
@@ -12,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, List
 from pyhocon import ConfigFactory, ConfigTree
 from jinja2 import Environment, FileSystemLoader, Template
+from dotenv import load_dotenv, find_dotenv
 import logging
 
 logger = logging.getLogger(__name__)
@@ -34,13 +38,15 @@ class ConfigurationLoader:
     Supports HOCON format with variable substitution and includes.
     """
     
-    def __init__(self, root_path: Optional[Path] = None):
+    def __init__(self, root_path: Optional[Path] = None, load_env: bool = True):
         """
         Initialize the configuration loader.
         
         Args:
             root_path: Root path of the TriBench framework.
                       If None, auto-detect from this file's location.
+            load_env: Whether to automatically load .env file from root_path.
+                     Default is True. Set to False for testing.
         """
         if root_path is None:
             # Auto-detect: go up from lib/tribench/utils/config.py to root
@@ -52,7 +58,50 @@ class ConfigurationLoader:
         self.reference_config_path = self.config_path / "reference.conf"
         self.hosts_path = self.config_path / "hosts"
         
+        # Load environment variables from .env file
+        if load_env:
+            self._load_env_file()
+        
         logger.debug(f"ConfigurationLoader initialized with root: {self.root_path}")
+    
+    def _load_env_file(self) -> None:
+        """
+        Load environment variables from .env file.
+        
+        Searches for .env file in the following order:
+        1. Explicit .env file in root_path
+        2. Auto-detected .env in parent directories (using find_dotenv)
+        
+        Environment variables from .env have LOWER priority than
+        existing environment variables (doesn't override).
+        """
+        env_path = self.root_path / ".env"
+        
+        if env_path.exists():
+            # Load from explicit path
+            load_dotenv(env_path, override=False)
+            logger.info(f"Loaded environment variables from: {env_path}")
+        else:
+            # Try to find .env in parent directories
+            found_env = find_dotenv(usecwd=True)
+            if found_env:
+                load_dotenv(found_env, override=False)
+                logger.info(f"Loaded environment variables from: {found_env}")
+            else:
+                logger.debug("No .env file found - using system environment only")
+    
+    def get_env(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        """
+        Get environment variable value.
+        
+        Args:
+            key: Environment variable name
+            default: Default value if not set
+        
+        Returns:
+            Environment variable value or default
+        """
+        return os.getenv(key, default)
     
     def load(self, 
              experiment_config: Optional[Path] = None,
@@ -171,16 +220,22 @@ class ConfigurationLoader:
         Resolve environment variable references in configuration.
         
         HOCON already supports ${?ENV_VAR} syntax, but this provides
-        additional resolution for nested structures.
+        additional resolution for nested structures and validates that
+        environment variables are properly loaded.
         
         Args:
             config: Configuration tree
         
         Returns:
             Configuration with resolved environment variables
+        
+        Note:
+            Environment variables loaded from .env file are available
+            through os.getenv() and HOCON's ${?VAR} syntax.
         """
         # HOCON's ConfigFactory already resolves ${?VAR} syntax
         # This is handled automatically during parsing
+        # The .env file loaded in __init__ makes those variables available
         return config
     
     def validate(self, config: ConfigTree, schema: Optional[Dict[str, Any]] = None) -> List[str]:
@@ -405,3 +460,53 @@ def get_config_value(config: ConfigTree,
         return config.get(path, default)
     except Exception:
         return default
+
+
+def get_config_or_env(config: ConfigTree,
+                     config_path: str,
+                     env_var: str,
+                     default: Any = None) -> Any:
+    """
+    Get configuration value from config first, then environment variable.
+    
+    This helper function implements the precedence:
+    1. Configuration file value (if present)
+    2. Environment variable (if set)
+    3. Default value
+    
+    Args:
+        config: Configuration tree
+        config_path: Dot-notation path in config
+        env_var: Environment variable name
+        default: Default value if neither config nor env is set
+    
+    Returns:
+        Configuration value, environment value, or default
+    
+    Examples:
+        >>> # Prefer config value over environment
+        >>> config = ConfigFactory.parse_string('db { password = "from_config" }')
+        >>> os.environ['DB_PASSWORD'] = 'from_env'
+        >>> get_config_or_env(config, 'db.password', 'DB_PASSWORD', 'default')
+        'from_config'
+        
+        >>> # Fall back to environment if config missing
+        >>> get_config_or_env(config, 'db.missing', 'DB_PASSWORD', 'default')
+        'from_env'
+        
+        >>> # Use default if both missing
+        >>> get_config_or_env(config, 'db.missing', 'MISSING_VAR', 'default')
+        'default'
+    """
+    # First try config
+    value = get_config_value(config, config_path, None)
+    if value is not None:
+        return value
+    
+    # Then try environment variable
+    env_value = os.getenv(env_var)
+    if env_value is not None:
+        return env_value
+    
+    # Finally return default
+    return default
