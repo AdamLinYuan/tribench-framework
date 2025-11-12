@@ -188,7 +188,6 @@ def run(ctx, experiment, runs, warmup, timeout, no_monitoring, save_json, no_sto
             # Cleanup
             experiment.cleanup()
         
-        click.echo(f"\nResults saved to: results/")
         click.secho(f"\n✓ Experiment '{exp_config.name}' completed successfully", fg='green')
         
     except FileNotFoundError as e:

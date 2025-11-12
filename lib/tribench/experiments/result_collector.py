@@ -29,9 +29,9 @@ class ResultCollector:
             results_dir: Directory to store results. If None, use default.
         """
         if results_dir is None:
-            # Default to tribench-framework/results/
+            # Default to tribench-framework/results/experiments/
             root_path = Path(__file__).parent.parent.parent.parent
-            results_dir = root_path / "results"
+            results_dir = root_path / "results" / "experiments"
         
         self.results_dir = Path(results_dir)
         self.results_dir.mkdir(parents=True, exist_ok=True)

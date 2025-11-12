@@ -32,7 +32,7 @@ class MonitoringConfig:
     # General settings
     enabled: bool = True
     interval_seconds: float = 1.0
-    output_dir: str = "monitoring"
+    output_dir: str = "results/monitoring"
     
     # Resource monitoring
     collect_system_resources: bool = True
