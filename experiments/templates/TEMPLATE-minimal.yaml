@@ -1,0 +1,60 @@
+# ============================================================================
+# Minimal Experiment Template - Quick Start
+# ============================================================================
+#
+# This is a minimal template with only the essential fields.
+# For a complete template with all options, see TEMPLATE.yaml
+#
+# Quick Start:
+#   1. Replace "my-experiment" with your experiment name
+#   2. Update the description
+#   3. Add your queries (inline or via files)
+#   4. Run: tribench exp run experiments/my-experiment.yaml
+#
+# ============================================================================
+
+# Required fields
+name: "my-experiment"
+description: "What this experiment measures"
+system: "trino"
+
+# Connection (adjust as needed)
+connection:
+  catalog: "tpch"
+  schema: "tiny"
+
+# Execution
+runs: 1
+timeout_seconds: 60
+
+# Add your queries here (choose one or both methods)
+
+# Method 1: Inline queries
+queries:
+  - "SELECT COUNT(*) FROM lineitem"
+  - "SELECT * FROM orders LIMIT 10"
+
+# Method 2: Query files
+# query_files:
+#   - "queries/my-query.sql"
+
+# Validation (optional but recommended)
+validation:
+  min_success_rate: 0.95
+
+# Metadata (helps with organization)
+metadata:
+  tags: ["test", "development"]
+
+# ============================================================================
+# Next Steps:
+#
+# 1. Test your experiment:
+#    tribench exp run experiments/my-experiment.yaml
+#
+# 2. View results:
+#    tribench res list
+#    tribench res show <experiment-id> --runs
+#
+# 3. For more options, see TEMPLATE.yaml or the experiments/README.md
+# ============================================================================

@@ -7,6 +7,26 @@ This directory contains experiment definition files in YAML format. Each experim
 - Validation rules
 - Metadata
 
+## Quick Start Templates
+
+Two template files are available to help you create new experiments:
+
+- **TEMPLATE-minimal.yaml** - Minimal template with only essential fields (recommended for beginners)
+- **TEMPLATE.yaml** - Complete template with all available options and detailed documentation
+
+To create a new experiment:
+```bash
+# Copy the minimal template
+cp experiments/templates/TEMPLATE-minimal.yaml experiments/my-experiment.yaml
+
+# Or copy the complete template
+cp experiments/templates/TEMPLATE.yaml experiments/my-experiment.yaml
+
+# Edit your experiment file
+# Then run it
+tribench exp run experiments/my-experiment.yaml
+```
+
 ## Experiment YAML Schema
 
 ```yaml

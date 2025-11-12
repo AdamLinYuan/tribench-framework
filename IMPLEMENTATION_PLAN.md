@@ -259,38 +259,27 @@ This document outlines the development plan for restructuring your Trino benchma
 
 **Rationale**: Monitoring infrastructure must be solid **before** Phase 4 Kubernetes deployment. Distributed systems require robust instrumentation for debugging, performance analysis, and validation. Starting monitoring in Week 18 (immediately after TPC-H completion) provides **10 weeks** of development and testing before cluster deployment begins in Week 28.
 
-### 3.1 Resource Monitoring
-- [ ] System resource monitoring:
-  - [ ] CPU utilization per core (via psutil or docker stats)
-  - [ ] Memory usage (RSS, VMS, swap) per container
-  - [ ] Disk I/O (read/write bytes, IOPS) per volume
-  - [ ] Network I/O (bytes sent/received) per container
-  - [ ] Time-series collection at configurable intervals (default: 1s)
-- [ ] Trino-specific metrics collection via JMX:
-  - [ ] Query execution metrics (planning time, execution time, wall time)
-  - [ ] Data processing metrics (input/output rows, bytes scanned, bytes returned)
-  - [ ] Resource usage per query (peak memory, CPU time, blocked time)
-  - [ ] Cluster metrics (active workers, queued queries, running queries)
-  - [ ] Connector-specific metrics (Iceberg snapshot reads, Hive partitions scanned)
-- [ ] Query-level performance metrics:
-  - [ ] Query plan collection and storage
-  - [ ] Stage-level execution times
-  - [ ] Operator-level statistics
-  - [ ] Explain plan analysis
-- [ ] Real-time monitoring during experiments:
-  - [ ] Live dashboard (optional: simple web UI)
-  - [ ] Progress tracking and ETA calculation
-  - [ ] Alert thresholds (OOM, timeout warnings)
-- [ ] Metrics storage in structured format:
-  - [ ] Time-series JSON format for resource metrics
-  - [ ] CSV export for analysis in external tools
-  - [ ] Integration with results database
+### 3.1 Resource Monitoring ✅ **COMPLETE**
+- [x] System resource monitoring (CPU, memory, disk I/O, network I/O)
+- [x] Trino-specific metrics collection via REST API
+- [x] Query-level performance metrics
+- [x] Real-time monitoring with alert system
+- [x] Metrics storage in structured format (JSON, CSV)
+- [x] Experiment integration with graceful degradation
+- [x] Documentation and user guide
+- [x] Unit tests for core components
 
-### 3.2 Result Storage
-- [ ] Structured result database schema
-- [ ] PostgreSQL integration for results
-- [ ] Result archiving and compression
-- [ ] Data export capabilities (CSV, JSON, Parquet)
+**Status**: Complete (100%) - All monitoring features implemented and tested
+
+### 3.2 Result Storage ✅ **COMPLETE**
+- [x] Structured result database schema (SQLAlchemy models)
+- [x] PostgreSQL integration with SQLite fallback
+- [x] ResultStorage service API
+- [x] Integration with TrinoExperiment
+- [x] Result archiving and compression
+- [x] Data export capabilities (CSV, JSON, Parquet)
+
+**Status**: Complete (100%) - Database storage fully integrated with experiment execution and CLI
 
 ### 3.3 Analysis Engine
 - [ ] Performance analysis algorithms
