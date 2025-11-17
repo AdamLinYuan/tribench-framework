@@ -18,7 +18,7 @@ connection:
 runs: 1
 warmup_runs: 0
 timeout_seconds: 120
-max_retries: 1
+max_retries: 2
 
 # TPC-H Queries
 query_files:

@@ -1,0 +1,63 @@
+# kind cluster configuration for TriBench
+#
+# This creates a 3-node Kubernetes cluster:
+# - 1 control plane (master) node
+# - 2 worker nodes (for Trino coordinator and workers)
+
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+
+# Cluster name (will create context 'kind-tribench')
+name: tribench
+
+# Node configuration
+nodes:
+  # Control plane node (runs Kubernetes API server, scheduler, etc.)
+  - role: control-plane
+    # Extra port mappings to access services from host
+    extraPortMappings:
+      # Trino coordinator UI
+      - containerPort: 30080
+        hostPort: 8080
+        protocol: TCP
+      # MinIO console
+      - containerPort: 30900
+        hostPort: 9000
+        protocol: TCP
+  
+  # Worker node 1 (will run Trino coordinator + MinIO)
+  - role: worker
+    # Labels for pod scheduling
+    labels:
+      node-role: coordinator
+  
+  # Worker node 2 (will run Trino workers)
+  - role: worker
+    labels:
+      node-role: worker
+
+# Networking configuration
+networking:
+  # Disable default CNI (Container Network Interface)
+  # kind uses kindnet by default
+  disableDefaultCNI: false
+  
+  # Pod subnet
+  podSubnet: "10.244.0.0/16"
+  
+  # Service subnet
+  serviceSubnet: "10.96.0.0/12"
+
+# Feature gates (optional: enable experimental features)
+featureGates:
+  # Enable metrics for kubectl top
+  "MixedProtocolLBService": true
+
+# Runtime configuration
+kubeadmConfigPatches:
+  # Increase API server timeout
+  - |
+    kind: ClusterConfiguration
+    apiServer:
+      extraArgs:
+        "enable-admission-plugins": "NodeRestriction"

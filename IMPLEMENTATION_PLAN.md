@@ -308,111 +308,136 @@ This document outlines the development plan for restructuring your Trino benchma
 
 ---
 
-## Phase 4: Cluster Deployment & Distributed Execution (Weeks 26-34)
+## Phase 4: Cluster Deployment & Distributed Execution (Weeks 28-38)
 
 **Status**: **REQUIRED** for dissertation completion - framework must demonstrate scalability to distributed environments
 
+**Approach**: Using **Docker Desktop Kubernetes (kind provisioner)** for local multi-node cluster development, with optional school cluster deployment for validation.
+
 **Note**: This phase sets up the infrastructure needed for distributed benchmarking before conducting validation studies in Phase 5.
 
-### 4.1 Multi-Node Architecture Design
-- [ ] Design distributed Trino cluster architecture:
-  - [ ] Single coordinator + multiple workers configuration
-  - [ ] Shared storage layer (MinIO/S3 for data files)
-  - [ ] Distributed Hive Metastore configuration
-  - [ ] Network topology and service discovery
-- [ ] Framework abstractions for cluster deployment:
-  - [ ] `ClusterSystem` abstraction (extends `System`)
-  - [ ] Node role management (coordinator vs worker)
-  - [ ] Cluster configuration profiles
-  - [ ] Dynamic worker scaling support
-- [ ] Resource allocation strategy:
-  - [ ] CPU/memory per node type
-  - [ ] Storage requirements calculation
-  - [ ] Network bandwidth considerations
-  - [ ] Configuration validation for cluster resources
+### 4.1 Cluster Architecture Design (2-3 weeks)
+- [ ] Design Trino cluster topology:
+  - [ ] 1 coordinator + 1-2 workers (sufficient for dissertation)
+  - [ ] Shared MinIO storage (reuse existing single-node setup)
+  - [ ] PostgreSQL/Hive Metastore (reuse existing single-node setup)
+  - [ ] Understand Kubernetes service discovery (DNS-based)
+- [ ] Framework abstractions for Kubernetes:
+  - [ ] `KubernetesSystem` class (extends `System`)
+  - [ ] Environment profiles (local kind vs optional school cluster)
+  - [ ] Cluster configuration templates (coordinator vs worker properties)
+  - [ ] Integration with existing monitoring infrastructure
+- [ ] Resource requirements definition:
+  - [ ] Set reasonable pod limits (2 CPU, 4GB RAM per Trino pod)
+  - [ ] Persistent volume claims for MinIO and PostgreSQL
+  - [ ] ConfigMap structure for Trino properties
 
-### 4.2 Kubernetes Deployment
-- [ ] Kubernetes infrastructure setup:
-  - [ ] Helm charts for Trino cluster
-  - [ ] StatefulSets for coordinator and workers
-  - [ ] Persistent volumes for data storage
-  - [ ] ConfigMaps for Trino configuration
-  - [ ] Services for internal communication
-- [ ] Cluster orchestration:
-  - [ ] Node affinity and pod placement
-  - [ ] Resource requests and limits
-  - [ ] Health checks and readiness probes
-  - [ ] Rolling updates and zero-downtime deployments
-- [ ] School cluster deployment:
-  - [ ] Kubernetes namespace setup
-  - [ ] Resource quota configuration
-  - [ ] Ingress for external access
-  - [ ] Storage class configuration
-- [ ] Alternative: Docker Compose multi-node (fallback):
-  - [ ] Coordinator service definition
-  - [ ] Worker service template (replicable)
-  - [ ] Shared volume mounts for data
-  - [ ] Network bridge configuration
+### 4.2 Local Kubernetes Setup with kind (2-3 weeks)
+- [ ] Docker Desktop Kubernetes setup:
+  - [ ] Enable Kubernetes in Docker Desktop
+  - [ ] Create kind cluster configuration (2-3 nodes)
+  - [ ] Verify kubectl connectivity
+  - [ ] Test basic pod deployment
+- [ ] Helm chart preparation:
+  - [ ] Find/adapt existing Trino Helm chart (e.g., trinodb/trino)
+  - [ ] Customize values.yaml for dissertation workloads
+  - [ ] Create custom values for coordinator and workers
+  - [ ] Test Helm install/upgrade/rollback locally
+- [ ] Supporting services on Kubernetes:
+  - [ ] Deploy MinIO via Helm (minio/minio chart)
+  - [ ] Deploy PostgreSQL via Helm (bitnami/postgresql chart)
+  - [ ] Deploy Hive Metastore (custom manifest or existing chart)
+  - [ ] Configure service-to-service communication
 
-### 4.3 Distributed Monitoring & Orchestration
-- [ ] Cluster-wide resource monitoring:
-  - [ ] Per-node metrics collection (CPU, memory, network, disk I/O)
-  - [ ] Coordinator-specific metrics (query coordination overhead)
-  - [ ] Worker-specific metrics (task execution, data shuffling)
-  - [ ] Aggregate cluster metrics (total throughput, utilization)
-- [ ] Distributed experiment execution:
-  - [ ] Cluster health checks before experiments
-  - [ ] Coordinated data loading across nodes
-  - [ ] Distributed query execution tracking
-  - [ ] Node failure detection and handling
-- [ ] Result aggregation:
-  - [ ] Coordinator collects results from all workers
-  - [ ] Distributed tracing for query execution paths
-  - [ ] Per-node performance breakdown
-  - [ ] Network overhead measurement
+### 4.3 Framework Integration with Kubernetes (2-3 weeks)
+- [ ] `KubernetesSystem` implementation:
+  - [ ] Lifecycle methods (setup, start, stop, teardown)
+  - [ ] kubectl wrapper for cluster operations
+  - [ ] Helm wrapper for chart deployments
+  - [ ] Health check integration (pod readiness)
+- [ ] Cluster-aware experiment execution:
+  - [ ] Automatic Trino coordinator endpoint detection
+  - [ ] Connection string generation for Kubernetes services
+  - [ ] Experiment configuration for cluster mode
+  - [ ] Error handling for pod failures
+- [ ] Configuration management:
+  - [ ] Environment detection (local kind vs school cluster)
+  - [ ] HOCON profiles for Kubernetes deployment
+  - [ ] ConfigMap generation from HOCON templates
+  - [ ] Secret management for credentials
 
-### 4.4 Cluster Configuration Management
-- [ ] Environment-specific configurations:
-  - [ ] Local development (Docker Compose)
-  - [ ] School cluster (Kubernetes)
-  - [ ] Configuration templating (Jinja2)
-  - [ ] Environment variable management
-- [ ] Framework integration:
-  - [ ] Automatic environment detection
-  - [ ] Cluster-aware experiment execution
-  - [ ] Distributed result collection
-  - [ ] Cluster lifecycle management (start/stop/scale)
+### 4.4 Distributed Monitoring Integration (2 weeks)
+- [ ] Extend existing monitoring for Kubernetes:
+  - [ ] Per-pod metrics collection (leverage kubectl top)
+  - [ ] Coordinator vs worker metric separation
+  - [ ] Kubernetes events monitoring
+  - [ ] Container log aggregation
+- [ ] Cluster-wide resource tracking:
+  - [ ] Aggregate CPU/memory across all Trino pods
+  - [ ] Storage usage monitoring (PVC metrics)
+  - [ ] Network I/O between pods (if feasible)
+  - [ ] Query distribution across workers (via Trino API)
+- [ ] Result collection:
+  - [ ] Store cluster topology metadata with results
+  - [ ] Per-node resource consumption in result database
+  - [ ] Query execution distribution metrics
 
-### 4.5 Documentation & User Guidance
-- [ ] Kubernetes deployment guide:
-  - [ ] Prerequisites (kubectl, helm, cluster access)
-  - [ ] Step-by-step deployment instructions
-  - [ ] Configuration examples for different cluster sizes
+### 4.5 Testing & Validation (1-2 weeks)
+- [ ] Local kind cluster testing:
+  - [ ] Deploy full stack (Trino, MinIO, PostgreSQL, Hive Metastore)
+  - [ ] Run TPC-H queries on 2-node cluster
+  - [ ] Verify monitoring data collection
+  - [ ] Test cluster restart/recovery
+- [ ] Framework testing:
+  - [ ] Unit tests for KubernetesSystem
+  - [ ] Integration tests for cluster deployment
+  - [ ] End-to-end experiment execution tests
+  - [ ] Configuration validation tests
+- [ ] Performance baseline:
+  - [ ] Single-node vs 2-node comparison on same queries
+  - [ ] Identify coordination overhead
+  - [ ] Document expected performance characteristics
+
+### 4.6 Documentation & Optional School Cluster (1-2 weeks)
+- [ ] Comprehensive documentation:
+  - [ ] Docker Desktop Kubernetes setup guide
+  - [ ] kind cluster creation instructions
+  - [ ] Helm chart customization guide
   - [ ] Troubleshooting common issues
-- [ ] School cluster-specific documentation:
-  - [ ] Resource request procedures
-  - [ ] Job submission workflows
-  - [ ] Storage access patterns
-  - [ ] Example experiment configurations
+  - [ ] Configuration examples for different cluster sizes
+- [ ] **Optional**: School cluster deployment (if access available):
+  - [ ] Namespace setup and resource quotas
+  - [ ] Deploy framework to school cluster
+  - [ ] Run validation experiments
+  - [ ] Compare results with local kind cluster
+  - [ ] Document any differences or issues
 - [ ] Migration guide:
   - [ ] Converting single-node experiments to cluster-ready
   - [ ] Configuration changes needed
-  - [ ] Expected behavior changes (timing, resource usage)
+  - [ ] Expected behavior changes
 
-**Time Estimate**: 8 weeks (with 40% buffer = 11.2 weeks)
+**Time Estimate**: 10-11 weeks (reduced from 11.2 weeks)
 
 **Deliverables**:
-- Kubernetes deployment with Helm charts working end-to-end
-- Framework supports both single-node and cluster execution modes
-- School cluster deployment validated (or Docker multi-node fallback)
-- Cluster-aware monitoring and orchestration operational
-- Comprehensive documentation for cluster deployment
+- Kind-based Kubernetes deployment working end-to-end locally
+- Framework supports both single-node (Docker Compose) and cluster (Kubernetes) modes
+- Helm charts for all components (Trino, MinIO, PostgreSQL, Hive Metastore)
+- Cluster-aware monitoring integrated with existing infrastructure
+- Optional: School cluster deployment validated
+- Comprehensive documentation for Kubernetes deployment
 
-**Risks**:
-- **High Priority**: School cluster access timing and resource availability
-- **High Priority**: Kubernetes learning curve if unfamiliar
-- **Medium**: Network complexity in distributed setup
-- **Medium**: Hive Metastore distributed configuration complexity
+**Key Benefits of kind Approach**:
+- ✅ **No school cluster dependency**: Can complete Phase 4 entirely locally
+- ✅ **Fast iteration**: Create/destroy clusters in ~30 seconds
+- ✅ **Real Kubernetes**: Genuine multi-node behavior, not Docker Compose simulation
+- ✅ **Portable**: Works on any developer machine with Docker Desktop
+- ✅ **Risk mitigation**: School cluster becomes optional validation, not critical path
+
+**Risks (Significantly Reduced)**:
+- ~~**High Priority**: School cluster access timing~~ → **MITIGATED**: kind works entirely locally
+- ~~**High Priority**: Kubernetes learning curve~~ → **REDUCED**: kind simplifies cluster management
+- **Low**: Docker Desktop resource limits on laptop (mitigate: 2-node cluster sufficient)
+- **Low**: Kubernetes-specific bugs (mitigate: use stable Helm charts, test thoroughly)
 
 **Dependencies**:
 - Phase 2.2 complete (TPC-H benchmark operational)
@@ -662,7 +687,7 @@ This document outlines the development plan for restructuring your Trino benchma
 | **Phase 2.3** | **Workload Orchestration (OPTIONAL)** | **Deferred** | **-** | **Moved to Phase 7** |
 | **Phase 2.4** | Secrets Management | 1 week | 17 | .env configuration |
 | **Phase 3** | **Monitoring & Analysis** | **10 weeks** | **18-27** | **Resource monitoring ready** |
-| **Phase 4** | **Kubernetes Cluster Deployment** | **11 weeks** | **28-38** | **Multi-node capability** |
+| **Phase 4** | **Kubernetes Cluster (kind)** | **10-11 weeks** | **28-38** | **Multi-node capability** |
 | **Phase 5** | Framework Validation & Case Studies | 10 weeks | 39-48 | Reproducibility, performance studies |
 | **Phase 6** | **TPC-DS Subset (OPTIONAL)** | **~4 weeks** | **-** | **If time permits** |
 | **Phase 7** | Additional Enhancements (OPTIONAL) | - | - | Deferred features, cloud, CI/CD |
@@ -700,14 +725,15 @@ This document outlines the development plan for restructuring your Trino benchma
 | Risk | Probability | Impact | Mitigation |
 |------|------------|--------|------------|
 | **Timeline overrun (52 weeks > 26 weeks)** | **CRITICAL** | **CRITICAL** | **SEE MITIGATION PLAN BELOW** |
-| Multi-node complexity | **HIGH** | **HIGH** | Start cluster access early, test on School resources by Week 30, Docker Swarm as simpler alternative to K8s |
+| Multi-node complexity | **MEDIUM** | **HIGH** | Using kind for local development, real Kubernetes without school cluster dependency |
 | TPC-DS scope (99 queries) | **HIGH** | **HIGH** | Implement subset initially (20 queries), document framework support for full suite |
-| School cluster access delay | **MEDIUM** | **HIGH** | Apply for access immediately, have Docker multi-host fallback, document process for future users |
+| School cluster access delay | **LOW** | **LOW** | **MITIGATED**: kind enables full local development, school cluster now optional |
 | Technical complexity (Trino/Iceberg) | **MEDIUM** | **HIGH** | Start simple (Docker only), use stable versions, extensive testing |
 | Scope creep beyond spec | **MEDIUM** | **HIGH** | Defer Phase 6 completely, focus on research questions, strict phase gates |
 | Research contribution unclear | **LOW** | **CRITICAL** | Framework as primary contribution (aligned with spec), regular advisor meetings |
-| Distributed monitoring complexity | **MEDIUM** | **MEDIUM** | Per-node metrics first, aggregate later, use existing tools (docker stats, JMX) |
-| Testing insufficient for cluster | **MEDIUM** | **HIGH** | Test-driven development, mock cluster scenarios, integration tests |
+| Distributed monitoring complexity | **MEDIUM** | **MEDIUM** | Per-pod metrics first via kubectl, aggregate later, leverage existing monitoring |
+| Testing insufficient for cluster | **MEDIUM** | **HIGH** | Test-driven development, kind enables rapid cluster testing locally |
+| Docker Desktop resource limits | **LOW** | **MEDIUM** | 2-node cluster sufficient, ~8GB RAM allocated to Docker Desktop |
 
 ### Critical Timeline Mitigation Plan
 
@@ -733,30 +759,33 @@ This document outlines the development plan for restructuring your Trino benchma
 
 **Option C: Hybrid Approach (RECOMMENDED + REALISTIC)**
 1. **Immediate Actions**:
-   - Apply for School cluster access (Week 1)
+   - ~~Apply for School cluster access (Week 1)~~ → **OPTIONAL**: kind provides full local cluster
    - Scope TPC-DS to 20-30 queries with framework support for rest
-   - Target 2-4 node cluster (not 8-node)
+   - Target 2-node kind cluster (sufficient for dissertation)
    - Basic monitoring only (defer Grafana/Prometheus)
+   - Enable Kubernetes in Docker Desktop and experiment with kind during Phase 3
 
 2. **Revised Timeline**: **38-42 weeks** (achievable)
    - Phase 2.5 (TPC-DS): 3 weeks (20 queries)
    - Phase 3 (Monitoring): 6 weeks (basic metrics)
    - Phase 4 (Validation): 6 weeks (as planned)
-   - Phase 5 (Cluster): 8 weeks (2-node deployment)
+   - Phase 5 (kind Cluster): 10 weeks (2-node local deployment)
 
 3. **Success Criteria**:
    - ✅ Framework functional for TPC-H (22 queries) and TPC-DS subset (20 queries)
-   - ✅ Single-node and 2-node deployment working
+   - ✅ Single-node (Docker Compose) and 2-node (kind) deployment working
    - ✅ Basic resource monitoring (CPU, memory, query execution)
    - ✅ Validation study: Iceberg vs Hive on single-node and 2-node
    - ✅ Reproducibility and framework overhead measured
-   - ⏭️ Future Work: Full TPC-DS (99 queries), 8-node scalability, advanced monitoring
+   - ✅ **No school cluster dependency** - all work completable locally
+   - ⏭️ Future Work: Full TPC-DS (99 queries), 8-node scalability, advanced monitoring, school cluster deployment
 
 4. **Advisor Discussion Points**:
    - Confirm scope reduction acceptable for dissertation
-   - Clarify minimum cluster requirements (2-node sufficient?)
+   - Clarify 2-node kind cluster sufficient (vs 4-8 nodes)
    - Discuss TPC-DS query count (20 vs 99)
    - Timeline feasibility check (38-42 weeks realistic?)
+   - Confirm Docker Desktop kind approach acceptable (vs school cluster requirement)
 
 ---
 
@@ -778,13 +807,14 @@ This document outlines the development plan for restructuring your Trino benchma
 
 ### Scalability
 - **Single-Node Deployment**: Local Docker Compose with all services
-- **Multi-Node Deployment**: 2-node cluster (coordinator + worker) on School cluster OR Docker multi-host
+- **Multi-Node Deployment**: 2-node kind cluster (coordinator + worker) via Docker Desktop Kubernetes
 - **Scalability Study**: Performance comparison (1-node vs 2-node) for representative workload
+- **Optional**: School cluster deployment for validation (if access available)
 
 ### Documentation
 - **User Guide**: Setup, configuration, running benchmarks, interpreting results
 - **Developer Guide**: Architecture, abstractions, adding benchmarks, extending systems
-- **Deployment Guide**: Single-node and cluster deployment procedures
+- **Deployment Guide**: Single-node (Docker Compose) and multi-node (kind/Kubernetes) deployment procedures
 - **API Documentation**: Core classes and methods documented
 
 ### Validation Study (Demonstrates Framework Utility)
@@ -971,19 +1001,19 @@ Use this template for weekly updates:
 
 **From Original "Out of Scope" List - Now Partially/Fully Included:**
 1. **TPC-DS Benchmark**: ✅ NOW INCLUDED - Subset of 20-30 queries (vs full 99) with framework support documented
-2. **Multi-Node Cluster**: ✅ NOW INCLUDED - 2-node deployment required (vs full 8-node scalability study)
-3. **Kubernetes**: ⏭️ DEFERRED - Docker Compose + optional Docker Swarm sufficient
-4. **Prometheus/Grafana**: ⏭️ DEFERRED - Basic metrics collection via docker stats + JMX, dashboards as Future Work
+2. **Multi-Node Cluster**: ✅ NOW INCLUDED - 2-node kind deployment (local Kubernetes via Docker Desktop)
+3. **Kubernetes**: ✅ NOW INCLUDED - Using Docker Desktop kind provisioner for local multi-node deployment
+4. **Prometheus/Grafana**: ⏭️ DEFERRED - Basic metrics collection via kubectl + Trino API, dashboards as Future Work
 
 **Features Remaining as Future Work:**
 5. **Machine Learning Analysis**: Statistical analysis only (regression models as Future Work)
 6. **Concurrent Execution**: Sequential experiments only (parallel execution as Future Work)
-7. **Cloud Deployment**: Local + School cluster only (AWS/Azure/GCP as Future Work)
+7. **Cloud Deployment**: Local + optional school cluster only (AWS/Azure/GCP as Future Work)
 8. **Full TPC-DS Coverage**: 20-30 queries implemented, remaining 70+ documented as Future Work
-9. **Advanced Scalability**: 2-node demonstrated, 4-8 node scaling as Future Work
+9. **Advanced Scalability**: 2-node demonstrated locally, 4-8 node scaling on school/cloud cluster as Future Work
 10. **Advanced Monitoring**: Real-time dashboards, alerting, distributed tracing as Future Work
 11. **CI/CD Pipeline**: GitHub Actions for testing as Future Work
-12. **Container Orchestration**: Kubernetes, Helm charts as Future Work
+12. **Production Kubernetes**: Advanced Helm features, auto-scaling, production-grade deployment as Future Work
 
 ### Justification for Scope Decisions
 
@@ -993,34 +1023,44 @@ Use this template for weekly updates:
 - Remaining queries follow same patterns (framework extensibility proven)
 - Time saved: ~3 weeks
 
-**2-Node Cluster (vs 8-node)**:
-- Demonstrates distributed execution capability
-- Validates coordinator-worker architecture
-- Shows scalability concept without diminishing returns of testing 4-8 nodes
-- Time saved: ~4 weeks
+**2-Node kind Cluster (vs 8-node)**:
+- Demonstrates distributed execution capability on local machine
+- Validates coordinator-worker architecture using real Kubernetes
+- Shows scalability concept without school cluster dependency
+- Docker Desktop can handle 2-node cluster comfortably (8GB RAM allocation)
+- Time saved: ~4 weeks (no waiting for school cluster access)
+- Risk mitigation: Complete dissertation without external dependencies
 
 **Basic Monitoring (vs Prometheus/Grafana)**:
-- Docker stats + JMX metrics sufficient for performance comparison
+- kubectl metrics + Trino API sufficient for performance comparison
 - Manual result analysis acceptable for dissertation scope
 - Real-time dashboards provide polish but not research value
 - Time saved: ~2 weeks
 
 **Total Time Saved**: ~9 weeks → brings project to **38-42 weeks** (feasible for extended dissertation timeline)
 
+**Additional Benefits of kind Approach**:
+- ✅ **Zero waiting time**: No school cluster access approval process
+- ✅ **Rapid iteration**: Create/destroy clusters in ~30 seconds
+- ✅ **Consistent environment**: Same Kubernetes behavior everywhere
+- ✅ **Offline development**: No network dependency for cluster work
+- ✅ **Cost-free**: No cloud costs, no cluster fees
+
 ### Future Work Opportunities (Dissertation Chapter 7)
 
 These features can be discussed as logical extensions in the "Future Work" section:
 
 1. **Full TPC-DS Implementation**: Complete all 99 queries, query complexity categorization
-2. **Large-Scale Scalability Study**: 4, 8, 16 worker configurations on production cluster
+2. **Large-Scale Scalability Study**: 4, 8, 16 worker configurations on school/cloud cluster
 3. **Advanced Monitoring Infrastructure**: Prometheus, Grafana, distributed tracing, real-time alerting
 4. **Cloud Provider Support**: AWS EMR/EKS, Azure AKS, GCP Dataproc deployment guides
 5. **Machine Learning Integration**: Query performance prediction, resource estimation, anomaly detection
-6. **Kubernetes Orchestration**: Helm charts, auto-scaling, production-grade deployment
+6. **Production Kubernetes**: Advanced Helm features, auto-scaling, ingress controllers, production-grade deployment
 7. **CI/CD Pipeline**: Automated testing, Docker image publishing, benchmark regression detection
 8. **Additional Benchmarks**: SSB (Star Schema Benchmark), custom industry workloads
 9. **Concurrent Execution**: Parallel experiment execution, workload simulation with timing
 10. **Interactive UI**: Web-based configuration, execution, monitoring dashboard
+11. **School Cluster Validation**: Deploy to university cluster for large-scale validation (optional extension)
 
 ---
 

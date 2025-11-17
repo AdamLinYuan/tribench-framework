@@ -648,7 +648,7 @@ networks:
     
     def _check_health(self) -> bool:
         """
-        Check if Trino is healthy.
+        Check if Trino is healthy and ready to accept queries.
         
         Returns:
             True if healthy, False otherwise
@@ -656,12 +656,22 @@ networks:
         try:
             port = get_config_value(self.config, "tribench.systems.trino.coordinator.port", 8080)
             host = get_config_value(self.config, "tribench.systems.trino.coordinator.host", "localhost")
-            url = f"http://{host}:{port}/v1/info"
             
-            response = requests.get(url, timeout=5)
-            return response.status_code == 200
+            # Step 1: Check if HTTP endpoint is responding
+            info_url = f"http://{host}:{port}/v1/info"
+            response = requests.get(info_url, timeout=5)
+            if response.status_code != 200:
+                return False
             
-        except Exception:
+            # Step 2: Check server state from info endpoint
+            info = response.json()
+            if info.get('starting', True):  # If 'starting' field exists and is True
+                logger.debug("Trino is still starting up...")
+                return False
+
+            
+        except Exception as e:
+            logger.debug(f"Health check failed: {e}")
             return False
     
     def _stop_by_container_name(self, force: bool = False) -> bool:

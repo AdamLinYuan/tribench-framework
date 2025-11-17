@@ -37,7 +37,7 @@
     
     <property>
         <name>javax.jdo.option.ConnectionPassword</name>
-        <value>hivepassword</value>
+        <value>hive_password</value>
     </property>
     
     <!-- Schema Verification -->

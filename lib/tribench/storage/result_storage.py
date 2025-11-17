@@ -472,7 +472,7 @@ class ResultStorage:
                 for run in runs
             ]
     
-    def get_run_query_executions(self, run_id: int) -> List[QueryExecution]:
+    def get_run_query_executions(self, run_id: int) -> List[Dict[str, Any]]:
         """
         Get all query executions for a specific run.
         
@@ -480,7 +480,7 @@ class ResultStorage:
             run_id: Run ID
             
         Returns:
-            List of QueryExecution objects with attributes eagerly loaded
+            List of query execution dictionaries
         """
         with get_db_session() as session:
             query_executions = (
@@ -490,20 +490,51 @@ class ResultStorage:
                 .all()
             )
             
-            # Eagerly access all attributes to load them before session closes
-            result = []
-            for qe in query_executions:
-                # Access key attributes to load them
-                _ = (qe.id, qe.query_name, qe.execution_time_ms, qe.status)
-                result.append(qe)
-            
-            # Expunge from session so they can be used outside
-            for qe in result:
-                session.expunge(qe)
-            
-            return result
+            # Convert ORM objects to dictionaries
+            return [
+                {
+                    "id": qe.id,
+                    "run_id": qe.run_id,
+                    "query_name": qe.query_name,
+                    "query_number": qe.query_number,
+                    "query_text": qe.query_text,
+                    "start_time": qe.start_time,
+                    "end_time": qe.end_time,
+                    "execution_time": qe.execution_time,
+                    "status": qe.status,
+                    # Trino-specific metrics
+                    "query_id": qe.query_id,
+                    "planning_time_ms": qe.planning_time_ms,
+                    "analysis_time_ms": qe.analysis_time_ms,
+                    "execution_time_ms": qe.execution_time_ms,
+                    "cpu_time_ms": qe.cpu_time_ms,
+                    "scheduled_time_ms": qe.scheduled_time_ms,
+                    "blocked_time_ms": qe.blocked_time_ms,
+                    # Data processing metrics
+                    "input_rows": qe.input_rows,
+                    "input_bytes": qe.input_bytes,
+                    "output_rows": qe.output_rows,
+                    "output_bytes": qe.output_bytes,
+                    "physical_input_bytes": qe.physical_input_bytes,
+                    "peak_memory_bytes": qe.peak_memory_bytes,
+                    # Results
+                    "rows_returned": qe.rows_returned,
+                    "result_checksum": qe.result_checksum,
+                    # Validation
+                    "validation_passed": qe.validation_passed,
+                    "expected_row_count": qe.expected_row_count,
+                    "expected_checksum": qe.expected_checksum,
+                    # Error information
+                    "error_message": qe.error_message,
+                    "error_code": qe.error_code,
+                    "error_traceback": qe.error_traceback,
+                    # Metadata
+                    "query_metadata": qe.query_metadata,
+                }
+                for qe in query_executions
+            ]
     
-    def get_experiment_by_id(self, experiment_id: int) -> Optional[Experiment]:
+    def get_experiment_by_id(self, experiment_id: int) -> Optional[Dict[str, Any]]:
         """
         Get experiment by ID.
         
@@ -511,18 +542,25 @@ class ResultStorage:
             experiment_id: Experiment ID
             
         Returns:
-            Experiment object (detached from session) or None if not found
+            Experiment dictionary or None if not found
         """
         with get_db_session() as session:
             experiment = session.query(Experiment).filter(Experiment.id == experiment_id).first()
-            if experiment:
-                # Access attributes to load them
-                _ = (experiment.id, experiment.name, experiment.description, 
-                     experiment.experiment_type, experiment.dataset_name, experiment.system_name,
-                     experiment.tags, experiment.created_at, experiment.updated_at)
-                # Expunge from session so it can be used outside
-                session.expunge(experiment)
-            return experiment
+            if not experiment:
+                return None
+            
+            return {
+                "id": experiment.id,
+                "name": experiment.name,
+                "description": experiment.description,
+                "experiment_type": experiment.experiment_type,
+                "dataset_name": experiment.dataset_name,
+                "system_name": experiment.system_name,
+                "config": experiment.config,
+                "tags": experiment.tags,
+                "created_at": experiment.created_at,
+                "updated_at": experiment.updated_at,
+            }
     
     def save_monitoring_metrics(
         self,

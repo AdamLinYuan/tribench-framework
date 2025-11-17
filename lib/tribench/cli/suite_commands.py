@@ -7,6 +7,11 @@ from pathlib import Path
 from tribench.cli.base import cli, dry_run_option, verbose_option, config_option
 from tribench.core.experiment_suite import ExperimentSuite
 from tribench.core.experiment_registry import ExperimentRegistry
+from tribench.systems.trino import TrinoSystem
+from tribench.systems.postgresql import PostgreSQLSystem
+from tribench.systems.minio import MinIOSystem
+from tribench.systems.hive_metastore import HiveMetastoreSystem
+from tribench.utils.config import ConfigurationLoader
 
 logger = logging.getLogger(__name__)
 
@@ -99,68 +104,215 @@ def run_suite(ctx, suite, experiment_filter, runs, timeout, config, dry_run, ver
             click.echo(f"\n[DRY RUN] Would execute {len(experiments_to_run)} experiments")
             return
         
-        # Execute each experiment
+        # =====================================================================
+        # AUTOMATIC SYSTEM LIFECYCLE MANAGEMENT (PEEL-inspired)
+        # =====================================================================
+        # Identify required systems from experiments and load configuration
+        config_loader = ConfigurationLoader()
+        cfg = config_loader.load(experiment_config=config) if config else config_loader.load()
+        
+        # Map system names to instances
+        system_map = {}
+        required_system_names = set()
+        
+        # Detect required systems from experiments
+        for exp in experiments_to_run:
+            required_system_names.add(exp.system)
+            
+            # Check if experiment uses Iceberg catalog - requires full lakehouse stack
+            catalog = None
+            if hasattr(exp, 'connection') and isinstance(exp.connection, dict):
+                catalog = exp.connection.get('catalog')
+            elif hasattr(exp, 'connection') and hasattr(exp.connection, 'catalog'):
+                catalog = exp.connection.catalog
+            
+            if catalog == 'iceberg':
+                # Iceberg catalog requires the full lakehouse stack
+                logger.debug(f"Experiment {exp.name} uses Iceberg catalog, adding lakehouse dependencies")
+                required_system_names.update(['trino', 'hive-metastore', 'minio', 'postgresql'])        
+        # Define dependency order for system startup
+        # Systems should start in this order to respect dependencies
+        system_startup_order = ['postgresql', 'minio', 'hive-metastore', 'trino']
+        
+        # Create system instances for required systems in dependency order
+        systems_to_manage = []
+        for system_name in system_startup_order:
+            if system_name not in required_system_names:
+                continue  # Skip systems not needed
+            
+            try:
+                if system_name == 'trino':
+                    system = TrinoSystem(config=cfg)
+                elif system_name == 'postgresql':
+                    system = PostgreSQLSystem(config=cfg)
+                elif system_name == 'minio':
+                    system = MinIOSystem(config=cfg)
+                elif system_name == 'hive-metastore':
+                    system = HiveMetastoreSystem(config=cfg)
+                else:
+                    click.secho(f"✗ Unknown system: {system_name}", fg='red')
+                    sys.exit(1)
+                
+                systems_to_manage.append(system)
+                logger.debug(f"Will manage system: {system_name}")
+            except Exception as e:
+                click.secho(f"✗ Failed to load system '{system_name}': {e}", fg='red')
+                if ctx.obj.verbose:
+                    import traceback
+                    click.echo(traceback.format_exc())
+                sys.exit(1)
+        
+        # Show systems that will be managed
+        if systems_to_manage:
+            click.echo(f"\nSystems required: {', '.join(s.name for s in systems_to_manage)}")
+            click.echo(f"{'='*60}")
+            click.echo("Phase 1: Checking and starting systems...")
+            click.echo(f"{'='*60}\n")
+            
+            # Track which systems we started vs already running
+            started_systems = []
+            already_running_systems = []
+            
+            for system in systems_to_manage:
+                try:
+                    # Check current status first
+                    click.echo(f"Checking {system.name} status...")
+                    status_info = system.status()
+                    
+                    if status_info.get('running') and status_info.get('healthy'):
+                        # System is already running and healthy - reuse it!
+                        click.secho(f"✓ {system.name} is already running and healthy", fg='green')
+                        already_running_systems.append(system)
+                        
+                    elif status_info.get('running') and not status_info.get('healthy'):
+                        # System is running but unhealthy - restart it
+                        click.secho(f"⚠ {system.name} is running but unhealthy, restarting...", fg='yellow')
+                        system.stop()
+                        system.start()
+                        click.secho(f"✓ {system.name} restarted successfully", fg='green')
+                        started_systems.append(system)
+                        
+                    else:
+                        # System is not running - setup and start
+                        click.echo(f"Setting up {system.name}...")
+                        system.setup()
+                        click.echo(f"Starting {system.name}...")
+                        system.start()
+                        started_systems.append(system)
+                        click.secho(f"✓ {system.name} is running", fg='green')
+                        
+                except Exception as e:
+                    click.secho(f"✗ Failed to start {system.name}: {e}", fg='red')
+                    if ctx.obj.verbose:
+                        import traceback
+                        click.echo(traceback.format_exc())
+                    
+                    # Cleanup only systems we started (not ones that were already running)
+                    if started_systems:
+                        click.echo("\nCleaning up systems we started...")
+                        for started_sys in reversed(started_systems):
+                            try:
+                                click.echo(f"Stopping {started_sys.name}...")
+                                started_sys.stop()
+                            except Exception as cleanup_err:
+                                logger.error(f"Cleanup error for {started_sys.name}: {cleanup_err}")
+                    
+                    sys.exit(1)
+        
+        # Execute experiments with guaranteed cleanup
         click.echo(f"\n{'='*60}")
-        click.echo("Starting suite execution...")
+        click.echo("Phase 2: Executing experiments...")
         click.echo(f"{'='*60}\n")
         
         results_summary = []
         
-        for i, exp_config in enumerate(experiments_to_run, 1):
-            click.echo(f"\n[{i}/{len(experiments_to_run)}] Executing: {exp_config.name}")
-            click.echo("-" * 60)
-            
-            try:
-                # Apply CLI overrides to this experiment
-                if cli_overrides:
-                    from tribench.core.experiment import ExperimentConfig
-                    for key, value in cli_overrides.items():
-                        setattr(exp_config, key, value)
+        try:
+            # Execute each experiment
+            for i, exp_config in enumerate(experiments_to_run, 1):
+                click.echo(f"\n[{i}/{len(experiments_to_run)}] Executing: {exp_config.name}")
+                click.echo("-" * 60)
                 
-                # Create experiment instance
-                experiment = ExperimentRegistry.create(exp_config)
+                try:
+                    # Apply CLI overrides to this experiment
+                    if cli_overrides:
+                        from tribench.core.experiment import ExperimentConfig
+                        for key, value in cli_overrides.items():
+                            setattr(exp_config, key, value)
+                    
+                    # Create experiment instance
+                    experiment = ExperimentRegistry.create(exp_config)
+                    
+                    # Execute lifecycle
+                    experiment.prepare()
+                    click.secho("✓ Preparation complete", fg='green')
+                    
+                    results = experiment.run()
+                    click.secho("✓ Execution complete", fg='green')
+                    
+                    # Validate
+                    if experiment.validate():
+                        click.secho("✓ Validation passed", fg='green')
+                        status = "PASS"
+                    else:
+                        click.secho("✗ Validation failed", fg='yellow')
+                        status = "FAIL"
+                    
+                    experiment.cleanup()
+                    
+                    # Track results
+                    results_summary.append({
+                        'name': exp_config.name,
+                        'status': status,
+                        'duration': results.get('total_duration_seconds', 0),
+                        'runs_completed': results.get('runs_completed', 0)
+                    })
+                    
+                except Exception as e:
+                    click.secho(f"✗ Experiment failed: {e}", fg='red')
+                    if ctx.obj.verbose:
+                        import traceback
+                        click.echo(traceback.format_exc())
+                    
+                    results_summary.append({
+                        'name': exp_config.name,
+                        'status': 'ERROR',
+                        'error': str(e)
+                    })
+                    
+                    # Ask whether to continue
+                    if i < len(experiments_to_run):
+                        if not click.confirm('\nContinue with remaining experiments?', default=True):
+                            break
+        
+        finally:
+            # =====================================================================
+            # GUARANTEED CLEANUP - Runs even if experiments fail
+            # =====================================================================
+            if systems_to_manage:
+                click.echo(f"\n{'='*60}")
+                click.echo("Phase 3: Cleaning up systems...")
+                click.echo(f"{'='*60}\n")
                 
-                # Execute lifecycle
-                experiment.prepare()
-                click.secho("✓ Preparation complete", fg='green')
+                # Only stop systems we started (not ones that were already running)
+                if started_systems:
+                    click.echo("Stopping systems we started...")
+                    for system in reversed(started_systems):
+                        try:
+                            click.echo(f"Stopping {system.name}...")
+                            system.stop()
+                            click.secho(f"✓ {system.name} stopped", fg='green')
+                        except Exception as e:
+                            click.secho(f"✗ Stop error for {system.name}: {e}", fg='yellow')
+                            if ctx.obj.verbose:
+                                import traceback
+                                click.echo(traceback.format_exc())
+                            # Continue cleanup of other systems
                 
-                results = experiment.run()
-                click.secho("✓ Execution complete", fg='green')
-                
-                # Validate
-                if experiment.validate():
-                    click.secho("✓ Validation passed", fg='green')
-                    status = "PASS"
-                else:
-                    click.secho("✗ Validation failed", fg='yellow')
-                    status = "FAIL"
-                
-                experiment.cleanup()
-                
-                # Track results
-                results_summary.append({
-                    'name': exp_config.name,
-                    'status': status,
-                    'duration': results.get('total_duration_seconds', 0),
-                    'runs_completed': results.get('runs_completed', 0)
-                })
-                
-            except Exception as e:
-                click.secho(f"✗ Experiment failed: {e}", fg='red')
-                if ctx.obj.verbose:
-                    import traceback
-                    click.echo(traceback.format_exc())
-                
-                results_summary.append({
-                    'name': exp_config.name,
-                    'status': 'ERROR',
-                    'error': str(e)
-                })
-                
-                # Ask whether to continue
-                if i < len(experiments_to_run):
-                    if not click.confirm('\nContinue with remaining experiments?', default=True):
-                        break
+                # Note about already-running systems
+                if already_running_systems:
+                    click.echo(f"\nSystems left running (were already running):")
+                    for system in already_running_systems:
+                        click.secho(f"  • {system.name}", fg='cyan')
         
         # Print summary
         click.echo(f"\n{'='*60}")

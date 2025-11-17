@@ -26,10 +26,6 @@ experiments:
   - path: ../tpch-iceberg-tiny.yaml
     runs: 2
     description: "TPC-H queries on Iceberg format"
-  
-  # Override timeout for longer-running query with larger scale factor
-  - path: ../tpch-q1-sf1.yaml
-    timeout_seconds: 600
-    runs: 5
+
 
 

@@ -587,6 +587,7 @@ class TrinoExperiment(Experiment):
                 runs = self.result_storage.get_experiment_runs(self.experiment_id)
                 if not runs:
                     logger.warning("No results to validate")
+                    logger.warning(f"Experiment ID {self.experiment_id} has no runs in database")
                     return False
                 
                 # Collect all query executions from all runs
@@ -597,27 +598,31 @@ class TrinoExperiment(Experiment):
                 
                 if not all_query_executions:
                     logger.warning("No query executions to validate")
+                    logger.warning(f"Experiment has {len(runs)} runs but no query executions recorded")
                     return False
                 
                 validation_rules = self.config.validation or {}
                 
                 # Check success rate
                 min_success_rate = validation_rules.get("min_success_rate", 0.95)
-                success_count = sum(1 for q in all_query_executions if q.status == "completed")
+                success_count = sum(1 for q in all_query_executions if q.get('status') == "completed")
                 actual_success_rate = success_count / len(all_query_executions)
+                
+                logger.info(f"Validation check: {success_count}/{len(all_query_executions)} queries completed successfully ({actual_success_rate:.1%})")
                 
                 if actual_success_rate < min_success_rate:
                     logger.error(
-                        f"Success rate {actual_success_rate:.2%} "
-                        f"below minimum {min_success_rate:.2%}"
+                        f"Validation FAILED: Success rate {actual_success_rate:.2%} "
+                        f"is below minimum required {min_success_rate:.2%}"
                     )
+                    logger.error(f"Query statuses: {[q.get('status') for q in all_query_executions]}")
                     return False
                 
                 # Check execution time variance (if multiple successful runs)
                 max_variance = validation_rules.get("max_execution_time_variance", 0.2)  # 20%
                 successful_times = [
-                    q.execution_time for q in all_query_executions 
-                    if q.status == "completed" and q.execution_time is not None
+                    q.get('execution_time') for q in all_query_executions 
+                    if q.get('status') == "completed" and q.get('execution_time') is not None
                 ]
                 
                 if len(successful_times) > 1:
