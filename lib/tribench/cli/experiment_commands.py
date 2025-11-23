@@ -25,6 +25,8 @@ def experiment_group():
 @click.option('--runs', type=int, help='Override number of runs to execute.')
 @click.option('--warmup', type=int, help='Override number of warmup runs.')
 @click.option('--timeout', type=int, help='Override timeout in seconds.')
+@click.option('--host', help='Override Trino host (e.g. localhost or k8s service).')
+@click.option('--port', type=int, help='Override Trino port.')
 @click.option('--no-monitoring', is_flag=True, default=False, 
               help='Disable resource and query monitoring.')
 @click.option('--save-json', is_flag=True, default=False,
@@ -35,7 +37,7 @@ def experiment_group():
 @dry_run_option
 @verbose_option
 @click.pass_context
-def run(ctx, experiment, runs, warmup, timeout, no_monitoring, save_json, no_storage, config, dry_run, verbose):
+def run(ctx, experiment, runs, warmup, timeout, host, port, no_monitoring, save_json, no_storage, config, dry_run, verbose):
     """Execute an experiment.
     
     \b
@@ -46,6 +48,7 @@ def run(ctx, experiment, runs, warmup, timeout, no_monitoring, save_json, no_sto
         tribench exp run experiments/tpch-sf1.yaml --no-monitoring
         tribench exp run experiments/tpch-iceberg-tiny.yaml --save-json
         tribench exp run experiments/tpch-sf1.yaml --no-storage
+        tribench exp run experiments/tpch-sf1.yaml --host localhost --port 8080
     """
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
@@ -67,6 +70,16 @@ def run(ctx, experiment, runs, warmup, timeout, no_monitoring, save_json, no_sto
             cli_overrides['warmup_runs'] = warmup
         if timeout is not None:
             cli_overrides['timeout_seconds'] = timeout
+        
+        # Handle connection overrides
+        connection_overrides = {}
+        if host:
+            connection_overrides['host'] = host
+        if port:
+            connection_overrides['port'] = port
+            
+        if connection_overrides:
+            cli_overrides['connection'] = connection_overrides
         
         # Load experiment configuration with CLI overrides
         click.echo(f"Loading experiment: {exp_path.name}")

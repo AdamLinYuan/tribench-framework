@@ -308,142 +308,73 @@ This document outlines the development plan for restructuring your Trino benchma
 
 ---
 
-## Phase 4: Cluster Deployment & Distributed Execution (Weeks 28-38)
+## Phase 4: MVP Kubernetes Deployment (Weeks 28-33)
 
-**Status**: **REQUIRED** for dissertation completion - framework must demonstrate scalability to distributed environments
+**Status**: **REQUIRED** - Streamlined for MVP delivery
 
-**Approach**: Using **Docker Desktop Kubernetes (kind provisioner)** for local multi-node cluster development, with optional school cluster deployment for validation.
+**Goal**: Enable basic distributed benchmarking on a local Kubernetes cluster using `kind` with minimal complexity.
 
-**Note**: This phase sets up the infrastructure needed for distributed benchmarking before conducting validation studies in Phase 5.
+**Approach**: Focus strictly on `kind` (Kubernetes in Docker) and standard Helm charts to get a working distributed environment quickly.
 
-### 4.1 Cluster Architecture Design (2-3 weeks)
-- [ ] Design Trino cluster topology:
-  - [ ] 1 coordinator + 1-2 workers (sufficient for dissertation)
-  - [ ] Shared MinIO storage (reuse existing single-node setup)
-  - [ ] PostgreSQL/Hive Metastore (reuse existing single-node setup)
-  - [ ] Understand Kubernetes service discovery (DNS-based)
-- [ ] Framework abstractions for Kubernetes:
-  - [ ] `KubernetesSystem` class (extends `System`)
-  - [ ] Environment profiles (local kind vs optional school cluster)
-  - [ ] Cluster configuration templates (coordinator vs worker properties)
-  - [ ] Integration with existing monitoring infrastructure
-- [ ] Resource requirements definition:
-  - [ ] Set reasonable pod limits (2 CPU, 4GB RAM per Trino pod)
-  - [ ] Persistent volume claims for MinIO and PostgreSQL
-  - [ ] ConfigMap structure for Trino properties
+### 4.1 Kubernetes Infrastructure (Week 28) ✅
+- [x] **Re-implement `KubernetesSystem`**:
+  - [x] Create `lib/tribench/systems/kubernetes_system.py` (was missing/lost)
+  - [x] Implement basic `kubectl` wrapper methods
+  - [x] Implement basic `helm` wrapper methods
+- [x] **Local Cluster Setup**:
+  - [x] Create `kind` cluster configuration (1 coordinator + 2 worker)
+  - [x] Script to spin up/tear down `kind` cluster
+- [x] **Helm Chart Selection**:
+  - [x] Select standard Trino Helm chart (e.g., `trinodb/trino`)
+  - [x] Create minimal `values.yaml` for local execution
 
-### 4.2 Local Kubernetes Setup with kind (2-3 weeks)
-- [ ] Docker Desktop Kubernetes setup:
-  - [ ] Enable Kubernetes in Docker Desktop
-  - [ ] Create kind cluster configuration (2-3 nodes)
-  - [ ] Verify kubectl connectivity
-  - [ ] Test basic pod deployment
-- [ ] Helm chart preparation:
-  - [ ] Find/adapt existing Trino Helm chart (e.g., trinodb/trino)
-  - [ ] Customize values.yaml for dissertation workloads
-  - [ ] Create custom values for coordinator and workers
-  - [ ] Test Helm install/upgrade/rollback locally
-- [ ] Supporting services on Kubernetes:
-  - [ ] Deploy MinIO via Helm (minio/minio chart)
-  - [ ] Deploy PostgreSQL via Helm (bitnami/postgresql chart)
-  - [ ] Deploy Hive Metastore (custom manifest or existing chart)
-  - [ ] Configure service-to-service communication
+### 4.2 Deployment & Lifecycle (Week 29) ✅
+- [x] **System Implementation**:
+  - [x] Implement `setup()`: Install Trino & MinIO via Helm
+  - [x] Implement `start()`: Wait for pods to be ready
+  - [x] Implement `stop()`: Uninstall charts / delete cluster
+- [x] **Service Access**:
+  - [x] Implement port-forwarding logic to access Trino coordinator from host
+  - [x] Verify connection via `trino-cli` or python client
 
-### 4.3 Framework Integration with Kubernetes (2-3 weeks)
-- [ ] `KubernetesSystem` implementation:
-  - [ ] Lifecycle methods (setup, start, stop, teardown)
-  - [ ] kubectl wrapper for cluster operations
-  - [ ] Helm wrapper for chart deployments
-  - [ ] Health check integration (pod readiness)
-- [ ] Cluster-aware experiment execution:
-  - [ ] Automatic Trino coordinator endpoint detection
-  - [ ] Connection string generation for Kubernetes services
-  - [ ] Experiment configuration for cluster mode
-  - [ ] Error handling for pod failures
-- [ ] Configuration management:
-  - [ ] Environment detection (local kind vs school cluster)
-  - [ ] HOCON profiles for Kubernetes deployment
-  - [ ] ConfigMap generation from HOCON templates
-  - [ ] Secret management for credentials
+### 4.3 Experiment Integration (Week 30)
+- [ ] **Update Experiment Engine**:
+  - [x] Add support for Kubernetes connection parameters in `TrinoExperiment`
+  - [x] Ensure `QueryExecutor` can talk to the forwarded port
+- [ ] **Basic Execution**:
+  - [ ] Run TPC-H SF0.01 (Tiny) on the K8s cluster
+  - [ ] Verify query completion and result retrieval
 
-### 4.4 Distributed Monitoring Integration (2 weeks)
-- [ ] Extend existing monitoring for Kubernetes:
-  - [ ] Per-pod metrics collection (leverage kubectl top)
-  - [ ] Coordinator vs worker metric separation
-  - [ ] Kubernetes events monitoring
-  - [ ] Container log aggregation
-- [ ] Cluster-wide resource tracking:
-  - [ ] Aggregate CPU/memory across all Trino pods
-  - [ ] Storage usage monitoring (PVC metrics)
-  - [ ] Network I/O between pods (if feasible)
-  - [ ] Query distribution across workers (via Trino API)
-- [ ] Result collection:
-  - [ ] Store cluster topology metadata with results
-  - [ ] Per-node resource consumption in result database
-  - [ ] Query execution distribution metrics
+### 4.4 Basic Monitoring & Validation (Week 31)
+- [ ] **MVP Monitoring**:
+  - [ ] Capture basic pod resource usage (CPU/Memory) via `kubectl top`
+  - [ ] Integrate into `ResourceMonitor` (simple extension)
+- [ ] **Validation**:
+  - [ ] Compare execution of TPC-H SF1 on Docker Compose vs Kind
+  - [ ] Ensure results are identical (correctness check)
 
-### 4.5 Testing & Validation (1-2 weeks)
-- [ ] Local kind cluster testing:
-  - [ ] Deploy full stack (Trino, MinIO, PostgreSQL, Hive Metastore)
-  - [ ] Run TPC-H queries on 2-node cluster
-  - [ ] Verify monitoring data collection
-  - [ ] Test cluster restart/recovery
-- [ ] Framework testing:
-  - [ ] Unit tests for KubernetesSystem
-  - [ ] Integration tests for cluster deployment
-  - [ ] End-to-end experiment execution tests
-  - [ ] Configuration validation tests
-- [ ] Performance baseline:
-  - [ ] Single-node vs 2-node comparison on same queries
-  - [ ] Identify coordination overhead
-  - [ ] Document expected performance characteristics
+### 4.5 Documentation (Week 32)
+- [ ] **User Guide**:
+  - [ ] "Running on Kubernetes" guide
+  - [ ] Prerequisites (Docker, Kind, Helm, Kubectl)
+- [ ] **Developer Guide**:
+  - [ ] How to debug K8s deployments
 
-### 4.6 Documentation & Optional School Cluster (1-2 weeks)
-- [ ] Comprehensive documentation:
-  - [ ] Docker Desktop Kubernetes setup guide
-  - [ ] kind cluster creation instructions
-  - [ ] Helm chart customization guide
-  - [ ] Troubleshooting common issues
-  - [ ] Configuration examples for different cluster sizes
-- [ ] **Optional**: School cluster deployment (if access available):
-  - [ ] Namespace setup and resource quotas
-  - [ ] Deploy framework to school cluster
-  - [ ] Run validation experiments
-  - [ ] Compare results with local kind cluster
-  - [ ] Document any differences or issues
-- [ ] Migration guide:
-  - [ ] Converting single-node experiments to cluster-ready
-  - [ ] Configuration changes needed
-  - [ ] Expected behavior changes
-
-**Time Estimate**: 10-11 weeks (reduced from 11.2 weeks)
+**Time Estimate**: 5 weeks (Reduced from 10-11 weeks)
 
 **Deliverables**:
-- Kind-based Kubernetes deployment working end-to-end locally
-- Framework supports both single-node (Docker Compose) and cluster (Kubernetes) modes
-- Helm charts for all components (Trino, MinIO, PostgreSQL, Hive Metastore)
-- Cluster-aware monitoring integrated with existing infrastructure
-- Optional: School cluster deployment validated
-- Comprehensive documentation for Kubernetes deployment
+- Working `KubernetesSystem` implementation
+- Ability to run TPC-H on a local 2-node `kind` cluster
+- Basic documentation for K8s execution
 
-**Key Benefits of kind Approach**:
-- ✅ **No school cluster dependency**: Can complete Phase 4 entirely locally
-- ✅ **Fast iteration**: Create/destroy clusters in ~30 seconds
-- ✅ **Real Kubernetes**: Genuine multi-node behavior, not Docker Compose simulation
-- ✅ **Portable**: Works on any developer machine with Docker Desktop
-- ✅ **Risk mitigation**: School cluster becomes optional validation, not critical path
-
-**Risks (Significantly Reduced)**:
-- ~~**High Priority**: School cluster access timing~~ → **MITIGATED**: kind works entirely locally
-- ~~**High Priority**: Kubernetes learning curve~~ → **REDUCED**: kind simplifies cluster management
-- **Low**: Docker Desktop resource limits on laptop (mitigate: 2-node cluster sufficient)
-- **Low**: Kubernetes-specific bugs (mitigate: use stable Helm charts, test thoroughly)
+**Key Benefits of MVP Approach**:
+- **Speed**: Focuses on getting it running immediately.
+- **Simplicity**: Avoids complex topology design and custom monitoring for now.
+- **Recovery**: Addresses the missing `KubernetesSystem` file issue directly.
 
 **Dependencies**:
-- Phase 2.2 complete (TPC-H benchmark operational)
-- **Phase 3 complete** (Monitoring infrastructure solid and tested on single-node)
-- School cluster access secured (initiate request early - **ACTION: Apply Week 1**)
-- Basic Kubernetes knowledge (can learn in parallel during Phase 3)
+- Phase 3 complete (Monitoring infrastructure solid)
+- Docker Desktop installed
 
 ---
 

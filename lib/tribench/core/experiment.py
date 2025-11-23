@@ -138,10 +138,9 @@ class ExperimentConfig:
             
             # Apply CLI overrides if provided (highest priority)
             if cli_overrides:
-                for key, value in cli_overrides.items():
-                    if key in config_data and value is not None:
-                        config_data[key] = value
-                        logger.debug(f"CLI override: {key} = {value}")
+                # Use deep merge for CLI overrides to support nested updates (e.g. connection params)
+                cls._deep_merge(config_data, cli_overrides)
+                logger.debug(f"Applied CLI overrides: {cli_overrides}")
             
             logger.info(f"Loaded experiment config: {config_data['name']}")
             return cls(**config_data)

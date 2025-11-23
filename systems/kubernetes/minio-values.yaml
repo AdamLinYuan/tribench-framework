@@ -1,0 +1,14 @@
+
+auth:
+  rootUser: minioadmin
+  rootPassword: minioadmin
+
+resources:
+  requests:
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+
+persistence:
+  enabled: false
+  size: 10Gi

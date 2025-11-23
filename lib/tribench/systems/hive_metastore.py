@@ -356,6 +356,12 @@ class HiveMetastoreSystem(System):
         <value>false</value>
     </property>
     
+    <!-- Disable Derby specific functions that cause issues with Postgres -->
+    <property>
+        <name>datanucleus.storeManagerType</name>
+        <value>rdbms</value>
+    </property>
+    
     <!-- S3A Configuration for MinIO -->
     <property>
         <name>fs.s3a.endpoint</name>
@@ -385,6 +391,37 @@ class HiveMetastoreSystem(System):
     <property>
         <name>fs.s3a.impl</name>
         <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
+    </property>
+    
+    <!-- Map s3:// to S3AFileSystem -->
+    <property>
+        <name>fs.s3.impl</name>
+        <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
+    </property>
+    
+    <property>
+        <name>fs.s3.endpoint</name>
+        <value>{self.minio_endpoint}</value>
+    </property>
+    
+    <property>
+        <name>fs.s3.access.key</name>
+        <value>{self.minio_access_key}</value>
+    </property>
+    
+    <property>
+        <name>fs.s3.secret.key</name>
+        <value>{self.minio_secret_key}</value>
+    </property>
+    
+    <property>
+        <name>fs.s3.path.style.access</name>
+        <value>true</value>
+    </property>
+    
+    <property>
+        <name>fs.s3.connection.ssl.enabled</name>
+        <value>false</value>
     </property>
 </configuration>
 """

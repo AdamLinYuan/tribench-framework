@@ -1,0 +1,52 @@
+
+image:
+  tag: "434"
+
+server:
+  workers: 2
+  node:
+    environment: tribench
+  config:
+    query:
+      maxMemory: "4GB"
+  jvm:
+    maxHeapSize: "4G"
+    gcMethodType: "G1"
+    gcConifg:
+      - "-XX:+UseG1GC"
+      - "-XX:G1HeapRegionSize=32M"
+      - "-XX:+ExplicitGCInvokesConcurrent"
+      - "-XX:+ExitOnOutOfMemoryError"
+      - "-Djdk.attach.allowAttachSelf=true"
+
+coordinator:
+  jvm:
+    maxHeapSize: "4G"
+
+worker:
+  jvm:
+    maxHeapSize: "4G"
+
+# Catalogs
+additionalCatalogs:
+  tpch: |
+    connector.name=tpch
+    tpch.splits-per-node=4
+  memory: |
+    connector.name=memory
+    memory.max-data-per-node=128MB
+  iceberg: |
+    connector.name=iceberg
+    iceberg.catalog.type=hive_metastore
+    hive.metastore.uri=thrift://tribench-hive-metastore:9083
+    fs.native-s3.enabled=true
+    s3.endpoint=http://tribench-minio:9000
+    s3.aws-access-key=minioadmin
+    s3.aws-secret-key=minioadmin
+    s3.path-style-access=true
+    s3.region=us-east-1
+    iceberg.file-format=PARQUET
+    iceberg.compression-codec=SNAPPY
+
+service:
+  type: ClusterIP

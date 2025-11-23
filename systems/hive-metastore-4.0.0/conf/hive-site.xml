@@ -22,7 +22,7 @@
     <!-- PostgreSQL Backend Configuration -->
     <property>
         <name>javax.jdo.option.ConnectionURL</name>
-        <value>jdbc:postgresql://tribench-postgresql-15:5432/metastore</value>
+        <value>jdbc:postgresql://tribench-postgresql:5432/metastore</value>
     </property>
     
     <property>
@@ -49,6 +49,12 @@
     <property>
         <name>hive.metastore.schema.verification</name>
         <value>false</value>
+    </property>
+    
+    <!-- Disable Derby specific functions that cause issues with Postgres -->
+    <property>
+        <name>datanucleus.storeManagerType</name>
+        <value>rdbms</value>
     </property>
     
     <!-- S3A Configuration for MinIO -->
@@ -80,5 +86,36 @@
     <property>
         <name>fs.s3a.impl</name>
         <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
+    </property>
+    
+    <!-- Map s3:// to S3AFileSystem -->
+    <property>
+        <name>fs.s3.impl</name>
+        <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
+    </property>
+    
+    <property>
+        <name>fs.s3.endpoint</name>
+        <value>http://tribench-minio:9000</value>
+    </property>
+    
+    <property>
+        <name>fs.s3.access.key</name>
+        <value>minioadmin</value>
+    </property>
+    
+    <property>
+        <name>fs.s3.secret.key</name>
+        <value>minioadmin</value>
+    </property>
+    
+    <property>
+        <name>fs.s3.path.style.access</name>
+        <value>true</value>
+    </property>
+    
+    <property>
+        <name>fs.s3.connection.ssl.enabled</name>
+        <value>false</value>
     </property>
 </configuration>

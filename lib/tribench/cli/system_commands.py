@@ -7,6 +7,7 @@ from tribench.systems.trino import TrinoSystem
 from tribench.systems.postgresql import PostgreSQLSystem
 from tribench.systems.minio import MinIOSystem
 from tribench.systems.hive_metastore import HiveMetastoreSystem
+from tribench.systems.kubernetes_system import KubernetesSystem
 from tribench.utils.config import ConfigurationLoader
 
 
@@ -19,14 +20,47 @@ def system_group():
     pass
 
 
+def get_k8s_system(config_tree=None):
+    """Get configured KubernetesSystem instance."""
+    # Try to detect context or use default
+    context = "kind-tribench"
+    try:
+        import subprocess
+        # Check if docker-desktop context exists (common on Mac)
+        result = subprocess.run(["kubectl", "config", "get-contexts", "-o", "name"], capture_output=True, text=True)
+        contexts = result.stdout.strip().split('\n')
+        if "docker-desktop" in contexts:
+            context = "docker-desktop"
+        elif "kind-tribench" in contexts:
+            context = "kind-tribench"
+        # If neither, stick to default or maybe first available?
+    except Exception:
+        pass
+
+    config = {
+        "context": context,
+        "namespace": "tribench",
+        "helm_chart": "trinodb/trino",
+        "helm_release": "tribench-trino",
+        "minio_chart": "minio/minio",
+        "minio_release": "tribench-minio",
+        "local_port": 8080,
+        "container_port": 8080,
+        "timeout": 600,
+        "config_tree": config_tree
+    }
+    return KubernetesSystem("k8s-system", config)
+
+
 @system_group.command(name="setup")
 @click.argument("system", type=click.Choice(['trino', 'postgresql', 'minio', 'hive-metastore', 'all']))
 @click.option('--version', help='System version to install.')
+@click.option('--kind', is_flag=True, help='Use Kubernetes backend (Kind/Helm).')
 @config_option
 @dry_run_option
 @verbose_option
 @click.pass_context
-def setup(ctx, system, version, config, dry_run, verbose):
+def setup(ctx, system, version, kind, config, dry_run, verbose):
     """Set up a system (trino, postgresql, minio, hive-metastore, all).
     
     \b
@@ -34,6 +68,7 @@ def setup(ctx, system, version, config, dry_run, verbose):
         tribench sys setup trino
         tribench sys setup trino --version 434
         tribench sys setup all --dry-run
+        tribench sys setup all --kind
     """
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
@@ -42,6 +77,8 @@ def setup(ctx, system, version, config, dry_run, verbose):
         click.echo(f"Setting up system: {system}")
         if version:
             click.echo(f"Version: {version}")
+        if kind:
+            click.echo("Backend: Kubernetes")
         if config:
             click.echo(f"Config: {config}")
     
@@ -49,6 +86,24 @@ def setup(ctx, system, version, config, dry_run, verbose):
         click.echo(f"[DRY RUN] Would setup {system}")
         return
     
+    if kind:
+        try:
+            click.echo(f"Setting up {system} on Kubernetes...")
+            
+            # Load configuration to pass to K8s system
+            loader = ConfigurationLoader()
+            cfg = loader.load(experiment_config=config) if config else loader.load()
+            
+            k8s = get_k8s_system(config_tree=cfg)
+            k8s.setup(component=system)
+            click.secho(f"✓ Kubernetes {system} setup complete", fg='green')
+        except Exception as e:
+            click.secho(f"✗ Failed to setup Kubernetes {system}: {e}", fg='red')
+            if ctx.obj.verbose:
+                import traceback
+                traceback.print_exc()
+        return
+
     # Implement system setup
     systems_to_setup = ['trino', 'postgresql', 'minio', 'hive-metastore'] if system == 'all' else [system]
     
@@ -136,28 +191,45 @@ def setup(ctx, system, version, config, dry_run, verbose):
 
 @system_group.command(name="start")
 @click.argument("system", type=click.Choice(['trino', 'postgresql', 'minio', 'hive-metastore', 'all']))
+@click.option('--kind', is_flag=True, help='Use Kubernetes backend (Kind/Helm).')
 @config_option
 @dry_run_option
 @verbose_option
 @click.pass_context
-def start(ctx, system, config, dry_run, verbose):
+def start(ctx, system, kind, config, dry_run, verbose):
     """Start a system.
     
     \b
     Examples:
         tribench sys start trino
         tribench sys start all
+        tribench sys start all --kind
     """
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
     if ctx.obj.verbose:
         click.echo(f"Starting system: {system}")
+        if kind:
+            click.echo("Backend: Kubernetes")
     
     if ctx.obj.dry_run:
         click.echo(f"[DRY RUN] Would start {system}")
         return
     
+    if kind:
+        try:
+            click.echo(f"Starting {system} on Kubernetes...")
+            k8s = get_k8s_system()
+            k8s.start(component=system)
+            click.secho(f"✓ Kubernetes {system} started successfully", fg='green')
+        except Exception as e:
+            click.secho(f"✗ Failed to start Kubernetes {system}: {e}", fg='red')
+            if ctx.obj.verbose:
+                import traceback
+                traceback.print_exc()
+        return
+
     # Implement system start
     systems_to_start = ['trino', 'postgresql', 'minio', 'hive-metastore'] if system == 'all' else [system]
     
@@ -231,16 +303,18 @@ def start(ctx, system, config, dry_run, verbose):
 @system_group.command(name="stop")
 @click.argument("system", type=click.Choice(['trino', 'postgresql', 'minio', 'hive-metastore', 'all']))
 @click.option('--force', is_flag=True, help='Force stop without graceful shutdown.')
+@click.option('--kind', is_flag=True, help='Use Kubernetes backend (Kind/Helm).')
 @dry_run_option
 @verbose_option
 @click.pass_context
-def stop(ctx, system, force, dry_run, verbose):
+def stop(ctx, system, force, kind, dry_run, verbose):
     """Stop a system.
     
     \b
     Examples:
         tribench sys stop trino
         tribench sys stop all --force
+        tribench sys stop all --kind
     """
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
@@ -249,11 +323,26 @@ def stop(ctx, system, force, dry_run, verbose):
         click.echo(f"Stopping system: {system}")
         if force:
             click.echo("Force stop enabled")
+        if kind:
+            click.echo("Backend: Kubernetes")
     
     if ctx.obj.dry_run:
         click.echo(f"[DRY RUN] Would stop {system}")
         return
     
+    if kind:
+        try:
+            click.echo(f"Stopping {system} on Kubernetes...")
+            k8s = get_k8s_system()
+            k8s.stop(component=system)
+            click.secho(f"✓ Kubernetes {system} stopped successfully", fg='green')
+        except Exception as e:
+            click.secho(f"✗ Failed to stop Kubernetes {system}: {e}", fg='red')
+            if ctx.obj.verbose:
+                import traceback
+                traceback.print_exc()
+        return
+
     # Implement system stop
     systems_to_stop = ['trino', 'postgresql', 'minio', 'hive-metastore'] if system == 'all' else [system]
     
@@ -308,15 +397,17 @@ def stop(ctx, system, force, dry_run, verbose):
 @click.argument("system", 
                 type=click.Choice(['trino', 'postgresql', 'minio', 'hive-metastore', 'all']),
                 required=False)
+@click.option('--kind', is_flag=True, help='Use Kubernetes backend (Kind/Helm).')
 @verbose_option
 @click.pass_context
-def status(ctx, system, verbose):
+def status(ctx, system, kind, verbose):
     """Check system status.
     
     \b
     Examples:
         tribench sys status
         tribench sys status trino
+        tribench sys status --kind
     """
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
@@ -328,6 +419,32 @@ def status(ctx, system, verbose):
             click.echo("Checking status of all systems")
         system = "all"
     
+    if kind:
+        try:
+            k8s = get_k8s_system()
+            status_info = k8s.status()
+            
+            if status_info.get('error'):
+                click.secho(f"✗ Kubernetes Status Error: {status_info['error']}", fg='red')
+            else:
+                click.secho("Kubernetes System Status:", fg='blue', bold=True)
+                click.echo(f"  Running: {status_info['running']}")
+                
+                click.echo("  Pods:")
+                for pod in status_info.get('pods', []):
+                    status_color = 'green' if pod['status'] == 'Running' and pod['ready'] else 'yellow'
+                    click.secho(f"    - {pod['name']}: {pod['status']} (Ready: {pod['ready']})", fg=status_color)
+                
+                click.echo("  Services:")
+                for svc in status_info.get('services', []):
+                    click.echo(f"    - {svc['name']} ({svc['type']})")
+        except Exception as e:
+            click.secho(f"✗ Failed to check Kubernetes status: {e}", fg='red')
+            if ctx.obj.verbose:
+                import traceback
+                traceback.print_exc()
+        return
+
     # Implement system status check
     systems_to_check = ['trino', 'postgresql', 'minio', 'hive-metastore'] if system == 'all' else [system]
     

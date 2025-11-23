@@ -1,0 +1,208 @@
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hive-config
+data:
+  hive-site.xml: |
+    <?xml version="1.0"?>
+    <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+    
+    <configuration>
+        <!-- Metastore Configuration -->
+        <property>
+            <name>metastore.thrift.uris</name>
+            <value>thrift://tribench-hive-metastore:9083</value>
+        </property>
+        
+        <property>
+            <name>metastore.thrift.port</name>
+            <value>9083</value>
+        </property>
+        
+        <!-- Warehouse Directory -->
+        <property>
+            <name>metastore.warehouse.dir</name>
+            <value>s3a://warehouse/</value>
+        </property>
+        
+        <!-- PostgreSQL Backend Configuration -->
+        <property>
+            <name>javax.jdo.option.ConnectionURL</name>
+            <value>jdbc:postgresql://tribench-postgresql:5432/metastore</value>
+        </property>
+        
+        <property>
+            <name>javax.jdo.option.ConnectionDriverName</name>
+            <value>org.postgresql.Driver</value>
+        </property>
+        
+        <property>
+            <name>javax.jdo.option.ConnectionUserName</name>
+            <value>hive</value>
+        </property>
+        
+        <property>
+            <name>javax.jdo.option.ConnectionPassword</name>
+            <value>hive_password</value>
+        </property>
+        
+        <!-- Schema Verification -->
+        <property>
+            <name>datanucleus.schema.autoCreateAll</name>
+            <value>true</value>
+        </property>
+        
+        <property>
+            <name>hive.metastore.schema.verification</name>
+            <value>false</value>
+        </property>
+        
+        <!-- Disable Derby specific functions that cause issues with Postgres -->
+        <property>
+            <name>datanucleus.storeManagerType</name>
+            <value>rdbms</value>
+        </property>
+        
+        <!-- S3A Configuration for MinIO -->
+        <property>
+            <name>fs.s3a.endpoint</name>
+            <value>http://tribench-minio:9000</value>
+        </property>
+        
+        <property>
+            <name>fs.s3a.access.key</name>
+            <value>minioadmin</value>
+        </property>
+        
+        <property>
+            <name>fs.s3a.secret.key</name>
+            <value>minioadmin</value>
+        </property>
+        
+        <property>
+            <name>fs.s3a.path.style.access</name>
+            <value>true</value>
+        </property>
+        
+        <property>
+            <name>fs.s3a.connection.ssl.enabled</name>
+            <value>false</value>
+        </property>
+        
+        <property>
+            <name>fs.s3a.impl</name>
+            <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
+        </property>
+        
+        <!-- Map s3:// to S3AFileSystem -->
+        <property>
+            <name>fs.s3.impl</name>
+            <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
+        </property>
+        
+        <property>
+            <name>fs.s3.endpoint</name>
+            <value>http://tribench-minio:9000</value>
+        </property>
+        
+        <property>
+            <name>fs.s3.access.key</name>
+            <value>minioadmin</value>
+        </property>
+        
+        <property>
+            <name>fs.s3.secret.key</name>
+            <value>minioadmin</value>
+        </property>
+        
+        <property>
+            <name>fs.s3.path.style.access</name>
+            <value>true</value>
+        </property>
+        
+        <property>
+            <name>fs.s3.connection.ssl.enabled</name>
+            <value>false</value>
+        </property>
+    </configuration>
+  core-site.xml: |
+    <?xml version="1.0"?>
+    <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+    
+    <configuration>
+        <!-- S3A Configuration -->
+        <property>
+            <name>fs.s3a.endpoint</name>
+            <value>http://tribench-minio:9000</value>
+        </property>
+        
+        <property>
+            <name>fs.s3a.access.key</name>
+            <value>minioadmin</value>
+        </property>
+        
+        <property>
+            <name>fs.s3a.secret.key</name>
+            <value>minioadmin</value>
+        </property>
+        
+        <property>
+            <name>fs.s3a.path.style.access</name>
+            <value>true</value>
+        </property>
+        
+        <property>
+            <name>fs.s3a.connection.ssl.enabled</name>
+            <value>false</value>
+        </property>
+    </configuration>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hive-metastore
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hive-metastore
+  template:
+    metadata:
+      labels:
+        app: hive-metastore
+    spec:
+      containers:
+      - name: metastore
+        image: tribench-hive-metastore:4.0.0
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 9083
+        env:
+        - name: SERVICE_NAME
+          value: metastore
+        - name: DB_DRIVER
+          value: postgres
+        volumeMounts:
+        - name: hive-config
+          mountPath: /opt/hive/conf/hive-site.xml
+          subPath: hive-site.xml
+        - name: hive-config
+          mountPath: /opt/hadoop/etc/hadoop/core-site.xml
+          subPath: core-site.xml
+      volumes:
+      - name: hive-config
+        configMap:
+          name: hive-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tribench-hive-metastore
+spec:
+  selector:
+    app: hive-metastore
+  ports:
+  - port: 9083
+    targetPort: 9083
+  type: ClusterIP

@@ -1,0 +1,18 @@
+coordinator:
+  jvm:
+    maxHeapSize: "2G"
+    gcHelpers:
+      enabled: false
+
+worker:
+  jvm:
+    maxHeapSize: "2G"
+    gcHelpers:
+      enabled: false
+
+server:
+  workers: 2
+  config:
+    query:
+      maxMemory: "4GB"
+

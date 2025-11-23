@@ -1,6 +1,6 @@
 # TriBench Framework - Complete Codebase Context
 
-**Last Updated**: November 13, 2025  
+**Last Updated**: November 22, 2025  
 **Version**: 1.0.0-dev  
 **Author**: Adam Yuan  
 **Institution**: University of Glasgow  
@@ -14,16 +14,25 @@ TriBench is a PEEL-inspired benchmarking framework for Apache Trino, designed to
 
 **Primary Research Question (Updated)**: How can we design and implement a systematic, reproducible benchmarking framework for Apache Trino that supports executing batch workloads, monitoring resource usage, and generating structured performance reports across single-node and distributed cluster environments?
 
-**Current Status**: Phase 0-3.2 complete (Weeks 1-25)
+**Current Status**: Phase 0-3.2 complete + Suite System Enhancements (Weeks 1-26)
 - ✅ **Phase 0-1**: Foundation, MVP framework, CLI, testing infrastructure (Weeks 1-14)
 - ✅ **Phase 2.1**: Iceberg integration (PostgreSQL, Hive Metastore, MinIO) (Week 15)
 - ✅ **Phase 2.2**: TPC-H benchmark suite (all 22 queries), experiment suites, validation (Week 16)
 - ✅ **Phase 3.1**: Resource monitoring (system, Trino metrics, alerts) (Weeks 18-20)
 - ✅ **Phase 3.2**: Database result storage (SQLite, PostgreSQL, rich CLI) (Weeks 21-25)
-- 🔄 **Phase 3.3**: Analysis Engine - Weeks 26-27 (upcoming)
-- 🔄 **Phase 4**: Kubernetes Cluster Deployment - Weeks 28-38 (planned)
+- ✅ **Suite System**: Smart lifecycle management, catalog detection, improved health checks (Week 26)
+- ✅ **Templates**: Complete reference templates for experiments and suites (Week 26)
+- 🔄 **Phase 3.3**: Analysis Engine - Weeks 27-28 (upcoming)
+- 🔄 **Phase 4**: Kubernetes Cluster Deployment - Weeks 29-38 (planned)
 
-**Key Achievement**: Production-ready monitoring and database storage infrastructure. Framework provides comprehensive performance tracking, structured result storage, and analysis capabilities for rigorous benchmarking studies.
+**Key Achievements**: 
+- Production-ready monitoring and database storage infrastructure
+- Intelligent suite execution with catalog-based dependency detection
+- Enhanced three-layer health verification for robust system readiness
+- Comprehensive template library (355-450 line reference documents)
+- Smart lifecycle management with status-based decision tree
+- Kubernetes deployment documentation for distributed clusters
+- Framework provides comprehensive performance tracking, structured result storage, and analysis capabilities for rigorous benchmarking studies
 
 ---
 
@@ -186,12 +195,24 @@ tribench-framework/
 - Documentation (PHASE_3.2_RESULT_STORAGE.md)
 - Time: ~6 hours
 
+**Suite System Enhancements (✅ Complete - November 2025)**:
+- Smart lifecycle management with status-based decision tree
+- Enhanced three-layer Trino health verification
+- Catalog-based dependency detection and auto-start
+- Dependency-aware system startup ordering
+- Template library (1,255 lines across 3 comprehensive reference files)
+- Kubernetes deployment documentation (400+ lines)
+- Code changes: ~200 lines in suite_commands.py and trino.py
+- Documentation: 4 comprehensive files
+- Time: ~8 hours
+
 **Phase 3 Total**:
-- ~4,800 lines of production code
+- ~5,200 lines of production code
 - ~920 lines of test code
-- 2 comprehensive documentation files
-- 12 hours development time
-- Production-ready monitoring and storage infrastructure
+- 1,255 lines of template documentation
+- 6 comprehensive documentation files
+- 20 hours development time
+- Production-ready monitoring, storage, and intelligent suite execution infrastructure
 
 ### Key Restructuring Decisions
 
@@ -841,6 +862,146 @@ metadata:
 
 ---
 
+### Suite System Enhancements (✅ November 2025)
+
+#### Smart Lifecycle Management
+
+**Purpose**: Intelligent system management with status-based decision making
+
+**Implementation**: `lib/tribench/cli/suite_commands.py`
+
+**Decision Tree**:
+```
+Check System Status
+│
+├─ Running & Healthy → Reuse (no action)
+├─ Running & Unhealthy → Restart (stop + start)
+└─ Not Running → Setup + Start
+```
+
+**Key Features**:
+1. **Separate Tracking**:
+   ```python
+   already_running = []  # Pre-existing systems
+   started_systems = []  # Systems started during suite
+   ```
+
+2. **Selective Cleanup**:
+   - Only stops systems started during suite execution
+   - Leaves pre-existing systems running
+   - Prevents disrupting other work
+
+3. **Status Verification**:
+   - Checks system status before any action
+   - Uses enhanced health checks (see Trino section)
+   - Logs all decisions for transparency
+
+#### Catalog-Based Dependency Detection
+
+**Purpose**: Automatically detect and start required infrastructure based on experiment configuration
+
+**Implementation**: `lib/tribench/cli/suite_commands.py` (lines 108-175)
+
+**How It Works**:
+
+1. **Inspect Experiment Configuration**:
+   ```python
+   for exp in experiments:
+       catalog = exp.connection.get('catalog', '')
+       
+       if catalog == 'iceberg':
+           required_system_names.update([
+               'trino', 'hive-metastore', 'minio', 'postgresql'
+           ])
+   ```
+
+2. **Catalog Mappings**:
+   - `iceberg` → PostgreSQL + MinIO + Hive Metastore + Trino
+   - `hive` → PostgreSQL + MinIO + Hive Metastore + Trino
+   - `delta` / `hudi` → Similar lakehouse stack
+   - `memory` / `tpch` → Trino only
+
+3. **Dependency-Aware Ordering**:
+   ```python
+   system_order = ['postgresql', 'minio', 'hive-metastore', 'trino']
+   
+   systems_to_manage.sort(
+       key=lambda s: system_order.index(s.name.split('-')[0])
+       if s.name.split('-')[0] in system_order else 999
+   )
+   ```
+
+**Benefits**:
+- Users don't need to manually specify all dependencies
+- Prevents "connection refused" errors from missing services
+- Ensures correct startup order (dependencies before dependents)
+- Works seamlessly with smart lifecycle management
+
+**Example**:
+```yaml
+# Suite with Iceberg experiment
+experiments:
+  - name: "iceberg-query-1"
+    connection:
+      catalog: "iceberg"  # ← Automatically starts PostgreSQL, MinIO, HMS, Trino
+      schema: "tpch"
+```
+
+#### Template Library
+
+**Purpose**: Comprehensive reference templates for configuration
+
+**Location**: `experiments/templates/`
+
+**Suite Complete Reference** (`suite-template-complete-reference.yaml` - 355 lines):
+- Every possible suite configuration option
+- 10 example experiments showing different override patterns:
+  1. Minimal experiment (only required fields)
+  2. Execution parameter overrides
+  3. Connection parameter overrides
+  4. Validation overrides
+  5. Monitoring overrides
+  6. Metadata overrides
+  7. Multiple override types
+  8. Different system usage
+  9. Inline queries
+  10. Query files
+- Configuration hierarchy explanation
+- Validation rules documentation
+- Monitoring configuration details
+- Metadata and tagging guide
+
+**Experiment Complete Reference** (`TEMPLATE-complete-reference.yaml` - 450 lines):
+- All experiment fields documented with inline comments
+- Connection parameters (basic and SSL/authentication)
+- Execution parameters (runs, warmup, timeout, retries)
+- Query configuration (inline SQL and file-based)
+- Validation rules (success rate, variance, correctness)
+- Monitoring configuration (resource and query metrics)
+- Metrics collection options
+- Metadata and tagging
+- Advanced options
+
+**Lakehouse Suite Template** (`suite-template-lakehouse.yaml` - 450 lines):
+- 10 comprehensive testing phases:
+  1. **Baseline Performance**: Standard TPC-H queries
+  2. **Time Travel & Versioning**: Snapshot queries
+  3. **Schema Evolution**: Column add/drop/rename
+  4. **Partition Pruning**: Metadata optimization
+  5. **Data Maintenance**: Compaction, snapshot expiration
+  6. **Scalability Testing**: Multiple scale factors
+  7. **Cross-Catalog Comparison**: Iceberg vs memory
+  8. **Concurrent Query Performance**: Multi-user simulation
+  9. **Write Performance**: INSERT, CTAS operations
+  10. **Advanced Iceberg Features**: Merge-on-read, branching
+- Iceberg-specific configuration
+- Object storage metrics emphasis
+- Time travel query examples
+- Metadata table queries
+- Best practices for lakehouse testing
+
+---
+
 ## Dataset Management Module (✅ Phase 2.1 Complete)
 
 ### Overview
@@ -1395,11 +1556,62 @@ services:
       start_period: 30s
 ```
 
-**Health Checking**:
-- HTTP GET to `http://localhost:{port}/v1/info`
-- Expects 200 response with JSON body
+**Health Checking** (✅ Enhanced November 2025):
+
+**Three-Layer Verification** (lines 649-687):
+
+The enhanced health check prevents premature experiment execution by verifying Trino is truly ready:
+
+```python
+def _check_health(self) -> bool:
+    """Three-layer health verification"""
+    url = f"http://{self.host}:{self.port}/v1/info"
+    
+    # Layer 1: HTTP endpoint responds
+    try:
+        response = requests.get(url, timeout=5)
+        if response.status_code != 200:
+            return False
+    except requests.RequestException:
+        return False
+    
+    # Layer 2: Server not in starting state
+    try:
+        info = response.json()
+        if info.get('starting', False):
+            return False
+    except (ValueError, KeyError):
+        return False
+    
+    # Layer 3: Can execute queries
+    try:
+        from trino.dbapi import connect
+        conn = connect(
+            host=self.host,
+            port=self.port,
+            user='tribench'
+        )
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        cursor.fetchone()
+        cursor.close()
+        conn.close()
+        return True
+    except Exception:
+        return False
+```
+
+**Why Three Layers?**:
+1. **HTTP 200** confirms the service is running
+2. **Starting field** confirms initialization is complete
+3. **Query test** confirms the server can actually process queries
+
+This prevents "SERVER_STARTING_UP" errors that occurred when experiments ran while Trino was still initializing internal components.
+
+**Retry Logic**:
 - Retries every 5 seconds for up to 120 seconds
-- Returns True when coordinator is ready
+- Returns True when all three checks pass
+- Logs progress at each check
 
 **Generated Configurations**:
 
@@ -1554,6 +1766,221 @@ open htmlcov/index.html
 - Data loading (CSV, Parquet)
 - Table creation
 - Data validation
+
+---
+
+## Kubernetes Integration (✅ Documentation Complete - November 2025)
+
+### Overview
+
+TriBench supports distributed Trino deployment on Kubernetes using **Kind** (Kubernetes in Docker). This enables testing multi-node cluster configurations locally before deploying to production environments.
+
+**Documentation**: See `docs/KUBERNETES_KIND_SETUP.md` (400+ lines)
+
+### Architecture
+
+**Three-Tier Lakehouse Stack**:
+
+1. **Compute Tier** (Trino):
+   - 1 coordinator node (query planning, coordination)
+   - 2 worker nodes (query execution)
+   - Resource allocation: 3G heap, configurable CPU/memory limits
+
+2. **Metadata Tier**:
+   - PostgreSQL (Hive Metastore backend)
+   - Hive Metastore (Iceberg catalog management)
+   - Storage: 5Gi for PostgreSQL
+
+3. **Storage Tier**:
+   - MinIO (S3-compatible object storage)
+   - Storage: 10Gi for object data
+
+### Kind Cluster Configuration
+
+**File**: `config/kubernetes/kind-cluster-config.yaml`
+
+```yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: tribench
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080  # Trino UI
+        hostPort: 8080
+      - containerPort: 30900  # MinIO Console
+        hostPort: 9000
+  - role: worker
+    labels:
+      node-role: coordinator
+  - role: worker
+    labels:
+      node-role: worker
+```
+
+**Features**:
+- 3-node cluster: 1 control plane, 2 workers
+- Port mappings for external access
+- Node labels for workload scheduling
+- Network configuration for inter-pod communication
+
+### Kubernetes Configuration
+
+**File**: `config/kubernetes/kind.conf`
+
+**Trino Coordinator**:
+```hocon
+coordinator {
+  replicas = 1
+  resources {
+    requests { memory = "4Gi", cpu = "2" }
+    limits { memory = "6Gi", cpu = "4" }
+  }
+  jvm {
+    heap = "3G"
+    opts = ["-server", "-XX:+UseG1GC"]
+  }
+  nodeSelector {
+    node-role = "coordinator"
+  }
+}
+```
+
+**Trino Workers**:
+```hocon
+workers {
+  replicas = 2
+  resources {
+    requests { memory = "4Gi", cpu = "2" }
+    limits { memory = "6Gi", cpu = "4" }
+  }
+  jvm {
+    heap = "3G"
+    opts = ["-server", "-XX:+UseG1GC"]
+  }
+  nodeSelector {
+    node-role = "worker"
+  }
+}
+```
+
+**Supporting Services**:
+- PostgreSQL: 2Gi memory, 1 CPU
+- MinIO: 2Gi memory, 1 CPU
+- Hive Metastore: 2Gi memory, 1 CPU
+
+### Deployment Workflow
+
+**Prerequisites**:
+1. Docker Desktop or Docker Engine
+2. kubectl (Kubernetes CLI)
+3. Helm (package manager)
+4. Kind (Kubernetes in Docker)
+
+**Quick Start**:
+```bash
+# 1. Create Kind cluster
+kind create cluster --config config/kubernetes/kind-cluster-config.yaml
+
+# 2. Deploy infrastructure (via Helm charts - see KUBERNETES_KIND_SETUP.md)
+# - PostgreSQL
+# - MinIO
+# - Hive Metastore
+# - Trino (coordinator + workers)
+
+# 3. Update TriBench configuration
+# Edit config/hosts/kubernetes.conf with service endpoints
+
+# 4. Run experiments
+tribench exp run experiments/kubernetes-test.yaml
+```
+
+### TriBench Integration
+
+**Connection Configuration**:
+```hocon
+tribench.systems.trino {
+  coordinator {
+    host = "localhost"  # Via NodePort mapping
+    port = 30080        # Mapped from container port 8080
+  }
+  
+  catalogs {
+    iceberg {
+      connector = "iceberg"
+      hive.metastore.uri = "thrift://hive-metastore:9083"  # K8s service name
+      iceberg.catalog.type = "hive"
+    }
+  }
+}
+```
+
+**System Management**:
+- Use `kubectl` commands for system lifecycle (start/stop/status)
+- TriBench CLI still manages experiments and results
+- Monitoring via Kubernetes dashboard and Trino Web UI
+
+**Example Commands**:
+```bash
+# Check cluster status
+kubectl get pods -A
+
+# Check Trino status
+kubectl get pods -l app=trino
+
+# View Trino logs
+kubectl logs -l app=trino -c coordinator
+
+# Access Trino UI
+# Open browser to http://localhost:30080
+
+# Run TriBench experiment
+tribench exp run experiments/kubernetes-test.yaml
+```
+
+### Monitoring
+
+**Kubernetes Dashboard**:
+- Resource usage per pod
+- Network traffic
+- Storage volumes
+- Events and logs
+
+**Trino Web UI** (`http://localhost:30080`):
+- Active queries
+- Query history
+- Worker nodes status
+- Cluster resource utilization
+
+**TriBench Monitoring**:
+- Same monitoring capabilities as Docker deployment
+- System resource metrics collected from Kubernetes API
+- Trino metrics via JMX/REST APIs
+
+### Advantages
+
+1. **Distributed Testing**: Test multi-node Trino configuration locally
+2. **Resource Isolation**: Kubernetes resource limits and requests
+3. **Scalability Testing**: Easy to adjust worker count
+4. **Production Parity**: Similar to production Kubernetes deployments
+5. **Educational**: Learn Kubernetes orchestration
+
+### Current Status
+
+- ✅ Kind cluster configuration complete
+- ✅ Kubernetes HOCON configuration complete
+- ✅ Comprehensive setup documentation (400+ lines)
+- ✅ Integration guide with TriBench CLI
+- ⚠️ Runtime testing pending (deployment and validation)
+- 📋 Future: Full TriBench CLI integration with `kubectl` commands
+
+### Next Steps
+
+1. Deploy and validate Kind cluster setup
+2. Run TPC-H benchmark suite on distributed Trino
+3. Compare single-node vs distributed performance
+4. Add Kubernetes-specific system commands to TriBench CLI
+5. Extend to school cluster deployment (Phase 4)
 
 ---
 
@@ -2271,13 +2698,60 @@ print(config)
 - 📝 Evaluation with studies
 - 📝 10,000-15,000 words
 
+### Recent Enhancements (Week 26 - November 2025)
+
+**Smart Lifecycle Management** ✅:
+- Status-based decision tree: reuse (healthy), restart (unhealthy), setup+start (not running)
+- Separate tracking of pre-existing vs newly-started systems
+- Selective cleanup: only stop what was started during suite execution
+- Implemented in `lib/tribench/cli/suite_commands.py`
+
+**Enhanced Health Verification** ✅:
+- Three-layer Trino health check:
+  1. HTTP endpoint check (`/v1/info` returns 200)
+  2. Server state check (JSON `starting` field is false)
+  3. Query execution test (`SELECT 1` succeeds)
+- Prevents "SERVER_STARTING_UP" race condition
+- Implemented in `lib/tribench/systems/trino.py` (lines 649-687)
+
+**Catalog-Based Dependency Detection** ✅:
+- Automatically inspects `experiment.connection.catalog` field
+- Maps catalogs to required infrastructure:
+  - `iceberg`/`hive` → PostgreSQL + MinIO + Hive Metastore + Trino
+  - `delta`/`hudi` → Similar lakehouse stack
+  - `memory`/`tpch` → Trino only
+- Dependency-aware startup ordering: PostgreSQL → MinIO → HMS → Trino
+- Implemented in `lib/tribench/cli/suite_commands.py` (lines 108-175)
+
+**Template Library** ✅:
+- `experiments/templates/suite-template-complete-reference.yaml` (355 lines)
+  - Every possible suite configuration option
+  - 10 example experiments showing different override patterns
+  - Configuration hierarchy and validation rules
+- `experiments/templates/TEMPLATE-complete-reference.yaml` (450 lines)
+  - Complete experiment configuration reference
+  - All fields documented with inline comments
+- `experiments/templates/suite-template-lakehouse.yaml` (450 lines)
+  - 10 testing phases for lakehouse architecture
+  - Time travel, schema evolution, partition pruning
+  - Iceberg-specific features and maintenance operations
+
+**Kubernetes Documentation** ✅:
+- `docs/KUBERNETES_KIND_SETUP.md` (400+ lines)
+  - Architecture overview (3-tier: compute, metadata, storage)
+  - Setup instructions (Kind, kubectl, Helm)
+  - Deployment procedures for all components
+  - Monitoring and troubleshooting guides
+- `config/kubernetes/kind-cluster-config.yaml` (3-node cluster config)
+- `config/kubernetes/kind.conf` (complete K8s configuration)
+- Distributed Trino: 1 coordinator + 2 workers in Kind cluster
+
 ### Known Limitations
 
 1. **Data Loading**: Iceberg loader creates tables but bulk INSERT not fully tested at scale
-2. **Monitoring**: No real-time monitoring yet (Phase 3)
-3. **Cluster**: Single-node only (Kubernetes in Phase 4)
-4. **TPC-DS**: Not implemented (optional Phase 6)
-5. **Result Analysis**: Basic aggregation only (advanced analytics in Phase 3)
+2. **Cluster**: Single-node Docker tested, Kubernetes deployment documented but not fully validated
+3. **TPC-DS**: Not implemented (optional Phase 6)
+4. **Result Analysis**: Basic aggregation only (advanced analytics in Phase 3.3)
 
 ### Next Immediate Steps
 

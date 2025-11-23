@@ -1,0 +1,15 @@
+
+auth:
+  username: hive
+  password: hive_password
+  database: metastore
+  postgresPassword: postgrespassword
+
+primary:
+  persistence:
+    enabled: false
+  resources:
+    requests:
+      memory: 256Mi
+    limits:
+      memory: 512Mi
