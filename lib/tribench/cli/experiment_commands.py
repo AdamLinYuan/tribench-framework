@@ -4,7 +4,7 @@ import click
 import sys
 import logging
 from pathlib import Path
-from tribench.cli.base import cli, dry_run_option, verbose_option, config_option
+from tribench.cli.base import cli, dry_run_option, verbose_option, config_option, kind_option, ensure_k8s_port_forwarding, auto_ensure_trino_connection
 from tribench.core.experiment import ExperimentConfig
 from tribench.experiments import TrinoExperiment
 
@@ -33,12 +33,15 @@ def experiment_group():
               help='Also save results as JSON files (in addition to database).')
 @click.option('--no-storage', is_flag=True, default=False,
               help='Disable all result storage (database and JSON). Useful for testing.')
+@kind_option
 @config_option
 @dry_run_option
 @verbose_option
 @click.pass_context
-def run(ctx, experiment, runs, warmup, timeout, host, port, no_monitoring, save_json, no_storage, config, dry_run, verbose):
+def run(ctx, experiment, runs, warmup, timeout, host, port, no_monitoring, save_json, no_storage, kind, config, dry_run, verbose):
     """Execute an experiment.
+    
+    For Kubernetes deployments, use --kind to ensure port forwarding is active.
     
     \b
     Examples:
@@ -49,9 +52,18 @@ def run(ctx, experiment, runs, warmup, timeout, host, port, no_monitoring, save_
         tribench exp run experiments/tpch-iceberg-tiny.yaml --save-json
         tribench exp run experiments/tpch-sf1.yaml --no-storage
         tribench exp run experiments/tpch-sf1.yaml --host localhost --port 8080
+        tribench exp run experiments/tpch-sf1.yaml --kind  # For Kubernetes deployments
     """
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
+    
+    # Handle Kubernetes port forwarding
+    if kind:
+        if not ensure_k8s_port_forwarding():
+            return
+    else:
+        # Auto-detect and ensure Trino connection
+        auto_ensure_trino_connection()
     
     # Set up logging level
     if ctx.obj.verbose:

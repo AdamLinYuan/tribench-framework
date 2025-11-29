@@ -7,14 +7,17 @@
 **Project Type**: MSc Computer Science Dissertation
 
 ---
-
+REMEBER IF YOU SEE THIS:
+zsh: command not found: tribench
+RUN:
+conda activate tribench
 ## Executive Summary
 
 TriBench is a PEEL-inspired benchmarking framework for Apache Trino, designed to systematically evaluate SQL query performance on distributed data lakehouses. The framework provides structured experiment definition, automated system lifecycle management, resource monitoring, and result analysis capabilities.
 
 **Primary Research Question (Updated)**: How can we design and implement a systematic, reproducible benchmarking framework for Apache Trino that supports executing batch workloads, monitoring resource usage, and generating structured performance reports across single-node and distributed cluster environments?
 
-**Current Status**: Phase 0-3.2 complete + Suite System Enhancements (Weeks 1-26)
+**Current Status**: Phase 0-4 complete + Suite System Enhancements (Weeks 1-38)
 - ✅ **Phase 0-1**: Foundation, MVP framework, CLI, testing infrastructure (Weeks 1-14)
 - ✅ **Phase 2.1**: Iceberg integration (PostgreSQL, Hive Metastore, MinIO) (Week 15)
 - ✅ **Phase 2.2**: TPC-H benchmark suite (all 22 queries), experiment suites, validation (Week 16)
@@ -22,8 +25,9 @@ TriBench is a PEEL-inspired benchmarking framework for Apache Trino, designed to
 - ✅ **Phase 3.2**: Database result storage (SQLite, PostgreSQL, rich CLI) (Weeks 21-25)
 - ✅ **Suite System**: Smart lifecycle management, catalog detection, improved health checks (Week 26)
 - ✅ **Templates**: Complete reference templates for experiments and suites (Week 26)
-- 🔄 **Phase 3.3**: Analysis Engine - Weeks 27-28 (upcoming)
-- 🔄 **Phase 4**: Kubernetes Cluster Deployment - Weeks 29-38 (planned)
+- ✅ **Phase 3.3**: Analysis Engine (Statistical, Comparison, Regression, Scalability) (Weeks 27-28)
+- ✅ **Phase 4**: Kubernetes Cluster Deployment (Native K8s System, Kind Integration) (Weeks 29-38)
+- 🔄 **Phase 5**: Framework Validation & Case Studies - Weeks 39-48 (current)
 
 **Key Achievements**: 
 - Production-ready monitoring and database storage infrastructure
@@ -31,7 +35,8 @@ TriBench is a PEEL-inspired benchmarking framework for Apache Trino, designed to
 - Enhanced three-layer health verification for robust system readiness
 - Comprehensive template library (355-450 line reference documents)
 - Smart lifecycle management with status-based decision tree
-- Kubernetes deployment documentation for distributed clusters
+- Native Kubernetes integration for distributed cluster deployment
+- Advanced analysis engine for statistical comparison and regression detection
 - Framework provides comprehensive performance tracking, structured result storage, and analysis capabilities for rigorous benchmarking studies
 
 ---
@@ -134,28 +139,29 @@ tribench-framework/
 - Experiment integration with backward compatibility
 - Comprehensive test suite (220+ lines)
 
+**Phase 3.3 (Weeks 26-27)**: Analysis Engine ✅
+- Statistical analysis (mean, median, stdev, percentiles, outliers)
+- Performance regression detection (thresholds, trend analysis)
+- Scalability analysis (speed-up, scale-up, efficiency)
+- Comparison analysis (baseline vs. current, t-tests)
+- Performance metrics (throughput, query complexity)
+
+**Phase 4 (Weeks 28-38)**: Kubernetes Cluster Deployment ✅
+- Native Kubernetes system implementation (`KubernetesSystem`)
+- Dynamic manifest generation (Trino, MinIO, PostgreSQL, Hive Metastore)
+- Kind cluster integration and image loading
+- Port forwarding automation
+- Distributed Trino deployment (Coordinator + Workers)
+
 ### Current Phase
 
-**Phase 3.3 (Weeks 26-27)**: Analysis Engine 🔄
-- Statistical analysis (mean, median, stdev, percentiles)
-- Performance regression detection
-- Scalability analysis (speed-up, scale-up)
-- Comparison analysis (baseline vs. current)
-- HTML report generation with visualizations
-
-### Upcoming Phases
-
-**Phase 4 (Weeks 28-38)**: Kubernetes Cluster Deployment 📋
-- Multi-node Trino cluster architecture
-- Helm charts for Kubernetes
-- Distributed monitoring
-- School cluster deployment
-
-**Phase 5 (Weeks 39-48)**: Framework Validation & Case Studies 📋
+**Phase 5 (Weeks 39-48)**: Framework Validation & Case Studies 🔄
 - Reproducibility testing
 - Scalability experiments
 - Performance case study (Iceberg vs Hive)
 - TPC-H workload characterization
+
+### Upcoming Phases
 
 **Phase 6 (Optional)**: TPC-DS Benchmark Support 📋
 - 20-30 representative TPC-DS queries
@@ -172,7 +178,7 @@ tribench-framework/
 - Evaluation with validation studies
 - 10,000-15,000 words
 
-### Phase 3 Completion Summary
+### Phase 3 & 4 Completion Summary
 
 **Phase 3.1 - Resource Monitoring (✅ Complete)**:
 - 6 implementation modules (~2,100 lines)
@@ -195,6 +201,20 @@ tribench-framework/
 - Documentation (PHASE_3.2_RESULT_STORAGE.md)
 - Time: ~6 hours
 
+**Phase 3.3 - Analysis Engine (✅ Complete)**:
+- 5 analysis modules (Statistical, Comparison, Performance, Regression, Scalability)
+- Advanced statistical methods (IQR, Z-score, t-tests)
+- Trend analysis and regression detection
+- Scalability metrics (speed-up, scale-up, efficiency)
+- Integrated with ResultStorage
+
+**Phase 4 - Kubernetes Deployment (✅ Complete)**:
+- Native `KubernetesSystem` implementation (no Helm dependency)
+- Dynamic manifest generation for full lakehouse stack
+- Automated port forwarding and service exposure
+- Kind cluster integration with image loading
+- Full lifecycle management (setup, start, stop, teardown)
+
 **Suite System Enhancements (✅ Complete - November 2025)**:
 - Smart lifecycle management with status-based decision tree
 - Enhanced three-layer Trino health verification
@@ -206,13 +226,10 @@ tribench-framework/
 - Documentation: 4 comprehensive files
 - Time: ~8 hours
 
-**Phase 3 Total**:
-- ~5,200 lines of production code
-- ~920 lines of test code
-- 1,255 lines of template documentation
-- 6 comprehensive documentation files
-- 20 hours development time
-- Production-ready monitoring, storage, and intelligent suite execution infrastructure
+**Phase 3 & 4 Total**:
+- ~7,000+ lines of production code
+- ~1,500+ lines of test code
+- Production-ready monitoring, storage, analysis, and distributed deployment infrastructure
 
 ### Key Restructuring Decisions
 
@@ -247,9 +264,11 @@ class System(ABC):
 - `PostgreSQLSystem` (✅ Complete): Hive Metastore backend database
 - `MinIOSystem` (✅ Complete): S3-compatible object storage for Iceberg
 - `HiveMetastoreSystem` (✅ Complete): Iceberg catalog metadata management
+- `KubernetesSystem` (✅ Complete): Native Kubernetes cluster management
 
 **Key Features**:
 - Docker Compose-based deployment for portability
+- Native Kubernetes manifest generation and management
 - Health checking via HTTP endpoints
 - Configuration-driven setup from HOCON
 - Automatic binary download and caching
@@ -2656,33 +2675,28 @@ print(config)
 - ✅ Query result validation
 - ✅ Multiple runs with statistics
 
-### 🔄 In Progress / Upcoming (Weeks 17+)
+**Monitoring & Analysis**:
+- ✅ Resource monitoring (CPU, memory, I/O)
+- ✅ Trino JMX metrics
+- ✅ PostgreSQL result storage
+- ✅ Statistical analysis (mean, median, stdev)
+- ✅ Scalability analysis (speed-up, scale-up)
+- ✅ Regression detection
+- ✅ Comparison analysis
 
-**Phase 2.4 (Week 17)**: Secrets Management
-- 🔄 .env configuration for credentials
-- 🔄 python-dotenv integration
-- 🔄 Security documentation
+**Kubernetes**:
+- ✅ Native `KubernetesSystem` implementation
+- ✅ Dynamic manifest generation
+- ✅ Kind cluster integration
+- ✅ Distributed Trino deployment
 
-**Phase 3 (Weeks 18-27)**: Monitoring & Analysis
-- 📋 Resource monitoring (CPU, memory, I/O)
-- 📋 Trino JMX metrics
-- 📋 Query plan collection
-- 📋 PostgreSQL result storage
-- 📋 Statistical analysis
-- 📋 HTML report generation
-- 📋 Visualization (matplotlib, plotly)
-
-**Phase 4 (Weeks 28-38)**: Kubernetes Cluster
-- 📋 Multi-node architecture
-- 📋 Helm charts
-- 📋 Distributed monitoring
-- 📋 School cluster deployment
+### 🔄 In Progress / Upcoming (Weeks 39+)
 
 **Phase 5 (Weeks 39-48)**: Validation & Case Studies
-- 📋 Reproducibility testing
-- 📋 Scalability experiments
-- 📋 Iceberg vs Hive performance study
-- 📋 TPC-H workload analysis
+- 🔄 Reproducibility testing
+- 🔄 Scalability experiments
+- 🔄 Iceberg vs Hive performance study
+- 🔄 TPC-H workload analysis
 
 **Phase 6-7 (Optional)**: Enhancements
 - 📋 TPC-DS benchmark (20-30 queries)

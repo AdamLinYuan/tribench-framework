@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  trino:
+    image: trinodb/trino:{{ config.tribench.systems.trino.version }}
+    container_name: tribench-trino-{{ config.tribench.systems.trino.version }}
+    ports:
+      - "{{ config.tribench.systems.trino.coordinator.port }}:{{ config.tribench.systems.trino.coordinator.port }}"
+    volumes:
+      - ./etc:/etc/trino
+      - trino-data:/data
+      - hive-warehouse:/user/hive/warehouse
+    networks:
+      - {{ config.tribench.systems.trino.docker.network }}
+    environment:
+      - JAVA_TOOL_OPTIONS=-Xmx{{ config.tribench.systems.trino.coordinator.jvm.heap }}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:{{ config.tribench.systems.trino.coordinator.port }}/v1/info || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  trino-data:
+    driver: local
+  hive-warehouse:
+    external: true
+    name: hive-metastore-400_hive-warehouse
+
+networks:
+  {{ config.tribench.systems.trino.docker.network }}:
+    external: true

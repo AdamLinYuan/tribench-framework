@@ -59,6 +59,10 @@ class PostgreSQLSystem(System):
         self.init_dir = self.system_dir / "init"
         self.compose_file = self.system_dir / "docker-compose.yml"
         
+        # Initialize template engine
+        from tribench.utils.config import ConfigurationTemplate
+        self.template = ConfigurationTemplate()
+        
         logger.debug(f"PostgreSQLSystem initialized: {self.name} version {self.version}")
     
     def setup(self) -> None:
@@ -258,64 +262,21 @@ class PostgreSQLSystem(System):
         # Create init script for databases
         init_script = self.init_dir / "01-init-databases.sql"
         
-        sql_commands = []
-        for db_name, db_config in self.databases.items():
-            user = db_config.get("user", db_name)
-            password = db_config.get("password", db_name)
-            db = db_config.get("name", db_name)
-            
-            sql_commands.append(f"-- Create database {db}")
-            sql_commands.append(f"CREATE DATABASE {db};")
-            sql_commands.append(f"CREATE USER {user} WITH PASSWORD '{password}';")
-            sql_commands.append(f"GRANT ALL PRIVILEGES ON DATABASE {db} TO {user};")
-            sql_commands.append("")
-        
-        with open(init_script, 'w') as f:
-            f.write("\n".join(sql_commands))
+        self.template.generate(
+            template_name="postgresql-init.sql.j2",
+            config=self.config,
+            output_path=init_script
+        )
         
         logger.debug(f"Generated init script: {init_script}")
     
     def _generate_docker_compose(self) -> None:
         """Generate Docker Compose configuration."""
-        # Get primary database config for POSTGRES_DB env var
-        primary_db = list(self.databases.values())[0] if self.databases else {}
-        primary_db_name = primary_db.get("name", "postgres")
-        primary_user = primary_db.get("user", "postgres")
-        primary_password = primary_db.get("password", "postgres")
-        
-        compose_content = f"""version: '3.8'
-
-services:
-  postgresql:
-    image: {self.docker_image}:{self.docker_tag}
-    container_name: tribench-postgresql-{self.version}
-    environment:
-      POSTGRES_DB: {primary_db_name}
-      POSTGRES_USER: {primary_user}
-      POSTGRES_PASSWORD: {primary_password}
-      POSTGRES_HOST_AUTH_METHOD: trust
-      PGDATA: /var/lib/postgresql/data/pgdata
-    ports:
-      - "{self.port}:5432"
-    volumes:
-      - {self.data_dir}:/var/lib/postgresql/data
-      - {self.init_dir}:/docker-entrypoint-initdb.d
-    networks:
-      - tribench-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U {primary_user}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-networks:
-  tribench-network:
-    external: true
-"""
-        
-        with open(self.compose_file, 'w') as f:
-            f.write(compose_content)
+        self.template.generate(
+            template_name="postgresql-compose.yml.j2",
+            config=self.config,
+            output_path=self.compose_file
+        )
         
         logger.debug(f"Generated Docker Compose: {self.compose_file}")
     

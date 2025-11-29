@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  hive-metastore:
+    container_name: {{ config.tribench.systems.hive_metastore.docker.service_name }}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tribench-hive-metastore:{{ config.tribench.systems.hive_metastore.version }}
+    ports:
+      - "{{ config.tribench.systems.hive_metastore.port }}:{{ config.tribench.systems.hive_metastore.port }}"
+    environment:
+      SERVICE_NAME: metastore
+      DB_DRIVER: postgres
+      SERVICE_OPTS: "-Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver -Djavax.jdo.option.ConnectionURL=jdbc:postgresql://{{ config.tribench.systems.postgresql.docker.service_name }}:5432/{{ config.tribench.systems.postgresql.databases.metastore.name }} -Djavax.jdo.option.ConnectionUserName={{ config.tribench.systems.postgresql.databases.metastore.user }} -Djavax.jdo.option.ConnectionPassword={{ config.tribench.systems.postgresql.databases.metastore.password }}"
+      # S3A configuration
+      AWS_ACCESS_KEY_ID: {{ config.tribench.systems.minio.access_key }}
+      AWS_SECRET_ACCESS_KEY: {{ config.tribench.systems.minio.secret_key }}
+    volumes:
+      - ./conf/hive-site.xml:/opt/hive/conf/hive-site.xml:ro
+      - ./conf/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml:ro
+      - hive-warehouse:/user/hive/warehouse
+    networks:
+      - {{ config.tribench.systems.hive_metastore.docker.network }}
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "{{ config.tribench.systems.hive_metastore.port }}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  hive-warehouse:
+    driver: local
+
+networks:
+  {{ config.tribench.systems.hive_metastore.docker.network }}:
+    external: true
+
+# Note: PostgreSQL and MinIO services must be running before starting Hive Metastore
+# They are defined in their respective docker-compose files

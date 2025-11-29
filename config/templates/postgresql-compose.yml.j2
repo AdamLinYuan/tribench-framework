@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  postgresql:
+    image: {{ config.tribench.systems.postgresql.docker.image }}:{{ config.tribench.systems.postgresql.version }}
+    container_name: tribench-postgresql-{{ config.tribench.systems.postgresql.version }}
+    environment:
+      POSTGRES_DB: {{ config.tribench.systems.postgresql.databases.values() | first | attr('name') }}
+      POSTGRES_USER: {{ config.tribench.systems.postgresql.databases.values() | first | attr('user') }}
+      POSTGRES_PASSWORD: {{ config.tribench.systems.postgresql.databases.values() | first | attr('password') }}
+      POSTGRES_HOST_AUTH_METHOD: trust
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "{{ config.tribench.systems.postgresql.port }}:5432"
+    volumes:
+      - {{ config.tribench.app.path.systems }}/postgresql-{{ config.tribench.systems.postgresql.version }}/data:/var/lib/postgresql/data
+      - {{ config.tribench.app.path.systems }}/postgresql-{{ config.tribench.systems.postgresql.version }}/init:/docker-entrypoint-initdb.d
+    networks:
+      - tribench-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ config.tribench.systems.postgresql.databases.values() | first | attr('user') }}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+networks:
+  tribench-network:
+    external: true

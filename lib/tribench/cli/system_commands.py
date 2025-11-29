@@ -24,18 +24,27 @@ def get_k8s_system(config_tree=None):
     """Get configured KubernetesSystem instance."""
     # Try to detect context or use default
     context = "kind-tribench"
-    try:
-        import subprocess
-        # Check if docker-desktop context exists (common on Mac)
-        result = subprocess.run(["kubectl", "config", "get-contexts", "-o", "name"], capture_output=True, text=True)
-        contexts = result.stdout.strip().split('\n')
-        if "docker-desktop" in contexts:
-            context = "docker-desktop"
-        elif "kind-tribench" in contexts:
-            context = "kind-tribench"
-        # If neither, stick to default or maybe first available?
-    except Exception:
-        pass
+    
+    # Check if context is defined in config
+    if config_tree:
+        context = config_tree.get("kubernetes.context", None)
+
+    if not context:
+        context = "kind-tribench"
+        try:
+            import subprocess
+            # Check available contexts
+            result = subprocess.run(["kubectl", "config", "get-contexts", "-o", "name"], capture_output=True, text=True)
+            contexts = result.stdout.strip().split('\n')
+            
+            # Prioritize kind-tribench
+            if "kind-tribench" in contexts:
+                context = "kind-tribench"
+            elif "docker-desktop" in contexts:
+                context = "docker-desktop"
+            # If neither, stick to default or maybe first available?
+        except Exception:
+            pass
 
     config = {
         "context": context,
@@ -220,7 +229,12 @@ def start(ctx, system, kind, config, dry_run, verbose):
     if kind:
         try:
             click.echo(f"Starting {system} on Kubernetes...")
-            k8s = get_k8s_system()
+            
+            # Load configuration to pass to K8s system
+            loader = ConfigurationLoader()
+            cfg = loader.load(experiment_config=config) if config else loader.load()
+            
+            k8s = get_k8s_system(config_tree=cfg)
             k8s.start(component=system)
             click.secho(f"✓ Kubernetes {system} started successfully", fg='green')
         except Exception as e:
@@ -536,17 +550,19 @@ def status(ctx, system, kind, verbose):
 @system_group.command(name="teardown")
 @click.argument("system", type=click.Choice(['trino', 'postgresql', 'minio', 'hive-metastore', 'all']))
 @click.option('--keep-data', is_flag=True, help='Keep data after teardown.')
+@click.option('--kind', is_flag=True, help='Use Kubernetes backend (Kind/Helm).')
 @click.confirmation_option(prompt='Are you sure you want to tear down the system?')
 @dry_run_option
 @verbose_option
 @click.pass_context
-def teardown(ctx, system, keep_data, dry_run, verbose):
+def teardown(ctx, system, keep_data, kind, dry_run, verbose):
     """Tear down a system (destructive operation).
     
     \b
     Examples:
         tribench sys teardown trino
         tribench sys teardown all --keep-data
+        tribench sys teardown all --kind
     """
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
@@ -555,11 +571,26 @@ def teardown(ctx, system, keep_data, dry_run, verbose):
         click.echo(f"Tearing down system: {system}")
         if keep_data:
             click.echo("Will keep data after teardown")
+        if kind:
+            click.echo("Backend: Kubernetes")
     
     if ctx.obj.dry_run:
         click.echo(f"[DRY RUN] Would teardown {system}")
         return
     
+    if kind:
+        try:
+            click.echo(f"Tearing down {system} on Kubernetes...")
+            k8s = get_k8s_system()
+            k8s.teardown(component=system)
+            click.secho(f"✓ Kubernetes {system} teardown complete", fg='green')
+        except Exception as e:
+            click.secho(f"✗ Failed to teardown Kubernetes {system}: {e}", fg='red')
+            if ctx.obj.verbose:
+                import traceback
+                traceback.print_exc()
+        return
+
     # Implement system teardown
     systems_to_teardown = ['trino', 'postgresql', 'minio', 'hive-metastore'] if system == 'all' else [system]
     
@@ -671,3 +702,76 @@ def logs(ctx, system, tail, follow, verbose):
             if ctx.obj.verbose:
                 import traceback
                 traceback.print_exc()
+
+
+@system_group.command(name="port-forward")
+@click.argument("action", type=click.Choice(['start', 'stop', 'status']))
+@click.option('--port', type=int, default=8080, help='Local port to forward (default: 8080).')
+@verbose_option
+@click.pass_context
+def port_forward(ctx, action, port, verbose):
+    """Manage Kubernetes port forwarding for Trino access.
+    
+    Port forwarding allows local access to Trino running in Kubernetes.
+    Once started, it persists until explicitly stopped or the process is killed.
+    
+    \b
+    Examples:
+        tribench sys port-forward start     # Start port forwarding
+        tribench sys port-forward status    # Check if port forwarding is active
+        tribench sys port-forward stop      # Stop port forwarding
+    """
+    ctx.obj.verbose = verbose or ctx.obj.verbose
+    
+    try:
+        k8s = get_k8s_system()
+        k8s.local_port = port
+        k8s.container_port = port
+        
+        if action == 'start':
+            click.echo(f"Starting port forwarding on port {port}...")
+            
+            # Check if Trino is running first
+            status = k8s.status()
+            if not status.get("running"):
+                click.secho("✗ Trino is not running in Kubernetes.", fg='red')
+                click.echo("  Start it first with: tribench sys start trino --kind")
+                return
+            
+            k8s.start_port_forwarding()
+            
+            if k8s.is_port_forwarding_active():
+                click.secho(f"✓ Port forwarding active on localhost:{port}", fg='green')
+                click.echo("  Trino is now accessible at http://localhost:8080")
+                click.echo("  Stop with: tribench sys port-forward stop")
+            else:
+                click.secho("✗ Failed to start port forwarding", fg='red')
+                click.echo("  Check log/port-forward.log for details")
+                
+        elif action == 'stop':
+            click.echo("Stopping port forwarding...")
+            k8s.stop_port_forwarding()
+            click.secho("✓ Port forwarding stopped", fg='green')
+            
+        elif action == 'status':
+            if k8s.is_port_forwarding_active():
+                # Try to get PID from file
+                from pathlib import Path
+                pid_file = Path("log/port-forward.pid")
+                pid_info = ""
+                if pid_file.exists():
+                    try:
+                        pid = pid_file.read_text().strip()
+                        pid_info = f" (pid {pid})"
+                    except:
+                        pass
+                click.secho(f"✓ Port forwarding is active on localhost:{port}{pid_info}", fg='green')
+            else:
+                click.secho(f"✗ Port forwarding is not active", fg='yellow')
+                click.echo("  Start with: tribench sys port-forward start")
+                
+    except Exception as e:
+        click.secho(f"✗ Port forward operation failed: {e}", fg='red')
+        if ctx.obj.verbose:
+            import traceback
+            traceback.print_exc()

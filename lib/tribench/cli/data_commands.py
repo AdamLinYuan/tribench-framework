@@ -5,7 +5,7 @@ from pathlib import Path
 from datetime import datetime
 import logging
 
-from tribench.cli.base import cli, dry_run_option, verbose_option, config_option
+from tribench.cli.base import cli, dry_run_option, verbose_option, config_option, kind_option, ensure_k8s_port_forwarding, auto_ensure_trino_connection
 from tribench.data.dataset import (
     TPCHGenerator, 
     TrinoDataLoader, 
@@ -177,18 +177,22 @@ def generate(ctx, dataset, format, output, overwrite, config, dry_run, verbose):
 @click.option('--catalog', default='memory', help='Trino catalog name.')
 @click.option('--schema', default='default', help='Schema/database name.')
 @click.option('--validate', is_flag=True, help='Validate data after loading.')
+@kind_option
 @config_option
 @dry_run_option
 @verbose_option
 @click.pass_context
-def load(ctx, dataset, system, catalog, schema, validate, config, dry_run, verbose):
+def load(ctx, dataset, system, catalog, schema, validate, kind, config, dry_run, verbose):
     """Load a dataset into a system.
+    
+    For Kubernetes deployments, use --kind to ensure port forwarding is active.
     
     \b
     Examples:
         tribench data load tpch-sf1
         tribench data load tpch-sf1 --system trino --catalog memory
         tribench data load tpch-sf1 --validate --dry-run
+        tribench data load tpch-sf1 --kind  # For Kubernetes deployments
     """
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
@@ -197,6 +201,14 @@ def load(ctx, dataset, system, catalog, schema, validate, config, dry_run, verbo
     config_loader = ConfigurationLoader()
     full_config = config_loader.load(experiment_config=config)
     datasets_root = Path(full_config.get("tribench", {}).get("datasets", {}).get("dir", "datasets"))
+    
+    # Handle Kubernetes port forwarding
+    if kind:
+        if not ensure_k8s_port_forwarding(full_config):
+            return
+    else:
+        # Auto-detect and ensure Trino connection
+        auto_ensure_trino_connection(full_config)
     
     if ctx.obj.verbose:
         click.echo(f"Dataset: {dataset}")
@@ -290,15 +302,18 @@ def load(ctx, dataset, system, catalog, schema, validate, config, dry_run, verbo
 @click.option('--partition/--no-partition', default=True, 
               help='Partition large tables (lineitem, orders) by date.')
 @click.option('--validate', is_flag=True, help='Validate data after loading.')
+@click.option('--kind', is_flag=True, help='Use Kubernetes backend (ensures port forwarding is active).')
 @config_option
 @dry_run_option
 @verbose_option
 @click.pass_context
-def load_iceberg(ctx, dataset, catalog, schema, storage, partition, validate, config, dry_run, verbose):
+def load_iceberg(ctx, dataset, catalog, schema, storage, partition, validate, kind, config, dry_run, verbose):
     """Load a dataset into Iceberg tables.
     
     Creates Iceberg tables in Trino using the Hive Metastore catalog.
     Supports partitioning and custom S3 storage locations.
+    
+    For Kubernetes deployments, use --kind to ensure port forwarding is active.
     
     \b
     Examples:
@@ -306,6 +321,7 @@ def load_iceberg(ctx, dataset, catalog, schema, storage, partition, validate, co
         tribench data load-iceberg tpch-sf1 --catalog iceberg --schema tpch
         tribench data load-iceberg tpch-sf1 --no-partition
         tribench data load-iceberg tpch-sf1 --storage s3://warehouse/tpch/ --validate
+        tribench data load-iceberg tpch-sf1 --kind  # For Kubernetes deployments
     """
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
@@ -314,6 +330,14 @@ def load_iceberg(ctx, dataset, catalog, schema, storage, partition, validate, co
     config_loader = ConfigurationLoader()
     full_config = config_loader.load(experiment_config=config)
     datasets_root = Path(full_config.get("tribench", {}).get("datasets", {}).get("dir", "datasets"))
+    
+    # Handle Kubernetes port forwarding
+    if kind:
+        if not ensure_k8s_port_forwarding(full_config):
+            return
+    else:
+        # Auto-detect and ensure Trino connection
+        auto_ensure_trino_connection(full_config)
     
     if ctx.obj.verbose:
         click.echo(f"Dataset: {dataset}")
@@ -781,10 +805,11 @@ def validate(ctx, dataset, checksums, row_counts, config, verbose):
               help='Scale factor for row count validation.')
 @click.option('--tables', help='Comma-separated list of tables to validate (default: all TPC-H tables).')
 @click.option('--detailed', is_flag=True, help='Show detailed validation results.')
+@kind_option
 @config_option
 @verbose_option
 @click.pass_context
-def validate_iceberg(ctx, catalog, schema, scale_factor, tables, detailed, config, verbose):
+def validate_iceberg(ctx, catalog, schema, scale_factor, tables, detailed, kind, config, verbose):
     """Validate Iceberg tables in Trino.
     
     Performs comprehensive validation including:
@@ -793,18 +818,29 @@ def validate_iceberg(ctx, catalog, schema, scale_factor, tables, detailed, confi
     - Schema inspection
     - Iceberg metadata validation (snapshots, manifests)
     
+    For Kubernetes deployments, use --kind to ensure port forwarding is active.
+    
     \b
     Examples:
         tribench data validate-iceberg
         tribench data validate-iceberg --catalog iceberg --schema tpch
         tribench data validate-iceberg --scale-factor 1 --detailed
         tribench data validate-iceberg --tables nation,region,customer
+        tribench data validate-iceberg --kind  # For Kubernetes deployments
     """
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
     # Load configuration
     config_loader = ConfigurationLoader()
     full_config = config_loader.load(experiment_config=config)
+    
+    # Handle Kubernetes port forwarding
+    if kind:
+        if not ensure_k8s_port_forwarding(full_config):
+            return
+    else:
+        # Auto-detect and ensure Trino connection
+        auto_ensure_trino_connection(full_config)
     
     if ctx.obj.verbose:
         click.echo(f"Validating Iceberg dataset")

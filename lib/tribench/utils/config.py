@@ -365,7 +365,8 @@ class ConfigurationTemplate:
     def generate(self, 
                 template_name: str, 
                 config: ConfigTree, 
-                output_path: Optional[Path] = None) -> str:
+                output_path: Optional[Path] = None,
+                **kwargs) -> str:
         """
         Generate configuration file from template.
         
@@ -373,6 +374,7 @@ class ConfigurationTemplate:
             template_name: Name of the template file
             config: Configuration data
             output_path: Optional path to write generated config
+            **kwargs: Additional variables to pass to the template
         
         Returns:
             Generated configuration as string
@@ -387,7 +389,7 @@ class ConfigurationTemplate:
         
         try:
             template = self.env.get_template(template_name)
-            rendered = template.render(config=config)
+            rendered = template.render(config=config, **kwargs)
             
             if output_path:
                 output_path = Path(output_path)

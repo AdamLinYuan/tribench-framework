@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trino-config
+data: {{ config_map_data }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trino-catalog
+data: {{ catalog_map_data }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trino-coordinator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trino
+      component: coordinator
+  template:
+    metadata:
+      labels:
+        app: trino
+        component: coordinator
+    spec:
+      containers:
+      - name: trino
+        image: trinodb/trino:{{ config.tribench.systems.trino.version }}
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/trino
+        - name: catalog-volume
+          mountPath: /etc/trino/catalog
+        livenessProbe:
+          httpGet:
+            path: /v1/info
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /v1/info
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 10
+      volumes:
+      - name: config-volume
+        configMap:
+          name: trino-config
+      - name: catalog-volume
+        configMap:
+          name: trino-catalog
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tribench-trino
+spec:
+  selector:
+    app: trino
+    component: coordinator
+  ports:
+  - port: 8080
+    targetPort: 8080
+  type: ClusterIP

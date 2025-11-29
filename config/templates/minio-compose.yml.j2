@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  minio:
+    image: {{ config.tribench.systems.minio.docker.image }}:{{ config.tribench.systems.minio.version }}
+    container_name: tribench-minio
+    command: server /data --console-address ":{{ config.tribench.systems.minio.console_port }}"
+    environment:
+      MINIO_ROOT_USER: {{ config.tribench.systems.minio.access_key }}
+      MINIO_ROOT_PASSWORD: {{ config.tribench.systems.minio.secret_key }}
+      MINIO_REGION: {{ config.tribench.systems.minio.region }}
+    ports:
+      - "{{ config.tribench.systems.minio.port }}:9000"
+      - "{{ config.tribench.systems.minio.console_port }}:9001"
+    volumes:
+      - {{ config.tribench.app.path.systems }}/minio/data:/data
+      - {{ config.tribench.app.path.systems }}/minio/config:/root/.minio
+    networks:
+      - tribench-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+networks:
+  tribench-network:
+    external: true

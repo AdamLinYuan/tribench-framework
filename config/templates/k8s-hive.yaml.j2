@@ -1,0 +1,58 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hive-config
+data:
+  hive-site.xml: |
+{{ hive_site | indent(4, first=True) }}
+  core-site.xml: |
+{{ core_site | indent(4, first=True) }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hive-metastore
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hive-metastore
+  template:
+    metadata:
+      labels:
+        app: hive-metastore
+    spec:
+      containers:
+      - name: metastore
+        image: tribench-hive-metastore:{{ config.tribench.systems.hive_metastore.version }}
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 9083
+        env:
+        - name: SERVICE_NAME
+          value: metastore
+        - name: DB_DRIVER
+          value: postgres
+        volumeMounts:
+        - name: hive-config
+          mountPath: /opt/hive/conf/hive-site.xml
+          subPath: hive-site.xml
+        - name: hive-config
+          mountPath: /opt/hadoop/etc/hadoop/core-site.xml
+          subPath: core-site.xml
+      volumes:
+      - name: hive-config
+        configMap:
+          name: hive-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tribench-hive-metastore
+spec:
+  selector:
+    app: hive-metastore
+  ports:
+  - port: 9083
+    targetPort: 9083
+  type: ClusterIP

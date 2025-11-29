@@ -18,10 +18,7 @@ defaults:
     benchmark_version: "3.0"
 
 # Experiments in this suite
-experiments:
-  # Simple reference - inherits all suite defaults
-  - path: ../tpch-q1-tiny.yaml
-  
+experiments:  
   # Iceberg-based experiment
   - path: ../tpch-iceberg-tiny.yaml
     runs: 2

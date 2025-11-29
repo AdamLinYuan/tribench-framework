@@ -4,7 +4,7 @@ import click
 import sys
 import logging
 from pathlib import Path
-from tribench.cli.base import cli, dry_run_option, verbose_option, config_option
+from tribench.cli.base import cli, dry_run_option, verbose_option, config_option, kind_option, ensure_k8s_port_forwarding, auto_ensure_trino_connection
 from tribench.core.experiment_suite import ExperimentSuite
 from tribench.core.experiment_registry import ExperimentRegistry
 from tribench.systems.trino import TrinoSystem
@@ -31,21 +31,33 @@ def suite_group():
               help='Run only experiments matching this name pattern.')
 @click.option('--runs', type=int, help='Override number of runs for all experiments.')
 @click.option('--timeout', type=int, help='Override timeout for all experiments.')
+@kind_option
 @config_option
 @dry_run_option
 @verbose_option
 @click.pass_context
-def run_suite(ctx, suite, experiment_filter, runs, timeout, config, dry_run, verbose):
+def run_suite(ctx, suite, experiment_filter, runs, timeout, kind, config, dry_run, verbose):
     """Execute all experiments in a suite.
+    
+    For Kubernetes deployments, use --kind to ensure port forwarding is active.
     
     \b
     Examples:
         tribench suite run experiments/suites/tpch-suite.yaml
         tribench suite run experiments/suites/tpch-suite.yaml --exp tpch-q1
         tribench suite run experiments/suites/tpch-suite.yaml --runs 5 --dry-run
+        tribench suite run experiments/suites/tpch-suite.yaml --kind  # For Kubernetes
     """
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
+    
+    # Handle Kubernetes port forwarding
+    if kind:
+        if not ensure_k8s_port_forwarding():
+            return
+    else:
+        # Auto-detect and ensure Trino connection
+        auto_ensure_trino_connection()
     
     # Set up logging level
     if ctx.obj.verbose:

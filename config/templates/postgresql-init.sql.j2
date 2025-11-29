@@ -1,0 +1,7 @@
+{% for db_name, db_config in config.tribench.systems.postgresql.databases.items() %}
+-- Create database {{ db_config.name }}
+CREATE DATABASE {{ db_config.name }};
+CREATE USER {{ db_config.user }} WITH PASSWORD '{{ db_config.password }}';
+GRANT ALL PRIVILEGES ON DATABASE {{ db_config.name }} TO {{ db_config.user }};
+
+{% endfor %}

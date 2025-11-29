@@ -62,6 +62,10 @@ class MinIOSystem(System):
         self.config_dir = self.system_dir / "config"
         self.compose_file = self.system_dir / "docker-compose.yml"
         
+        # Initialize template engine
+        from tribench.utils.config import ConfigurationTemplate
+        self.template = ConfigurationTemplate()
+        
         logger.debug(f"MinIOSystem initialized: {self.name}")
     
     def setup(self) -> None:
@@ -262,39 +266,11 @@ class MinIOSystem(System):
     
     def _generate_docker_compose(self) -> None:
         """Generate Docker Compose configuration."""
-        compose_content = f"""version: '3.8'
-
-services:
-  minio:
-    image: {self.docker_image}:{self.version}
-    container_name: tribench-minio
-    command: server /data --console-address ":{self.console_port}"
-    environment:
-      MINIO_ROOT_USER: {self.access_key}
-      MINIO_ROOT_PASSWORD: {self.secret_key}
-      MINIO_REGION: {self.region}
-    ports:
-      - "{self.port}:9000"
-      - "{self.console_port}:9001"
-    volumes:
-      - {self.data_dir}:/data
-      - {self.config_dir}:/root/.minio
-    networks:
-      - tribench-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-networks:
-  tribench-network:
-    external: true
-"""
-        
-        with open(self.compose_file, 'w') as f:
-            f.write(compose_content)
+        self.template.generate(
+            template_name="minio-compose.yml.j2",
+            config=self.config,
+            output_path=self.compose_file
+        )
         
         logger.debug(f"Generated Docker Compose: {self.compose_file}")
     

@@ -320,17 +320,16 @@ This document outlines the development plan for restructuring your Trino benchma
 - [x] **Re-implement `KubernetesSystem`**:
   - [x] Create `lib/tribench/systems/kubernetes_system.py` (was missing/lost)
   - [x] Implement basic `kubectl` wrapper methods
-  - [x] Implement basic `helm` wrapper methods
 - [x] **Local Cluster Setup**:
   - [x] Create `kind` cluster configuration (1 coordinator + 2 worker)
   - [x] Script to spin up/tear down `kind` cluster
 - [x] **Helm Chart Selection**:
-  - [x] Select standard Trino Helm chart (e.g., `trinodb/trino`)
+  - [x] Select standard Trino 
   - [x] Create minimal `values.yaml` for local execution
 
 ### 4.2 Deployment & Lifecycle (Week 29) ✅
 - [x] **System Implementation**:
-  - [x] Implement `setup()`: Install Trino & MinIO via Helm
+  - [x] Implement `setup()`: Install Trino & MinIO
   - [x] Implement `start()`: Wait for pods to be ready
   - [x] Implement `stop()`: Uninstall charts / delete cluster
 - [x] **Service Access**:
@@ -342,7 +341,7 @@ This document outlines the development plan for restructuring your Trino benchma
   - [x] Add support for Kubernetes connection parameters in `TrinoExperiment`
   - [x] Ensure `QueryExecutor` can talk to the forwarded port
 - [ ] **Basic Execution**:
-  - [ ] Run TPC-H SF0.01 (Tiny) on the K8s cluster
+  - [ ] Run TPC-H SF0.01 (Tiny) and TPC-H Iceberg on the K8s cluster
   - [ ] Verify query completion and result retrieval
 
 ### 4.4 Basic Monitoring & Validation (Week 31)

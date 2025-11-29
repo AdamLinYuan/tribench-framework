@@ -5,24 +5,24 @@
     <!-- Metastore Configuration -->
     <property>
         <name>metastore.thrift.uris</name>
-        <value>thrift://tribench-hive-metastore:9083</value>
+        <value>thrift://{{ config.tribench.systems.hive_metastore.docker.service_name }}:{{ config.tribench.systems.hive_metastore.port }}</value>
     </property>
     
     <property>
         <name>metastore.thrift.port</name>
-        <value>9083</value>
+        <value>{{ config.tribench.systems.hive_metastore.port }}</value>
     </property>
     
     <!-- Warehouse Directory -->
     <property>
         <name>metastore.warehouse.dir</name>
-        <value>s3a://warehouse/</value>
+        <value>{{ config.tribench.systems.hive_metastore.warehouse_dir }}</value>
     </property>
     
     <!-- PostgreSQL Backend Configuration -->
     <property>
         <name>javax.jdo.option.ConnectionURL</name>
-        <value>jdbc:postgresql://tribench-postgresql-15:5432/metastore</value>
+        <value>jdbc:postgresql://{{ config.tribench.systems.postgresql.docker.service_name }}:5432/{{ config.tribench.systems.postgresql.databases.metastore.name }}</value>
     </property>
     
     <property>
@@ -32,12 +32,12 @@
     
     <property>
         <name>javax.jdo.option.ConnectionUserName</name>
-        <value>hive</value>
+        <value>{{ config.tribench.systems.postgresql.databases.metastore.user }}</value>
     </property>
     
     <property>
         <name>javax.jdo.option.ConnectionPassword</name>
-        <value>hive_password</value>
+        <value>{{ config.tribench.systems.postgresql.databases.metastore.password }}</value>
     </property>
     
     <!-- Schema Verification -->
@@ -60,17 +60,17 @@
     <!-- S3A Configuration for MinIO -->
     <property>
         <name>fs.s3a.endpoint</name>
-        <value>http://tribench-minio:9000</value>
+        <value>http://{{ config.tribench.systems.minio.docker.service_name }}:{{ config.tribench.systems.minio.port }}</value>
     </property>
     
     <property>
         <name>fs.s3a.access.key</name>
-        <value>minioadmin</value>
+        <value>{{ config.tribench.systems.minio.access_key }}</value>
     </property>
     
     <property>
         <name>fs.s3a.secret.key</name>
-        <value>minioadmin</value>
+        <value>{{ config.tribench.systems.minio.secret_key }}</value>
     </property>
     
     <property>
@@ -96,17 +96,17 @@
     
     <property>
         <name>fs.s3.endpoint</name>
-        <value>http://tribench-minio:9000</value>
+        <value>http://{{ config.tribench.systems.minio.docker.service_name }}:{{ config.tribench.systems.minio.port }}</value>
     </property>
     
     <property>
         <name>fs.s3.access.key</name>
-        <value>minioadmin</value>
+        <value>{{ config.tribench.systems.minio.access_key }}</value>
     </property>
     
     <property>
         <name>fs.s3.secret.key</name>
-        <value>minioadmin</value>
+        <value>{{ config.tribench.systems.minio.secret_key }}</value>
     </property>
     
     <property>

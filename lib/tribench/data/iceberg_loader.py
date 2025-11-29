@@ -195,8 +195,9 @@ class IcebergDataLoader:
             
             logger.info(f"✓ Schema ready: {schema}")
         except Exception as e:
-            # Schema might already exist
-            logger.debug(f"Schema creation note: {e}")
+            # Schema might already exist, but if it failed for other reasons (e.g. S3 bucket missing),
+            # we should know about it.
+            logger.warning(f"Schema creation failed (ignoring if it already exists): {e}")
     
     def _create_iceberg_table(
         self,

@@ -89,6 +89,10 @@ class HiveMetastoreSystem(System):
         self.system_dir = systems_dir / f"hive-metastore-{self.version}"
         self.conf_dir = self.system_dir / 'conf'
         
+        # Initialize template engine
+        from tribench.utils.config import ConfigurationTemplate
+        self.template = ConfigurationTemplate()
+        
         logger.info(f"Initialized Hive Metastore system (version={self.version}, port={self.port})")
     
     def setup(self) -> None:
@@ -299,264 +303,51 @@ class HiveMetastoreSystem(System):
     
     def _generate_metastore_site(self) -> None:
         """Generate hive-site.xml configuration for metastore."""
-        
-        # JDBC connection URL for PostgreSQL
-        jdbc_url = f"jdbc:postgresql://{self.postgres_host}:5432/{self.postgres_db}"
-        
-        config = f"""<?xml version="1.0"?>
-<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
-
-<configuration>
-    <!-- Metastore Configuration -->
-    <property>
-        <name>metastore.thrift.uris</name>
-        <value>thrift://{self.service_name}:{self.port}</value>
-    </property>
-    
-    <property>
-        <name>metastore.thrift.port</name>
-        <value>{self.port}</value>
-    </property>
-    
-    <!-- Warehouse Directory -->
-    <property>
-        <name>metastore.warehouse.dir</name>
-        <value>{self.warehouse_dir}</value>
-    </property>
-    
-    <!-- PostgreSQL Backend Configuration -->
-    <property>
-        <name>javax.jdo.option.ConnectionURL</name>
-        <value>{jdbc_url}</value>
-    </property>
-    
-    <property>
-        <name>javax.jdo.option.ConnectionDriverName</name>
-        <value>org.postgresql.Driver</value>
-    </property>
-    
-    <property>
-        <name>javax.jdo.option.ConnectionUserName</name>
-        <value>{self.postgres_user}</value>
-    </property>
-    
-    <property>
-        <name>javax.jdo.option.ConnectionPassword</name>
-        <value>{self.postgres_password}</value>
-    </property>
-    
-    <!-- Schema Verification -->
-    <property>
-        <name>datanucleus.schema.autoCreateAll</name>
-        <value>true</value>
-    </property>
-    
-    <property>
-        <name>hive.metastore.schema.verification</name>
-        <value>false</value>
-    </property>
-    
-    <!-- Disable Derby specific functions that cause issues with Postgres -->
-    <property>
-        <name>datanucleus.storeManagerType</name>
-        <value>rdbms</value>
-    </property>
-    
-    <!-- S3A Configuration for MinIO -->
-    <property>
-        <name>fs.s3a.endpoint</name>
-        <value>{self.minio_endpoint}</value>
-    </property>
-    
-    <property>
-        <name>fs.s3a.access.key</name>
-        <value>{self.minio_access_key}</value>
-    </property>
-    
-    <property>
-        <name>fs.s3a.secret.key</name>
-        <value>{self.minio_secret_key}</value>
-    </property>
-    
-    <property>
-        <name>fs.s3a.path.style.access</name>
-        <value>true</value>
-    </property>
-    
-    <property>
-        <name>fs.s3a.connection.ssl.enabled</name>
-        <value>false</value>
-    </property>
-    
-    <property>
-        <name>fs.s3a.impl</name>
-        <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
-    </property>
-    
-    <!-- Map s3:// to S3AFileSystem -->
-    <property>
-        <name>fs.s3.impl</name>
-        <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
-    </property>
-    
-    <property>
-        <name>fs.s3.endpoint</name>
-        <value>{self.minio_endpoint}</value>
-    </property>
-    
-    <property>
-        <name>fs.s3.access.key</name>
-        <value>{self.minio_access_key}</value>
-    </property>
-    
-    <property>
-        <name>fs.s3.secret.key</name>
-        <value>{self.minio_secret_key}</value>
-    </property>
-    
-    <property>
-        <name>fs.s3.path.style.access</name>
-        <value>true</value>
-    </property>
-    
-    <property>
-        <name>fs.s3.connection.ssl.enabled</name>
-        <value>false</value>
-    </property>
-</configuration>
-"""
-        
         config_file = self.conf_dir / 'hive-site.xml'
-        config_file.write_text(config)
+        
+        self.template.generate(
+            template_name="hive-site.xml.j2",
+            config=self.config,
+            output_path=config_file
+        )
+        
         logger.info(f"Generated hive-site.xml: {config_file}")
     
     def _generate_core_site(self) -> None:
         """Generate core-site.xml for Hadoop configuration."""
-        
-        config = f"""<?xml version="1.0"?>
-<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
-
-<configuration>
-    <!-- S3A Configuration -->
-    <property>
-        <name>fs.s3a.endpoint</name>
-        <value>{self.minio_endpoint}</value>
-    </property>
-    
-    <property>
-        <name>fs.s3a.access.key</name>
-        <value>{self.minio_access_key}</value>
-    </property>
-    
-    <property>
-        <name>fs.s3a.secret.key</name>
-        <value>{self.minio_secret_key}</value>
-    </property>
-    
-    <property>
-        <name>fs.s3a.path.style.access</name>
-        <value>true</value>
-    </property>
-    
-    <property>
-        <name>fs.s3a.connection.ssl.enabled</name>
-        <value>false</value>
-    </property>
-</configuration>
-"""
-        
         config_file = self.conf_dir / 'core-site.xml'
-        config_file.write_text(config)
+        
+        self.template.generate(
+            template_name="core-site.xml.j2",
+            config=self.config,
+            output_path=config_file
+        )
+        
         logger.info(f"Generated core-site.xml: {config_file}")
     
     def _generate_dockerfile(self) -> None:
         """Generate Dockerfile that adds PostgreSQL JDBC driver and Hadoop AWS libraries to Hive image."""
-        
-        # Match the exact working configuration format, with added S3A support
-        dockerfile = f"""FROM alpine:latest as downloader
-RUN apk add --no-cache wget && \\
-    wget https://jdbc.postgresql.org/download/postgresql-42.7.1.jar -O /postgresql-42.7.1.jar && \\
-    wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar -O /hadoop-aws-3.3.4.jar && \\
-    wget https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar -O /aws-java-sdk-bundle-1.12.262.jar
-
-FROM apache/hive:{self.version}
-
-# Add PostgreSQL JDBC driver
-# Using version 42.7.1 which supports SCRAM-SHA-256 authentication
-USER root
-COPY --from=downloader /postgresql-42.7.1.jar /opt/hive/lib/postgresql-42.7.1.jar
-RUN chmod 644 /opt/hive/lib/postgresql-42.7.1.jar
-
-# Add Hadoop AWS libraries for S3A support (MinIO compatibility)
-# These are required for accessing s3a:// URIs from Hive Metastore
-COPY --from=downloader /hadoop-aws-3.3.4.jar /opt/hive/lib/hadoop-aws-3.3.4.jar
-COPY --from=downloader /aws-java-sdk-bundle-1.12.262.jar /opt/hive/lib/aws-java-sdk-bundle-1.12.262.jar
-RUN chmod 644 /opt/hive/lib/hadoop-aws-3.3.4.jar && \\
-    chmod 644 /opt/hive/lib/aws-java-sdk-bundle-1.12.262.jar
-
-# Install netcat for health checks
-RUN apt-get update && apt-get install -y netcat-openbsd && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Create warehouse directory and set permissions
-RUN mkdir -p /user/hive/warehouse && \\
-    chown -R hive:hive /user/hive/warehouse && \\
-    chmod -R 755 /user/hive/warehouse
-
-USER hive
-"""
-        
         dockerfile_path = self.system_dir / 'Dockerfile'
-        dockerfile_path.write_text(dockerfile)
+        
+        self.template.generate(
+            template_name="hive-dockerfile.j2",
+            config=self.config,
+            output_path=dockerfile_path
+        )
+        
         logger.info(f"Generated Dockerfile: {dockerfile_path}")
 
     
     def _generate_docker_compose(self) -> None:
         """Generate Docker Compose configuration."""
-        
-        compose = f"""version: '3.8'
-
-services:
-  hive-metastore:
-    container_name: {self.service_name}
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: tribench-hive-metastore:{self.version}
-    ports:
-      - "{self.port}:{self.port}"
-    environment:
-      SERVICE_NAME: metastore
-      DB_DRIVER: postgres
-      SERVICE_OPTS: "-Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver -Djavax.jdo.option.ConnectionURL=jdbc:postgresql://{self.postgres_host}:5432/{self.postgres_db} -Djavax.jdo.option.ConnectionUserName={self.postgres_user} -Djavax.jdo.option.ConnectionPassword={self.postgres_password}"
-      # S3A configuration
-      AWS_ACCESS_KEY_ID: {self.minio_access_key}
-      AWS_SECRET_ACCESS_KEY: {self.minio_secret_key}
-    volumes:
-      - ./conf/hive-site.xml:/opt/hive/conf/hive-site.xml:ro
-      - ./conf/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml:ro
-      - hive-warehouse:/user/hive/warehouse
-    networks:
-      - {self.network}
-    healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "{self.port}"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
-volumes:
-  hive-warehouse:
-    driver: local
-
-networks:
-  {self.network}:
-    external: true
-
-# Note: PostgreSQL and MinIO services must be running before starting Hive Metastore
-# They are defined in their respective docker-compose files
-"""
-        
         compose_file = self.system_dir / 'docker-compose.yml'
-        compose_file.write_text(compose)
+        
+        self.template.generate(
+            template_name="hive-compose.yml.j2",
+            config=self.config,
+            output_path=compose_file
+        )
+        
         logger.info(f"Generated Docker Compose config: {compose_file}")
     
     def _ensure_docker_network(self) -> None:
