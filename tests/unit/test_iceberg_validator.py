@@ -35,9 +35,15 @@ class TestIcebergValidator:
     
     def test_init(self, iceberg_validator, connection_params):
         """Test validator initialization."""
-        assert iceberg_validator.connection_params == connection_params
-        assert iceberg_validator.connection_params['host'] == 'localhost'
-        assert iceberg_validator.connection_params['port'] == 8080
+        params = {
+            'host': 'localhost',
+            'port': 8080,
+            'user': 'admin'
+        }
+        
+        assert iceberg_validator.connection_params.host == params['host']
+        assert iceberg_validator.connection_params.port == params['port']
+        assert iceberg_validator.connection_params.user == params['user']
     
     @patch('tribench.data.iceberg_validator.connect')
     def test_get_connection(self, mock_connect, iceberg_validator):

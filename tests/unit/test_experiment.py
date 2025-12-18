@@ -165,9 +165,9 @@ class TestQueryExecutor:
             catalog="test_catalog"
         )
         
-        assert executor.host == "testhost"
-        assert executor.port == 9090
-        assert executor.catalog == "test_catalog"
+        assert executor.config.host == "testhost"
+        assert executor.config.port == 9090
+        assert executor.config.catalog == "test_catalog"
         assert not executor.is_connected()
     
     @patch('tribench.experiments.query_executor.trino.dbapi.connect')

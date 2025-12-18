@@ -15,6 +15,7 @@ from typing import Dict, Optional
 import requests
 
 from tribench.core.system import System
+from tribench.defaults import Defaults
 
 
 logger = logging.getLogger(__name__)
@@ -56,31 +57,31 @@ class HiveMetastoreSystem(System):
         hive_config = self.config.get('tribench.systems.hive_metastore', {})
         
         self.version = hive_config.get('version', '4.0.0')
-        self.port = hive_config.get('port', 9083)
+        self.port = hive_config.get('port', Defaults.HiveMetastore.PORT)
         self.warehouse_dir = hive_config.get('warehouse_dir', 's3a://warehouse/')
         
         # PostgreSQL backend configuration
         postgres_config = self.config.get('tribench.systems.postgresql', {})
-        self.postgres_host = postgres_config.get('docker', {}).get('service_name', 'tribench-postgresql')
+        self.postgres_host = postgres_config.get('docker', {}).get('service_name', Defaults.ServiceNames.POSTGRESQL)
         postgres_databases = postgres_config.get('databases', {})
         metastore_db = postgres_databases.get('metastore', {})
-        self.postgres_db = metastore_db.get('name', 'metastore')
-        self.postgres_user = metastore_db.get('user', 'hive')
-        self.postgres_password = metastore_db.get('password', 'hivepassword')
+        self.postgres_db = metastore_db.get('name', Defaults.HiveMetastore.DB_NAME)
+        self.postgres_user = metastore_db.get('user', Defaults.HiveMetastore.DB_USER)
+        self.postgres_password = metastore_db.get('password', Defaults.HiveMetastore.DB_PASSWORD)
         
         # MinIO configuration
         minio_config = self.config.get('tribench.systems.minio', {})
         minio_docker = minio_config.get('docker', {})
-        self.minio_host = minio_docker.get('service_name', 'tribench-minio')
-        self.minio_port = minio_config.get('api_port', 9000)
-        self.minio_access_key = minio_config.get('root_user', 'minioadmin')
-        self.minio_secret_key = minio_config.get('root_password', 'minioadmin')
+        self.minio_host = minio_docker.get('service_name', Defaults.ServiceNames.MINIO)
+        self.minio_port = minio_config.get('api_port', Defaults.MinIO.PORT)
+        self.minio_access_key = minio_config.get('root_user', Defaults.MinIO.ACCESS_KEY)
+        self.minio_secret_key = minio_config.get('root_password', Defaults.MinIO.SECRET_KEY)
         self.minio_endpoint = f"http://{self.minio_host}:{self.minio_port}"
         
         # Docker configuration
         docker_config = hive_config.get('docker', {})
-        self.service_name = docker_config.get('service_name', 'tribench-hive-metastore')
-        self.network = docker_config.get('network', 'tribench-network')
+        self.service_name = docker_config.get('service_name', Defaults.ServiceNames.HIVE_METASTORE)
+        self.network = docker_config.get('network', Defaults.Docker.NETWORK)
         
         # Directories
         framework_root = Path(self.config.get('tribench.paths.framework_root', os.getcwd()))
@@ -117,7 +118,7 @@ class HiveMetastoreSystem(System):
         
         logger.info("Hive Metastore setup complete")
     
-    def start(self, wait_for_health: bool = True, timeout: int = 120) -> None:
+    def start(self, wait_for_health: bool = True, timeout: int = Defaults.Timeouts.HIVE_METASTORE) -> None:
         """
         Start Hive Metastore system.
         
@@ -280,7 +281,7 @@ class HiveMetastoreSystem(System):
             logger.debug(f"Health check failed: {e}")
             return False
     
-    def _wait_for_health(self, timeout: int = 120) -> bool:
+    def _wait_for_health(self, timeout: int = Defaults.Timeouts.HIVE_METASTORE) -> bool:
         """
         Wait for Hive Metastore to become healthy.
         
@@ -297,7 +298,7 @@ class HiveMetastoreSystem(System):
                 return True
             
             logger.debug("Waiting for Hive Metastore to be ready...")
-            time.sleep(5)
+            time.sleep(Defaults.Retry.HEALTH_CHECK_INTERVAL)
         
         return False
     

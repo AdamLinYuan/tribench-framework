@@ -1,0 +1,47 @@
+# ============================================================================
+# TPC-H Aggregation Queries Demo
+# ============================================================================
+# Focuses on queries that demonstrate aggregation and grouping performance
+# Queries: Q1 (Pricing Summary), Q6 (Forecasting Revenue Change)
+
+name: "tpch-aggregation-demo"
+description: "TPC-H aggregation-focused queries demonstrating GROUP BY and SUM performance"
+
+system: "trino"
+
+connection:
+  host: "localhost"
+  port: 8080
+  user: "tribench"
+  catalog: "iceberg"
+  schema: "tpch"
+
+# Execution parameters - quick demo settings
+runs: 3
+warmup_runs: 1
+timeout_seconds: 120
+max_retries: 2
+
+# Aggregation-focused queries
+query_files:
+  - "apps/tpch/queries/q01.sql"  # Pricing Summary Report - heavy aggregation
+  - "apps/tpch/queries/q06.sql"  # Forecasting Revenue Change - simple scan + aggregate
+
+validation:
+  min_success_rate: 0.90
+  max_execution_time_variance: 0.40
+
+metrics:
+  - execution_time
+  - rows_returned
+  - cpu_time
+  - memory_usage
+  - data_scanned
+
+metadata:
+  benchmark: "TPC-H"
+  scale_factor: 0.01
+  dataset: "tpch-tiny"
+  query_type: "aggregation"
+  tags: ["demo", "tpch", "iceberg", "aggregation"]
+  purpose: "Demo aggregation query performance"

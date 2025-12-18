@@ -1,4 +1,6 @@
 # Node Properties
 node.environment={{ config.tribench.systems.trino.node.environment }}
+{% if node_id %}
 node.id={{ node_id }}
+{% endif %}
 node.data-dir={{ config.tribench.systems.trino.node.data_dir }}

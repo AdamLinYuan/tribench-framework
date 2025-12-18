@@ -19,8 +19,12 @@ from tribench.systems.minio import MinIOSystem
 from tribench.systems.trino import TrinoSystem
 from tribench.systems.hive_metastore import HiveMetastoreSystem
 from tribench.utils.config import get_config_value
+from tribench.defaults import Defaults
 
 logger = logging.getLogger(__name__)
+
+# Default Kind cluster configuration path
+DEFAULT_KIND_CONFIG = Path("config/kubernetes/kind-config.yaml")
 
 
 class KubernetesSystem(System):
@@ -28,8 +32,7 @@ class KubernetesSystem(System):
     System implementation for Kubernetes-based deployments.
     
     Manages lifecycle using generated Kubernetes manifests applied via kubectl.
-    Assumes a Kubernetes cluster (like kind) is already running and configured
-    in the local kubeconfig.
+    Can also manage the Kind cluster itself (create/delete).
     """
     
     def __init__(self, name: str, config: Dict[str, Any]):
@@ -39,13 +42,18 @@ class KubernetesSystem(System):
         Args:
             name: System name
             config: Configuration dictionary containing:
-                - context: Kubernetes context name (default: kind-tribench)
-                - namespace: Kubernetes namespace (default: tribench)
+                - context: Kubernetes context name (default: Defaults.Kubernetes.CONTEXT)
+                - namespace: Kubernetes namespace (default: Defaults.Kubernetes.NAMESPACE)
                 - config_tree: The full configuration tree
+                - kind_config: Path to Kind cluster config (default: config/kubernetes/kind-config.yaml)
         """
         super().__init__(name, config)
-        self.context = config.get("context", "kind-tribench")
-        self.namespace = config.get("namespace", "tribench")
+        self.context = config.get("context", Defaults.Kubernetes.CONTEXT)
+        self.namespace = config.get("namespace", Defaults.Kubernetes.NAMESPACE)
+        self.cluster_name = self.context.replace("kind-", "") if self.context.startswith("kind-") else "tribench"
+        
+        # Kind cluster configuration
+        self.kind_config = Path(config.get("kind_config", DEFAULT_KIND_CONFIG))
         
         # Paths for generated manifests
         self.systems_path = Path("systems/kubernetes")
@@ -55,12 +63,12 @@ class KubernetesSystem(System):
         self.hive_manifest = self.systems_path / "hive-metastore.yaml"
         
         # Port Forwarding
-        self.local_port = config.get("local_port", 8080)
-        self.container_port = config.get("container_port", 8080)
+        self.local_port = config.get("local_port", Defaults.Trino.PORT)
+        self.container_port = config.get("container_port", Defaults.Trino.PORT)
         self._pf_process: Optional[subprocess.Popen] = None
         
         # Timeout for operations in seconds
-        self.timeout = config.get("timeout", 300)
+        self.timeout = config.get("timeout", Defaults.Timeouts.K8S_DEPLOYMENT)
         
         # Full config tree for generation
         self.config_tree = config.get("config_tree")
@@ -68,6 +76,230 @@ class KubernetesSystem(System):
         # Initialize template engine
         from tribench.utils.config import ConfigurationTemplate
         self.template = ConfigurationTemplate()
+
+    # =========================================================================
+    # Kind Cluster Management
+    # =========================================================================
+    
+    def cluster_exists(self) -> bool:
+        """Check if the Kind cluster exists."""
+        try:
+            result = subprocess.run(
+                ["kind", "get", "clusters"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            clusters = result.stdout.strip().split('\n')
+            return self.cluster_name in clusters
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
+    
+    def cluster_status(self) -> Dict[str, Any]:
+        """
+        Get detailed cluster status.
+        
+        Returns:
+            Dictionary with cluster info including nodes, their roles, and status
+        """
+        status = {
+            "exists": False,
+            "running": False,
+            "nodes": [],
+            "config_file": str(self.kind_config),
+            "cluster_name": self.cluster_name,
+        }
+        
+        if not self.cluster_exists():
+            return status
+        
+        status["exists"] = True
+        
+        try:
+            # Get node information
+            result = subprocess.run(
+                ["kubectl", "--context", self.context, "get", "nodes", "-o", "json"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            nodes_data = json.loads(result.stdout)
+            
+            for node in nodes_data.get("items", []):
+                node_name = node["metadata"]["name"]
+                labels = node["metadata"].get("labels", {})
+                
+                # Determine role from labels
+                role = "worker"
+                if "node-role.kubernetes.io/control-plane" in labels:
+                    role = "control-plane"
+                
+                # Get status conditions
+                conditions = node["status"].get("conditions", [])
+                ready = any(c["type"] == "Ready" and c["status"] == "True" for c in conditions)
+                
+                status["nodes"].append({
+                    "name": node_name,
+                    "role": role,
+                    "ready": ready,
+                })
+            
+            # Cluster is running if we have nodes
+            status["running"] = len(status["nodes"]) > 0 and all(n["ready"] for n in status["nodes"])
+            
+            # Compare with expected config
+            if self.kind_config.exists():
+                expected = self._parse_kind_config()
+                status["expected_nodes"] = expected
+                status["config_matches"] = self._config_matches(status["nodes"], expected)
+            
+        except Exception as e:
+            status["error"] = str(e)
+        
+        return status
+    
+    def _parse_kind_config(self) -> Dict[str, int]:
+        """Parse Kind config to get expected node counts."""
+        import yaml
+        
+        expected = {"control-plane": 0, "worker": 0}
+        
+        if not self.kind_config.exists():
+            return expected
+        
+        try:
+            with open(self.kind_config) as f:
+                config = yaml.safe_load(f)
+            
+            for node in config.get("nodes", []):
+                role = node.get("role", "worker")
+                if role == "control-plane":
+                    expected["control-plane"] += 1
+                else:
+                    expected["worker"] += 1
+                    
+        except Exception as e:
+            logger.warning(f"Failed to parse Kind config: {e}")
+        
+        return expected
+    
+    def _config_matches(self, actual_nodes: List[Dict], expected: Dict[str, int]) -> bool:
+        """Check if actual nodes match expected configuration."""
+        actual_counts = {"control-plane": 0, "worker": 0}
+        for node in actual_nodes:
+            role = node.get("role", "worker")
+            if role in actual_counts:
+                actual_counts[role] += 1
+        
+        return actual_counts == expected
+    
+    def create_cluster(self, force: bool = False) -> bool:
+        """
+        Create the Kind cluster using the configuration file.
+        
+        Args:
+            force: If True, delete existing cluster first
+            
+        Returns:
+            True if cluster was created successfully
+        """
+        logger.info(f"Creating Kind cluster '{self.cluster_name}'...")
+        
+        # Check if cluster already exists
+        if self.cluster_exists():
+            if force:
+                logger.info("Force flag set, deleting existing cluster...")
+                self.delete_cluster()
+            else:
+                logger.warning(f"Cluster '{self.cluster_name}' already exists. Use force=True to recreate.")
+                return False
+        
+        # Verify config file exists
+        if not self.kind_config.exists():
+            raise FileNotFoundError(f"Kind config file not found: {self.kind_config}")
+        
+        # Create cluster with config
+        cmd = [
+            "kind", "create", "cluster",
+            "--name", self.cluster_name,
+            "--config", str(self.kind_config)
+        ]
+        
+        try:
+            logger.info(f"Running: {' '.join(cmd)}")
+            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            logger.info(result.stdout)
+            logger.info(f"✓ Kind cluster '{self.cluster_name}' created successfully")
+            return True
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to create cluster: {e.stderr}")
+            raise RuntimeError(f"Failed to create Kind cluster: {e.stderr}")
+    
+    def delete_cluster(self) -> bool:
+        """
+        Delete the Kind cluster.
+        
+        Returns:
+            True if cluster was deleted successfully
+        """
+        logger.info(f"Deleting Kind cluster '{self.cluster_name}'...")
+        
+        if not self.cluster_exists():
+            logger.info(f"Cluster '{self.cluster_name}' does not exist")
+            return True
+        
+        # Stop port forwarding first
+        self.stop_port_forwarding()
+        
+        cmd = ["kind", "delete", "cluster", "--name", self.cluster_name]
+        
+        try:
+            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            logger.info(f"✓ Kind cluster '{self.cluster_name}' deleted")
+            return True
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to delete cluster: {e.stderr}")
+            raise RuntimeError(f"Failed to delete Kind cluster: {e.stderr}")
+    
+    def ensure_cluster(self) -> bool:
+        """
+        Ensure the Kind cluster exists and matches the expected configuration.
+        
+        If the cluster doesn't exist, creates it.
+        If the cluster exists but doesn't match config, offers to recreate.
+        
+        Returns:
+            True if cluster is ready
+        """
+        status = self.cluster_status()
+        
+        if not status["exists"]:
+            logger.info("Cluster does not exist, creating...")
+            return self.create_cluster()
+        
+        if not status.get("config_matches", True):
+            expected = status.get("expected_nodes", {})
+            actual_nodes = status.get("nodes", [])
+            
+            actual_counts = {"control-plane": 0, "worker": 0}
+            for node in actual_nodes:
+                role = node.get("role", "worker")
+                if role in actual_counts:
+                    actual_counts[role] += 1
+            
+            logger.warning(
+                f"Cluster configuration mismatch:\n"
+                f"  Expected: {expected['control-plane']} control-plane, {expected['worker']} worker nodes\n"
+                f"  Actual: {actual_counts['control-plane']} control-plane, {actual_counts['worker']} worker nodes"
+            )
+            return False  # Return False to indicate mismatch - caller can decide to recreate
+        
+        logger.info(f"Cluster '{self.cluster_name}' exists and matches configuration")
+        return True
+
+    # =========================================================================
+    # Original Methods
+    # =========================================================================
 
     def _run_command(self, cmd: List[str], check: bool = True, capture: bool = True, log_errors: bool = True) -> subprocess.CompletedProcess:
         """Run a shell command."""
@@ -190,6 +422,35 @@ class KubernetesSystem(System):
         """Generate Trino manifest from TrinoSystem configuration."""
         logger.info(f"Generating Trino manifest at {self.trino_manifest}")
         
+        # Calculate worker count first
+        workers_val = get_config_value(self.config_tree, "tribench.systems.trino.workers", 0)
+        if isinstance(workers_val, list):
+            worker_count = len(workers_val)
+        else:
+            worker_count = int(workers_val)
+
+        # Auto-detect K8s worker nodes if config is 0
+        if worker_count == 0:
+            try:
+                nodes_json = self._kubectl(["get", "nodes", "-o", "json"], namespace="")
+                nodes = json.loads(nodes_json)
+                # Count nodes that are NOT control-plane
+                k8s_workers = 0
+                for node in nodes.get("items", []):
+                    labels = node["metadata"].get("labels", {})
+                    if "node-role.kubernetes.io/control-plane" not in labels:
+                        k8s_workers += 1
+                
+                if k8s_workers > 0:
+                    logger.info(f"Auto-detected {k8s_workers} Kubernetes worker nodes. Setting Trino worker count to match.")
+                    worker_count = k8s_workers
+            except Exception as e:
+                logger.warning(f"Failed to auto-detect K8s nodes: {e}")
+
+        # Determine if coordinator should schedule work
+        include_coordinator = worker_count == 0
+
+        # 1. Generate Coordinator Configs
         # Use TrinoSystem to generate configs locally first
         trino_sys = TrinoSystem(config=self.config_tree)
         
@@ -202,11 +463,33 @@ class KubernetesSystem(System):
         jvm_config = (trino_sys.install_path / "etc" / "jvm.config").read_text()
         node_props = (trino_sys.install_path / "etc" / "node.properties").read_text()
         
+        # Append node-scheduler.include-coordinator if needed
+        if not include_coordinator:
+            config_props += "\nnode-scheduler.include-coordinator=false"
+
         # Read catalogs
         catalog_dir = trino_sys.install_path / "etc" / "catalog"
         catalogs = {}
         for cat_file in catalog_dir.glob("*.properties"):
             catalogs[cat_file.name] = cat_file.read_text()
+
+        # 2. Generate Worker Configs
+        # Clone config and override for worker
+        worker_config = self.config_tree.copy()
+        worker_config.put("tribench.systems.trino.coordinator.enabled", False)
+        # Workers must point to the K8s service for discovery
+        worker_config.put("tribench.systems.trino.coordinator.host", Defaults.ServiceNames.TRINO)
+        
+        trino_worker_sys = TrinoSystem(config=worker_config)
+        trino_worker_sys._create_directories()
+        trino_worker_sys._generate_configs()
+        
+        worker_config_props = (trino_worker_sys.install_path / "etc" / "config.properties").read_text()
+        worker_jvm_config = (trino_worker_sys.install_path / "etc" / "jvm.config").read_text()
+        worker_node_props = (trino_worker_sys.install_path / "etc" / "node.properties").read_text()
+        
+        # Remove node.id from worker_node_props to allow K8s/Trino to handle unique IDs for replicas
+        worker_node_props = "\n".join([line for line in worker_node_props.splitlines() if not line.strip().startswith("node.id=")])
             
         # Build ConfigMap data for main config
         config_map_data = f"""
@@ -216,6 +499,16 @@ class KubernetesSystem(System):
 {self._indent(jvm_config, 4)}
   node.properties: |
 {self._indent(node_props, 4)}
+"""
+
+        # Build ConfigMap data for worker config
+        worker_config_map_data = f"""
+  config.properties: |
+{self._indent(worker_config_props, 4)}
+  jvm.config: |
+{self._indent(worker_jvm_config, 4)}
+  node.properties: |
+{self._indent(worker_node_props, 4)}
 """
         
         # Build ConfigMap data for catalogs
@@ -231,7 +524,10 @@ class KubernetesSystem(System):
             config=self.config_tree,
             output_path=self.trino_manifest,
             config_map_data=config_map_data,
-            catalog_map_data=catalog_map_data
+            worker_config_map_data=worker_config_map_data,
+            catalog_map_data=catalog_map_data,
+            worker_count=worker_count,
+            include_coordinator=include_coordinator
         )
 
     def _generate_minio_manifest(self):
@@ -243,6 +539,39 @@ class KubernetesSystem(System):
             config=self.config_tree,
             output_path=self.minio_manifest
         )
+
+    def _ensure_minio_bucket(self, bucket_name: str) -> bool:
+        """
+        Ensure a bucket exists in MinIO.
+        
+        Creates the bucket directory inside the MinIO container's data directory.
+        This is required for Hive Metastore to create schemas successfully.
+        
+        Args:
+            bucket_name: Name of the bucket to create (e.g., 'warehouse')
+            
+        Returns:
+            True if bucket exists or was created successfully
+        """
+        logger.info(f"Ensuring MinIO bucket '{bucket_name}' exists...")
+        
+        try:
+            # Create bucket directory with proper permissions
+            cmd = ["exec", "deployment/minio", "--", "sh", "-c", 
+                   f"mkdir -p /data/{bucket_name} && chmod 777 /data/{bucket_name}"]
+            self._kubectl(cmd)
+            
+            # Verify bucket was created
+            result = self._kubectl(["exec", "deployment/minio", "--", "ls", "-d", f"/data/{bucket_name}"])
+            if bucket_name in result:
+                logger.info(f"✓ MinIO bucket '{bucket_name}' ready")
+                return True
+            else:
+                logger.warning(f"Bucket '{bucket_name}' creation may have failed")
+                return False
+        except Exception as e:
+            logger.error(f"Failed to create MinIO bucket '{bucket_name}': {e}")
+            return False
 
     def _generate_postgres_manifest(self):
         """Generate PostgreSQL manifest."""
@@ -313,8 +642,8 @@ class KubernetesSystem(System):
         hive_sys.conf_dir.mkdir(parents=True, exist_ok=True)
         
         # Override hostnames for K8s DNS
-        hive_sys.postgres_host = "tribench-postgresql"
-        hive_sys.minio_endpoint = "http://tribench-minio:9000"
+        hive_sys.postgres_host = Defaults.ServiceNames.POSTGRESQL
+        hive_sys.minio_endpoint = f"http://{Defaults.ServiceNames.MINIO}:{Defaults.MinIO.PORT}"
         
         hive_sys._generate_metastore_site()
         hive_sys._generate_core_site()
@@ -352,6 +681,9 @@ class KubernetesSystem(System):
             
             self._kubectl(["apply", "-f", str(self.minio_manifest)])
             self._kubectl(["rollout", "status", "deployment/minio"])
+            
+            # Create warehouse bucket for Iceberg/Hive
+            self._ensure_minio_bucket("warehouse")
 
         # 2. Install PostgreSQL (for Hive Metastore)
         if component in ["all", "hive-metastore"]:
@@ -373,12 +705,20 @@ class KubernetesSystem(System):
 
         # 4. Install Trino
         if component in ["all", "trino"]:
-            logger.info(f"Deploying Trino from {self.trino_manifest}")
-            if not self.trino_manifest.exists():
-                self._generate_trino_manifest()
+            # Always regenerate Trino manifest to ensure worker count matches current cluster
+            # The worker count is auto-detected from K8s nodes, which may have changed
+            logger.info(f"Generating fresh Trino manifest with current cluster state...")
+            self._generate_trino_manifest()
             
+            logger.info(f"Deploying Trino from {self.trino_manifest}")
             self._kubectl(["apply", "-f", str(self.trino_manifest)])
             self._kubectl(["rollout", "status", "deployment/trino-coordinator"])
+            
+            # Wait for workers if deployment exists
+            try:
+                self._kubectl(["rollout", "status", "deployment/trino-worker"], log_errors=False)
+            except Exception:
+                pass
             
             self._is_running = True
             logger.info(f"System '{self.name}' started successfully")
@@ -401,6 +741,7 @@ class KubernetesSystem(System):
             logger.info(f"Stopping Trino (scaling to 0)...")
             try:
                 self._kubectl(["scale", "deployment", "trino-coordinator", "--replicas=0"], log_errors=False)
+                self._kubectl(["scale", "deployment", "trino-worker", "--replicas=0"], log_errors=False)
                 self._is_running = False
             except Exception:
                 pass
@@ -474,7 +815,7 @@ class KubernetesSystem(System):
             import socket
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(1)
-            result = sock.connect_ex(('localhost', self.local_port))
+            result = sock.connect_ex((Defaults.Hosts.LOCALHOST, self.local_port))
             sock.close()
             return result == 0
         except Exception:
@@ -514,7 +855,7 @@ class KubernetesSystem(System):
         logger.info(f"Starting port forwarding {self.local_port}:{self.container_port}")
         
         # Service name is now fixed in our manifests
-        service_name = "tribench-trino"
+        service_name = Defaults.ServiceNames.TRINO
         
         cmd = [
             "kubectl", "--context", self.context, "--namespace", self.namespace,
@@ -535,7 +876,7 @@ class KubernetesSystem(System):
                 start_new_session=True  # Detach from parent
             )
             # Give it a moment to start
-            time.sleep(2)
+            time.sleep(Defaults.Retry.PORT_FORWARD_STARTUP_DELAY)
             if self._pf_process.poll() is not None:
                 # It died immediately
                 raise RuntimeError(f"Port forwarding failed to start. Check log/port-forward.log")
@@ -562,7 +903,7 @@ class KubernetesSystem(System):
                     os.kill(pid, 0)  # Signal 0 just checks if process exists
                     logger.info(f"Killing stale port-forward process {pid}")
                     os.kill(pid, signal.SIGTERM)
-                    time.sleep(1)
+                    time.sleep(Defaults.Retry.PROCESS_KILL_DELAY)
                     try:
                         os.kill(pid, 0)
                         os.kill(pid, signal.SIGKILL)  # Force kill if still alive
@@ -585,7 +926,7 @@ class KubernetesSystem(System):
                 logger.info(f"Stopping port forwarding (pid {pid})")
                 try:
                     os.kill(pid, signal.SIGTERM)
-                    time.sleep(1)
+                    time.sleep(Defaults.Retry.PROCESS_KILL_DELAY)
                     try:
                         os.kill(pid, 0)
                         os.kill(pid, signal.SIGKILL)

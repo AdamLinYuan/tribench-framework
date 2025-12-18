@@ -57,6 +57,58 @@ spec:
           name: trino-catalog
 ---
 apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trino-worker-config
+data: {{ worker_config_map_data }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trino-worker
+spec:
+  replicas: {{ worker_count }}
+  selector:
+    matchLabels:
+      app: trino
+      component: worker
+  template:
+    metadata:
+      labels:
+        app: trino
+        component: worker
+    spec:
+      containers:
+      - name: trino-worker
+        image: trinodb/trino:{{ config.tribench.systems.trino.version }}
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/trino
+        - name: catalog-volume
+          mountPath: /etc/trino/catalog
+        livenessProbe:
+          httpGet:
+            path: /v1/info
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /v1/info
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 10
+      volumes:
+      - name: config-volume
+        configMap:
+          name: trino-worker-config
+      - name: catalog-volume
+        configMap:
+          name: trino-catalog
+---
+apiVersion: v1
 kind: Service
 metadata:
   name: tribench-trino

@@ -2,11 +2,14 @@
 
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from ..core.experiment import Experiment, ExperimentConfig
 from ..core.result import Result
+from ..config import ConnectionConfig, ConnectionPool
+from ..defaults import Defaults
 from .query_executor import QueryExecutor, QueryExecutionError
 from .result_collector import ResultCollector
 
@@ -59,16 +62,19 @@ class TrinoExperiment(Experiment):
         super().__init__(config)
         
         # Initialize executor with connection parameters
-        conn_params = config.connection or {}
+        # Convert dict connection params to ConnectionConfig
+        connection_config = ConnectionConfig.from_dict(config.connection or {})
         self.executor = QueryExecutor(
-            host=conn_params.get("host", "localhost"),
-            port=conn_params.get("port", 8080),
-            user=conn_params.get("user", "tribench"),
-            catalog=conn_params.get("catalog", "memory"),
-            schema=conn_params.get("schema", "default"),
+            connection=connection_config,
             timeout_seconds=config.timeout_seconds,
             max_retries=config.max_retries,
         )
+        
+        # Store connection config for monitoring and parallel execution
+        self.connection_config = connection_config
+        
+        # Connection pool for parallel query execution (lazy initialization)
+        self._connection_pool: Optional[ConnectionPool] = None
         
         # Storage configuration
         self.enable_json = enable_json
@@ -107,19 +113,19 @@ class TrinoExperiment(Experiment):
         self.trino_monitor: Optional['TrinoMonitor'] = None
         
         if self.enable_monitoring:
-            self._setup_monitoring(conn_params)
+            self._setup_monitoring(connection_config)
         else:
             if enable_monitoring and not MONITORING_AVAILABLE:
                 logger.warning("Monitoring requested but not available")
         
         logger.info(f"TrinoExperiment initialized: {config.name}")
     
-    def _setup_monitoring(self, conn_params: Dict[str, Any]) -> None:
+    def _setup_monitoring(self, connection_config: ConnectionConfig) -> None:
         """
         Set up monitoring session with collectors.
         
         Args:
-            conn_params: Connection parameters for Trino
+            connection_config: ConnectionConfig for Trino
         """
         try:
             # Create monitoring config
@@ -138,9 +144,9 @@ class TrinoExperiment(Experiment):
             # Add Trino monitor
             self.trino_monitor = TrinoMonitor(
                 config=monitoring_config,
-                host=conn_params.get("host", "localhost"),
-                port=conn_params.get("port", 8080),
-                username=conn_params.get("user"),
+                host=connection_config.host,
+                port=connection_config.port,
+                username=connection_config.user,
             )
             collectors.append(self.trino_monitor)
             
@@ -187,13 +193,14 @@ class TrinoExperiment(Experiment):
             
             logger.info("Connection test passed")
             
+            # Keep connection open for run() - will be closed in cleanup()
+            logger.info("Experiment preparation completed successfully")
+            
         except Exception as e:
             logger.error(f"Preparation failed: {e}")
-            raise
-        finally:
+            # Disconnect on failure
             self.executor.disconnect()
-        
-        logger.info("Experiment preparation completed successfully")
+            raise
     
     def run(self) -> Dict[str, Any]:
         """
@@ -259,8 +266,9 @@ class TrinoExperiment(Experiment):
                 self.enable_monitoring = False
         
         try:
-            # Connect to Trino
-            self.executor.connect()
+            # Ensure connected to Trino (may already be connected from prepare())
+            if not self.executor.is_connected():
+                self.executor.connect()
             
             # Collect all queries to execute
             queries = self._collect_queries()
@@ -457,6 +465,8 @@ class TrinoExperiment(Experiment):
     
     def _execute_measured_runs(self, queries: List[Dict[str, Any]]) -> None:
         """Execute measured runs and collect results."""
+        parallel_queries = getattr(self.config, 'parallel_queries', 1)
+        
         for run_num in range(self.config.runs):
             logger.info(f"Measured run {run_num + 1}/{self.config.runs}")
             
@@ -476,89 +486,23 @@ class TrinoExperiment(Experiment):
             run_queries_failed = 0
             run_start_time = time.time()
             
-            for query in queries:
-                query_name = f"{query['name']}_run{run_num + 1}"
-                logger.info(f"Executing: {query_name}")
-                
-                query_exec_start = time.time()
-                status = "success"
-                error = None
-                query_metadata = None
-                
-                try:
-                    # Execute query with retry
-                    _, query_metadata = self.executor.execute_query_with_retry(
-                        query["sql"],
-                        fetch_results=True
-                    )
-                    
-                    # Track query in monitoring if available
-                    if (self.enable_monitoring and self.trino_monitor and 
-                        query_metadata and query_metadata.get("query_id")):
-                        try:
-                            self.trino_monitor.track_query(query_metadata["query_id"])
-                        except Exception as e:
-                            logger.warning(f"Failed to track query in monitoring: {e}")
-                    
-                    run_queries_succeeded += 1
-                    
-                except Exception as e:
-                    status = "failed"
-                    error = e
-                    run_queries_failed += 1
-                    logger.error(f"Query {query_name} failed: {e}")
-                    # Log the full traceback for debugging
-                    import traceback
-                    logger.debug(f"Full traceback: {traceback.format_exc()}")
-                
-                query_duration = time.time() - query_exec_start
-                
-                # Increment total queries executed counter
-                self.total_queries_executed += 1
-                
-                # Save query execution to database (primary storage)
-                if self.enable_database and self.result_storage and self.current_run_id:
-                    try:
-                        from datetime import datetime, timedelta
-                        query_end_time = datetime.now()
-                        query_start_time = query_end_time - timedelta(seconds=query_duration)
-                        
-                        self.result_storage.add_query_execution(
-                            run_id=self.current_run_id,
-                            query_name=query["name"],
-                            query_text=query["sql"],
-                            start_time=query_start_time,
-                            end_time=query_end_time,
-                            execution_time=query_duration,
-                            status="completed" if status == "success" else "failed",
-                            error_message=str(error) if error else None,
-                            query_id=query_metadata.get("query_id") if query_metadata else None,
-                            metadata=query_metadata if query_metadata else None,
-                        )
-                    except Exception as e:
-                        logger.error(f"Failed to save query execution to database: {e}")
-                
-                # Save to JSON files if enabled
-                if self.enable_json:
-                    result = self.result_collector.create_result(
-                        experiment_name=self.config.name,
-                        experiment_type="trino_query",
-                        duration_seconds=query_duration,
-                        status=status,
-                        query_metadata=query_metadata,
-                        error=error,
-                        metadata={
-                            "query_name": query["name"],
-                            "run_number": run_num + 1,
-                            "query_source": query["source"],
-                        }
-                    )
-                    
-                    # Store result
-                    self.run_results.append(result)
-                    
-                    # Save individual result as JSON file
-                    self.result_collector.save_result(result)
+            # Choose execution mode based on parallel_queries setting
+            if parallel_queries > 1:
+                logger.info(f"Executing {len(queries)} queries in parallel (max {parallel_queries} concurrent)")
+                results = self._execute_queries_parallel(queries, run_num, parallel_queries)
+                for result in results:
+                    if result['status'] == 'success':
+                        run_queries_succeeded += 1
+                    else:
+                        run_queries_failed += 1
+            else:
+                # Sequential execution (original behavior)
+                for query in queries:
+                    result = self._execute_single_query(query, run_num)
+                    if result['status'] == 'success':
+                        run_queries_succeeded += 1
+                    else:
+                        run_queries_failed += 1
             
             # Complete run record in database
             if self.enable_database and self.result_storage and self.current_run_id:
@@ -570,6 +514,266 @@ class TrinoExperiment(Experiment):
                     logger.info(f"Database: Run completed (ID: {self.current_run_id})")
                 except Exception as e:
                     logger.error(f"Failed to complete run record in database: {e}")
+    
+    def _execute_single_query(self, query: Dict[str, Any], run_num: int) -> Dict[str, Any]:
+        """
+        Execute a single query and record results.
+        
+        Args:
+            query: Query dictionary with 'name', 'sql', 'source'
+            run_num: Current run number (0-indexed)
+            
+        Returns:
+            Result dictionary with 'status', 'duration', 'metadata'
+        """
+        query_name = f"{query['name']}_run{run_num + 1}"
+        logger.info(f"Executing: {query_name}")
+        
+        query_exec_start = time.time()
+        status = "success"
+        error = None
+        query_metadata = None
+        
+        try:
+            # Execute query with retry
+            _, query_metadata = self.executor.execute_query_with_retry(
+                query["sql"],
+                fetch_results=True
+            )
+            
+            # Track query in monitoring if available
+            if (self.enable_monitoring and self.trino_monitor and 
+                query_metadata and query_metadata.get("query_id")):
+                try:
+                    self.trino_monitor.track_query(query_metadata["query_id"])
+                except Exception as e:
+                    logger.warning(f"Failed to track query in monitoring: {e}")
+            
+        except Exception as e:
+            status = "failed"
+            error = e
+            logger.error(f"Query {query_name} failed: {e}")
+            import traceback
+            logger.debug(f"Full traceback: {traceback.format_exc()}")
+        
+        query_duration = time.time() - query_exec_start
+        
+        # Increment total queries executed counter
+        self.total_queries_executed += 1
+        
+        # Save query execution to database (primary storage)
+        if self.enable_database and self.result_storage and self.current_run_id:
+            try:
+                from datetime import datetime, timedelta
+                query_end_time = datetime.now()
+                query_start_time = query_end_time - timedelta(seconds=query_duration)
+                
+                self.result_storage.add_query_execution(
+                    run_id=self.current_run_id,
+                    query_name=query["name"],
+                    query_text=query["sql"],
+                    start_time=query_start_time,
+                    end_time=query_end_time,
+                    execution_time=query_duration,
+                    status="completed" if status == "success" else "failed",
+                    error_message=str(error) if error else None,
+                    query_id=query_metadata.get("query_id") if query_metadata else None,
+                    metadata=query_metadata if query_metadata else None,
+                )
+            except Exception as e:
+                logger.error(f"Failed to save query execution to database: {e}")
+        
+        # Save to JSON files if enabled
+        if self.enable_json:
+            result = self.result_collector.create_result(
+                experiment_name=self.config.name,
+                experiment_type="trino_query",
+                duration_seconds=query_duration,
+                status=status,
+                query_metadata=query_metadata,
+                error=error,
+                metadata={
+                    "query_name": query["name"],
+                    "run_number": run_num + 1,
+                    "query_source": query["source"],
+                }
+            )
+            
+            # Store result
+            self.run_results.append(result)
+            
+            # Save individual result as JSON file
+            self.result_collector.save_result(result)
+        
+        return {
+            'status': status,
+            'duration': query_duration,
+            'metadata': query_metadata,
+            'error': error,
+        }
+    
+    def _execute_queries_parallel(
+        self, 
+        queries: List[Dict[str, Any]], 
+        run_num: int,
+        max_workers: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Execute queries in parallel using a thread pool.
+        
+        Each thread gets its own QueryExecutor connection to Trino.
+        
+        Args:
+            queries: List of query dictionaries
+            run_num: Current run number (0-indexed)
+            max_workers: Maximum number of concurrent queries
+            
+        Returns:
+            List of result dictionaries
+        """
+        import threading
+        
+        # Initialize connection pool for parallel execution if not already done
+        if self._connection_pool is None:
+            pool_size = max_workers  # Match worker count for maximum parallelism
+            logger.info(f"Initializing connection pool with size={pool_size}")
+            self._connection_pool = ConnectionPool(
+                self.connection_config,
+                pool_size=pool_size,
+                timeout=30.0,
+                eager_create=True  # Pre-create all connections
+            )
+        
+        # Lock for thread-safe result storage
+        results_lock = threading.Lock()
+        
+        def execute_query_task(query: Dict[str, Any]) -> Dict[str, Any]:
+            """Execute a single query using pooled connection."""
+            query_name = f"{query['name']}_run{run_num + 1}"
+            logger.info(f"[Parallel] Executing: {query_name}")
+            
+            query_exec_start = time.time()
+            status = "success"
+            error = None
+            query_metadata = None
+            
+            try:
+                # Use pooled execution for better connection management
+                _, query_metadata = self.executor.execute_with_pool(
+                    query["sql"],
+                    self._connection_pool,
+                    fetch_results=True
+                )
+                
+                # Track query in monitoring if available
+                if (self.enable_monitoring and self.trino_monitor and 
+                    query_metadata and query_metadata.get("query_id")):
+                    try:
+                        self.trino_monitor.track_query(query_metadata["query_id"])
+                    except Exception as e:
+                        logger.warning(f"Failed to track query in monitoring: {e}")
+                
+            except Exception as e:
+                status = "failed"
+                error = e
+                logger.error(f"[Parallel] Query {query_name} failed: {e}")
+                import traceback
+                logger.debug(f"Full traceback: {traceback.format_exc()}")
+            
+            query_duration = time.time() - query_exec_start
+            
+            # Thread-safe increment
+            with results_lock:
+                self.total_queries_executed += 1
+            
+            # Save query execution to database (thread-safe via SQLAlchemy session)
+            if self.enable_database and self.result_storage and self.current_run_id:
+                try:
+                    from datetime import datetime, timedelta
+                    query_end_time = datetime.now()
+                    query_start_time = query_end_time - timedelta(seconds=query_duration)
+                    
+                    self.result_storage.add_query_execution(
+                        run_id=self.current_run_id,
+                        query_name=query["name"],
+                        query_text=query["sql"],
+                        start_time=query_start_time,
+                        end_time=query_end_time,
+                        execution_time=query_duration,
+                        status="completed" if status == "success" else "failed",
+                        error_message=str(error) if error else None,
+                        query_id=query_metadata.get("query_id") if query_metadata else None,
+                        metadata=query_metadata if query_metadata else None,
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to save query execution to database: {e}")
+            
+            # Save to JSON files if enabled (thread-safe append)
+            if self.enable_json:
+                result_obj = self.result_collector.create_result(
+                    experiment_name=self.config.name,
+                    experiment_type="trino_query",
+                    duration_seconds=query_duration,
+                    status=status,
+                    query_metadata=query_metadata,
+                    error=error,
+                    metadata={
+                        "query_name": query["name"],
+                        "run_number": run_num + 1,
+                        "query_source": query["source"],
+                    }
+                )
+                
+                with results_lock:
+                    self.run_results.append(result_obj)
+                
+                self.result_collector.save_result(result_obj)
+            
+            return {
+                'status': status,
+                'duration': query_duration,
+                'metadata': query_metadata,
+                'error': error,
+                'query_name': query['name'],
+            }
+        
+        # Execute queries in parallel
+        results = []
+        executors_to_close = []
+        
+        try:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # Submit all queries
+                future_to_query = {
+                    executor.submit(execute_query_task, query): query 
+                    for query in queries
+                }
+                
+                # Collect results as they complete
+                for future in as_completed(future_to_query):
+                    query = future_to_query[future]
+                    try:
+                        result = future.result()
+                        results.append(result)
+                        logger.info(f"[Parallel] Completed: {result['query_name']} in {result['duration']:.2f}s")
+                    except Exception as e:
+                        logger.error(f"[Parallel] Query {query['name']} raised exception: {e}")
+                        results.append({
+                            'status': 'failed',
+                            'duration': 0,
+                            'metadata': None,
+                            'error': e,
+                            'query_name': query['name'],
+                        })
+        
+        finally:
+            # Log connection pool statistics
+            if self._connection_pool:
+                pool_stats = self._connection_pool.get_stats()
+                logger.info(f"[Parallel] Pool stats: {pool_stats}")
+        
+        logger.info(f"[Parallel] Completed {len(results)} queries")
+        return results
     
     def validate(self) -> bool:
         """
@@ -692,6 +896,14 @@ class TrinoExperiment(Experiment):
         logger.info("Cleaning up experiment resources")
         
         try:
+            # Close connection pool if it was created
+            if self._connection_pool is not None:
+                pool_stats = self._connection_pool.get_stats()
+                logger.info(f"Connection pool stats: {pool_stats}")
+                self._connection_pool.close_all()
+                logger.info("Connection pool closed")
+            
+            # Close main executor connection
             if self.executor.is_connected():
                 self.executor.disconnect()
         except Exception as e:

@@ -4,6 +4,7 @@ import click
 import sys
 from pathlib import Path
 from tribench.__version__ import __version__
+from tribench.defaults import Defaults
 
 
 # Common options that can be reused across commands
@@ -47,7 +48,7 @@ def is_k8s_deployment_active() -> bool:
     """
     Check if Kubernetes deployment is active by looking for:
     1. Port forwarding PID file exists
-    2. Port 8080 is accessible
+    2. Trino port is accessible
     
     Returns:
         True if K8s deployment appears to be active
@@ -56,12 +57,12 @@ def is_k8s_deployment_active() -> bool:
     if pid_file.exists():
         return True
     
-    # Also check if port 8080 is accessible (might be manually forwarded)
+    # Also check if Trino port is accessible (might be manually forwarded)
     try:
         import socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(0.5)
-        result = sock.connect_ex(('localhost', 8080))
+        result = sock.connect_ex((Defaults.Hosts.LOCALHOST, Defaults.Trino.PORT))
         sock.close()
         return result == 0
     except Exception:
@@ -83,10 +84,10 @@ def ensure_k8s_port_forwarding(config=None, echo=click.echo, silent_if_active=Fa
     from tribench.systems.kubernetes_system import KubernetesSystem
     
     k8s_config = {
-        "context": "kind-tribench",
-        "namespace": "tribench",
-        "local_port": 8080,
-        "container_port": 8080,
+        "context": Defaults.Kubernetes.CONTEXT,
+        "namespace": Defaults.Kubernetes.NAMESPACE,
+        "local_port": Defaults.Trino.PORT,
+        "container_port": Defaults.Trino.PORT,
         "config_tree": config
     }
     k8s = KubernetesSystem("k8s-system", k8s_config)
@@ -124,7 +125,7 @@ def auto_ensure_trino_connection(config=None) -> bool:
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(1)
-        result = sock.connect_ex(('localhost', 8080))
+        result = sock.connect_ex((Defaults.Hosts.LOCALHOST, Defaults.Trino.PORT))
         sock.close()
         if result == 0:
             return True  # Trino is accessible

@@ -340,9 +340,9 @@ This document outlines the development plan for restructuring your Trino benchma
 - [ ] **Update Experiment Engine**:
   - [x] Add support for Kubernetes connection parameters in `TrinoExperiment`
   - [x] Ensure `QueryExecutor` can talk to the forwarded port
-- [ ] **Basic Execution**:
-  - [ ] Run TPC-H SF0.01 (Tiny) and TPC-H Iceberg on the K8s cluster
-  - [ ] Verify query completion and result retrieval
+- [x] **Basic Execution**:
+  - [x] Run TPC-H SF0.01 (Tiny) and TPC-H Iceberg on the K8s cluster
+  - [x] Verify query completion and result retrieval
 
 ### 4.4 Basic Monitoring & Validation (Week 31)
 - [ ] **MVP Monitoring**:
@@ -355,7 +355,7 @@ This document outlines the development plan for restructuring your Trino benchma
 ### 4.5 Documentation (Week 32)
 - [ ] **User Guide**:
   - [ ] "Running on Kubernetes" guide
-  - [ ] Prerequisites (Docker, Kind, Helm, Kubectl)
+  - [ ] Prerequisites (Docker, Kind, Kubectl)
 - [ ] **Developer Guide**:
   - [ ] How to debug K8s deployments
 

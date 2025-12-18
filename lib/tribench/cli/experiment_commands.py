@@ -27,6 +27,8 @@ def experiment_group():
 @click.option('--timeout', type=int, help='Override timeout in seconds.')
 @click.option('--host', help='Override Trino host (e.g. localhost or k8s service).')
 @click.option('--port', type=int, help='Override Trino port.')
+@click.option('--parallel', type=int, default=None, 
+              help='Number of concurrent queries (default 1 = sequential). Use with caution for benchmarking.')
 @click.option('--no-monitoring', is_flag=True, default=False, 
               help='Disable resource and query monitoring.')
 @click.option('--save-json', is_flag=True, default=False,
@@ -38,7 +40,7 @@ def experiment_group():
 @dry_run_option
 @verbose_option
 @click.pass_context
-def run(ctx, experiment, runs, warmup, timeout, host, port, no_monitoring, save_json, no_storage, kind, config, dry_run, verbose):
+def run(ctx, experiment, runs, warmup, timeout, host, port, parallel, no_monitoring, save_json, no_storage, kind, config, dry_run, verbose):
     """Execute an experiment.
     
     For Kubernetes deployments, use --kind to ensure port forwarding is active.
@@ -53,6 +55,7 @@ def run(ctx, experiment, runs, warmup, timeout, host, port, no_monitoring, save_
         tribench exp run experiments/tpch-sf1.yaml --no-storage
         tribench exp run experiments/tpch-sf1.yaml --host localhost --port 8080
         tribench exp run experiments/tpch-sf1.yaml --kind  # For Kubernetes deployments
+        tribench exp run experiments/tpch-sf1.yaml --parallel 4  # Run 4 queries concurrently
     """
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
@@ -82,6 +85,8 @@ def run(ctx, experiment, runs, warmup, timeout, host, port, no_monitoring, save_
             cli_overrides['warmup_runs'] = warmup
         if timeout is not None:
             cli_overrides['timeout_seconds'] = timeout
+        if parallel is not None:
+            cli_overrides['parallel_queries'] = parallel
         
         # Handle connection overrides
         connection_overrides = {}
@@ -108,6 +113,13 @@ def run(ctx, experiment, runs, warmup, timeout, host, port, no_monitoring, save_
         if ctx.obj.verbose:
             click.echo(f"Warmup runs: {exp_config.warmup_runs}")
         click.echo(f"Timeout: {exp_config.timeout_seconds}s")
+        
+        # Show parallelism setting
+        parallel_queries = getattr(exp_config, 'parallel_queries', 1)
+        if parallel_queries > 1:
+            click.echo(f"Parallel queries: {parallel_queries} (concurrent execution)")
+        else:
+            click.echo(f"Parallel queries: 1 (sequential execution)")
         
         # Determine storage modes
         enable_database = not no_storage  # Database enabled by default unless --no-storage

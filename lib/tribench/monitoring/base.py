@@ -14,6 +14,8 @@ import logging
 import threading
 import time
 
+from ..defaults import Defaults
+
 logger = logging.getLogger(__name__)
 
 
@@ -43,7 +45,7 @@ class MonitoringConfig:
     # Trino monitoring
     collect_trino_jmx: bool = True
     collect_query_plans: bool = True
-    trino_jmx_port: int = 8080
+    trino_jmx_port: int = Defaults.Trino.PORT
     
     # Storage settings
     store_timeseries: bool = True

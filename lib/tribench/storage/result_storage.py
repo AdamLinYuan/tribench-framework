@@ -18,6 +18,7 @@ from .models import (
     SystemMetric,
     MonitoringMetric,
 )
+from tribench.defaults import Defaults
 
 logger = logging.getLogger(__name__)
 
@@ -566,7 +567,7 @@ class ResultStorage:
         self,
         run_id: int,
         metrics: List[Any],  # List of Metric objects from monitoring.base
-        batch_size: int = 1000
+        batch_size: int = Defaults.Retry.STORAGE_BATCH_SIZE
     ) -> int:
         """
         Save monitoring metrics to the database.

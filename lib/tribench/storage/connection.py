@@ -15,6 +15,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
 
 from .models import Base
+from ..defaults import Defaults
 
 logger = logging.getLogger(__name__)
 
@@ -47,14 +48,14 @@ def get_database_url(config: Optional[dict] = None) -> str:
         return db_url
     
     # PostgreSQL from environment
-    db_host = os.getenv("TRIBENCH_DB_HOST", "localhost")
-    db_port = os.getenv("TRIBENCH_DB_PORT", "5432")
-    db_name = os.getenv("TRIBENCH_DB_NAME", "tribench")
-    db_user = os.getenv("TRIBENCH_DB_USER", "tribench")
-    db_pass = os.getenv("TRIBENCH_DB_PASSWORD", "tribench")
+    db_host = os.getenv("TRIBENCH_DB_HOST", Defaults.PostgreSQL.HOST)
+    db_port = os.getenv("TRIBENCH_DB_PORT", str(Defaults.PostgreSQL.PORT))
+    db_name = os.getenv("TRIBENCH_DB_NAME", Defaults.PostgreSQL.DATABASE)
+    db_user = os.getenv("TRIBENCH_DB_USER", Defaults.PostgreSQL.USER)
+    db_pass = os.getenv("TRIBENCH_DB_PASSWORD", Defaults.PostgreSQL.PASSWORD)
     
     # Try PostgreSQL if password is set
-    if db_pass != "tribench":
+    if db_pass != Defaults.PostgreSQL.PASSWORD:
         return f"postgresql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
     
     # Default to SQLite for development

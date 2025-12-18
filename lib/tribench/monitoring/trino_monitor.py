@@ -17,6 +17,7 @@ from typing import Dict, Any, List, Optional
 from urllib.parse import urljoin
 
 from .base import MetricCollector, Metric, MonitoringConfig
+from ..defaults import Defaults
 
 logger = logging.getLogger(__name__)
 
@@ -99,8 +100,8 @@ class TrinoMonitor(MetricCollector):
     
     def __init__(self,
                  config: MonitoringConfig,
-                 host: str = "localhost",
-                 port: int = 8080,
+                 host: str = Defaults.Trino.HOST,
+                 port: int = Defaults.Trino.PORT,
                  use_https: bool = False,
                  username: Optional[str] = None,
                  password: Optional[str] = None,

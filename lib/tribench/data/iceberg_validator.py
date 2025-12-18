@@ -16,6 +16,9 @@ from datetime import datetime
 
 from trino.dbapi import connect
 
+from ..defaults import Defaults
+from ..config import ConnectionConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -65,7 +68,7 @@ class IcebergValidator:
         }
     }
     
-    def __init__(self, connection_params: Dict[str, Any]):
+    def __init__(self, connection_params: Optional[Dict[str, Any]] = None):
         """
         Initialize Iceberg validator.
         
@@ -75,7 +78,17 @@ class IcebergValidator:
                 - port: Trino port (default: 8080)
                 - user: Username (default: admin)
         """
-        self.connection_params = connection_params
+        if connection_params is None:
+            self.connection_params = ConnectionConfig.from_defaults()
+        elif isinstance(connection_params, ConnectionConfig):
+            self.connection_params = connection_params
+        elif isinstance(connection_params, dict):
+            self.connection_params = ConnectionConfig.from_dict(connection_params)
+        else:
+            raise TypeError(
+                f"connection_params must be dict, ConnectionConfig, or None, got {type(connection_params)}"
+            )
+        self._connection = None
     
     def validate_iceberg_dataset(
         self,
@@ -263,9 +276,9 @@ class IcebergValidator:
     def _get_connection(self, catalog: str, schema: str):
         """Create Trino connection."""
         return connect(
-            host=self.connection_params.get('host', 'localhost'),
-            port=self.connection_params.get('port', 8080),
-            user=self.connection_params.get('user', 'admin'),
+            host=self.connection_params.host,
+            port=self.connection_params.port,
+            user=self.connection_params.user,
             catalog=catalog,
             schema=schema
         )
@@ -392,9 +405,9 @@ def create_iceberg_validator(config: Optional[Dict] = None) -> IcebergValidator:
         config = {}
     
     connection_params = {
-        'host': config.get('host', 'localhost'),
-        'port': config.get('port', 8080),
-        'user': config.get('user', 'admin')
+        'host': config.get('host', Defaults.Trino.HOST),
+        'port': config.get('port', Defaults.Trino.PORT),
+        'user': config.get('user', Defaults.Trino.USER)
     }
     
     return IcebergValidator(connection_params)

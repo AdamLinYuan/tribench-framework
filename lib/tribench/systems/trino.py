@@ -15,6 +15,7 @@ from pyhocon import ConfigTree
 
 from tribench.core.system import System
 from tribench.utils.config import ConfigurationLoader, get_config_value
+from tribench.defaults import Defaults
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ class TrinoSystem(System):
         
         # Docker configuration
         self.container_name = f"tribench-trino-{self.version}"
-        self.network_name = "tribench-network"
+        self.network_name = Defaults.ServiceNames.NETWORK
         
         # Initialize template engine
         from tribench.utils.config import ConfigurationTemplate
@@ -152,7 +153,7 @@ class TrinoSystem(System):
             logger.info("Trino container started, waiting for health check...")
             
             # Wait for Trino to be healthy
-            if self._wait_for_health(timeout=120):
+            if self._wait_for_health(timeout=Defaults.Timeouts.TRINO):
                 logger.info(f"Trino {self.version} started successfully")
                 return True
             else:
@@ -297,8 +298,8 @@ class TrinoSystem(System):
                 
                 # Set endpoints
                 if status["healthy"]:
-                    port = get_config_value(self.config, "tribench.systems.trino.coordinator.port", 8080)
-                    host = get_config_value(self.config, "tribench.systems.trino.coordinator.host", "localhost")
+                    port = get_config_value(self.config, "tribench.systems.trino.coordinator.port", Defaults.Trino.PORT)
+                    host = get_config_value(self.config, "tribench.systems.trino.coordinator.host", Defaults.Trino.HOST)
                     status["endpoints"]["ui"] = f"http://{host}:{port}"
                     status["endpoints"]["api"] = f"http://{host}:{port}/v1/info"
             
@@ -513,7 +514,7 @@ class TrinoSystem(System):
         except Exception as e:
             logger.warning(f"Failed to create Docker network: {e}")
     
-    def _wait_for_health(self, timeout: int = 120) -> bool:
+    def _wait_for_health(self, timeout: int = Defaults.Timeouts.TRINO) -> bool:
         """
         Wait for Trino to be healthy.
         
@@ -528,7 +529,7 @@ class TrinoSystem(System):
         while time.time() - start_time < timeout:
             if self._check_health():
                 return True
-            time.sleep(5)
+            time.sleep(Defaults.Retry.HEALTH_CHECK_INTERVAL)
             logger.debug("Waiting for Trino to be healthy...")
         
         return False
@@ -541,8 +542,8 @@ class TrinoSystem(System):
             True if healthy, False otherwise
         """
         try:
-            port = get_config_value(self.config, "tribench.systems.trino.coordinator.port", 8080)
-            host = get_config_value(self.config, "tribench.systems.trino.coordinator.host", "localhost")
+            port = get_config_value(self.config, "tribench.systems.trino.coordinator.port", Defaults.Trino.PORT)
+            host = get_config_value(self.config, "tribench.systems.trino.coordinator.host", Defaults.Trino.HOST)
             
             # Step 1: Check if HTTP endpoint is responding
             info_url = f"http://{host}:{port}/v1/info"

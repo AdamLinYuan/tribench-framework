@@ -50,10 +50,15 @@ class TestIcebergDataLoader:
     
     def test_init(self, iceberg_loader, connection_params):
         """Test loader initialization."""
-        assert iceberg_loader.connection_params == connection_params
-        assert iceberg_loader.connection_params['host'] == 'localhost'
-        assert iceberg_loader.connection_params['port'] == 8080
-        assert iceberg_loader.connection_params['user'] == 'admin'
+        params = {
+            'host': 'localhost',
+            'port': 8080,
+            'user': 'admin'
+        }
+        assert iceberg_loader.connection_params.host == params['host']
+        assert iceberg_loader.connection_params.port == params['port']
+        assert iceberg_loader.connection_params.user == params['user']
+        assert iceberg_loader.connection_params.user == params['user']
     
     def test_arrow_to_trino_type_integer(self, iceberg_loader):
         """Test integer type mapping."""
@@ -378,9 +383,8 @@ class TestIcebergLoaderEdgeCases:
         custom_params = {
             **connection_params,
             'http_scheme': 'https',
-            'auth': 'basic'
         }
         loader = IcebergDataLoader(custom_params)
         
-        assert loader.connection_params['http_scheme'] == 'https'
-        assert loader.connection_params['auth'] == 'basic'
+        assert loader.connection_params.http_scheme == 'https'
+        assert loader.connection_params.host == connection_params['host']

@@ -266,7 +266,9 @@ class TestTrinoDataLoader:
         }
         
         loader = TrinoDataLoader(params)
-        assert loader.connection_params == params
+        assert loader.connection_params.host == params['host']
+        assert loader.connection_params.port == params['port']
+        assert loader.connection_params.user == params['user']
     
     def test_arrow_to_trino_type_mappings(self):
         """Test PyArrow to Trino type conversions."""

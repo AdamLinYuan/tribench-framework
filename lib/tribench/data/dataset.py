@@ -25,6 +25,9 @@ import pyarrow.parquet as pq
 import pyarrow.csv as csv
 import yaml
 
+from ..defaults import Defaults
+from ..config import ConnectionConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -551,14 +554,24 @@ class TPCHGenerator:
 class TrinoDataLoader:
     """Loads datasets into Trino (benchmark-agnostic)."""
     
-    def __init__(self, connection_params: Dict[str, Any]):
+    def __init__(self, connection_params: Optional[Dict[str, Any]] = None):
         """
         Initialize Trino data loader.
         
         Args:
-            connection_params: Trino connection parameters
+            connection_params: Trino connection parameters (dict) or None to use defaults.
+                             Can also accept ConnectionConfig directly.
         """
-        self.connection_params = connection_params
+        if connection_params is None:
+            self.connection_params = ConnectionConfig.from_defaults()
+        elif isinstance(connection_params, ConnectionConfig):
+            self.connection_params = connection_params
+        elif isinstance(connection_params, dict):
+            self.connection_params = ConnectionConfig.from_dict(connection_params)
+        else:
+            raise TypeError(
+                f"connection_params must be dict, ConnectionConfig, or None, got {type(connection_params)}"
+            )
         self._connection = None
     
     def load_dataset(self, dataset_path: Path, dataset_schema: DatasetSchema,
@@ -581,11 +594,11 @@ class TrinoDataLoader:
         logger.info(f"Loading {benchmark_type.upper()} dataset from {dataset_path}")
         logger.info(f"Target: {catalog}.{schema}")
         
-        # Connect to Trino
+        # Connect to Trino using ConnectionConfig
         conn = connect(
-            host=self.connection_params.get('host', 'localhost'),
-            port=self.connection_params.get('port', 8080),
-            user=self.connection_params.get('user', 'admin'),
+            host=self.connection_params.host,
+            port=self.connection_params.port,
+            user=self.connection_params.user,
             catalog=catalog,
             schema=schema
         )
@@ -696,7 +709,7 @@ class TrinoDataLoader:
             return 0
         
         # Batch size for INSERT statements
-        batch_size = 1000
+        batch_size = Defaults.Retry.DATA_BATCH_SIZE_SMALL
         column_names = table.schema.names
         quoted_columns = [f'"{col}"' for col in column_names]
         

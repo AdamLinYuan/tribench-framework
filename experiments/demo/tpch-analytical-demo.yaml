@@ -1,0 +1,48 @@
+# ============================================================================
+# TPC-H Analytical Queries Demo
+# ============================================================================
+# Focuses on analytical queries with complex business logic
+# Queries: Q7 (Volume Shipping), Q8 (National Market Share), Q9 (Product Profit)
+
+name: "tpch-analytical-demo"
+description: "TPC-H analytical queries demonstrating complex business intelligence patterns"
+
+system: "trino"
+
+connection:
+  host: "localhost"
+  port: 8080
+  user: "tribench"
+  catalog: "iceberg"
+  schema: "tpch"
+
+# Execution parameters
+runs: 3
+warmup_runs: 1
+timeout_seconds: 240
+max_retries: 2
+
+# Analytical queries
+query_files:
+  - "apps/tpch/queries/q07.sql"  # Volume Shipping - multi-year analysis
+  - "apps/tpch/queries/q08.sql"  # National Market Share - complex analytics
+  - "apps/tpch/queries/q09.sql"  # Product Type Profit Measure - profit analysis
+
+validation:
+  min_success_rate: 0.85
+  max_execution_time_variance: 0.50
+
+metrics:
+  - execution_time
+  - rows_returned
+  - cpu_time
+  - memory_usage
+  - data_scanned
+
+metadata:
+  benchmark: "TPC-H"
+  scale_factor: 0.01
+  dataset: "tpch-tiny"
+  query_type: "analytical"
+  tags: ["demo", "tpch", "iceberg", "analytical", "business-intelligence"]
+  purpose: "Demo analytical query performance"

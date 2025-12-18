@@ -51,52 +51,154 @@ tpch-tiny-iceberg:
   format: iceberg
   scale_factor: 0.01
   size_bytes: null
-  location: iceberg.tpch
+  location: iceberg.tpch_tiny
   tables:
-  - customer
-  - lineitem
   - nation
-  - orders
+  - region
+  - customer
+  - supplier
   - part
   - partsupp
-  - region
-  - supplier
+  - orders
+  - lineitem
   row_counts:
-    customer: 1500
-    lineitem: 60175
     nation: 25
-    orders: 15000
+    region: 5
+    customer: 1500
+    supplier: 100
     part: 2000
     partsupp: 8000
-    region: 5
-    supplier: 100
+    orders: 15000
+    lineitem: 60175
   checksums: {}
   properties:
     source_dataset: tpch-tiny
     partitioned: true
     storage_location: default
-  created_at: '2025-11-29T20:43:27.551889'
+  created_at: '2025-12-17T17:42:48.333886'
   generator: iceberg_loader
   iceberg_catalog: iceberg
-  iceberg_schema: tpch
+  iceberg_schema: tpch_tiny
   snapshot_ids:
-    customer: 8076930263192325580
-    lineitem: 6167208562440253210
-    nation: 6322955807563344050
-    orders: 3909615888670837882
-    part: 5403946182479000563
-    partsupp: 7126246512178617465
-    region: 4135194612099284057
-    supplier: 3521428415818806296
+    nation: 5848336524749392556
+    region: 9197099833899735186
+    customer: 4674319121604194911
+    supplier: 4886042318166811389
+    part: 5781824078459028437
+    partsupp: 3195017219465438448
+    orders: 49464643252041577
+    lineitem: 7185065053944051728
   snapshot_timestamps:
-    customer: '2025-11-29 20:39:03.726000+00:00'
-    lineitem: '2025-11-29 20:42:43.938000+00:00'
-    nation: '2025-11-29 20:42:44.171000+00:00'
-    orders: '2025-11-29 20:43:16.751000+00:00'
-    part: '2025-11-29 20:43:19.968000+00:00'
-    partsupp: '2025-11-29 20:43:26.526000+00:00'
-    region: '2025-11-29 20:43:26.715000+00:00'
-    supplier: '2025-11-29 20:43:26.939000+00:00'
+    nation: '2025-12-17 17:42:41.028000+00:00'
+    region: '2025-12-17 17:42:41.216000+00:00'
+    customer: '2025-12-17 17:42:41.460000+00:00'
+    supplier: '2025-12-17 17:42:41.652000+00:00'
+    part: '2025-12-17 17:42:41.891000+00:00'
+    partsupp: '2025-12-17 17:42:42.158000+00:00'
+    orders: '2025-12-17 17:42:44.252000+00:00'
+    lineitem: '2025-12-17 17:42:47.431000+00:00'
+  manifest_counts: {}
+  format_version: 2
+  storage_location: null
+tpch-sf1:
+  name: tpch-sf1
+  benchmark_type: tpch
+  type: generated
+  format: parquet
+  scale_factor: 1.0
+  size_bytes: 321318110
+  location: /Users/adamyuan/Documents/UofG/Yr 4/Dissertation/Code/tribench-framework/datasets/tpch-sf1_0/parquet
+  tables:
+  - nation
+  - region
+  - customer
+  - supplier
+  - part
+  - partsupp
+  - orders
+  - lineitem
+  row_counts:
+    nation: 25
+    region: 5
+    customer: 150000
+    supplier: 10000
+    part: 200000
+    partsupp: 800000
+    orders: 1500000
+    lineitem: 6001215
+  checksums:
+    nation: 38d2d9e01f803fce0f60543be13d22de6896aa73632a9420d0bd8746c5cedb6d
+    region: 4d98abdc8a21b3f21e5fc0eeeacc8c901a7c7f238125c1124195b0a47a5ab45f
+    customer: d12ec007ececcf050aee90f35cb3ceed0f6cb71137b4ba721a0b0d702ba89291
+    supplier: ecd4475f68d5976663b0d5a4a962adda93f324d74ba10d65a1fb830a99bbdbee
+    part: 30ceb9210b16844f2b87b5cd422ab9399de8056521c2be1e7fb512dbae8712b9
+    partsupp: ae6d6f6580ba1f9d8b20c8ae2ab031b675360b5bf4ae55514da3d74247aa10ef
+    orders: 444bde2dc6773f8306e3c5e88f41f00509ba25731ba3b848fd8ba5d287aa65e0
+    lineitem: 5ecff47a77677c859aa0815e468328290dcc1a1a1baa16969249a29ac73bd0ee
+  properties:
+    tpch_version: '3.0'
+  created_at: '2025-12-17T17:08:32.418243'
+  generator: tpch-dbgen
+  iceberg_catalog: null
+  iceberg_schema: null
+  snapshot_ids: null
+  snapshot_timestamps: null
+  manifest_counts: null
+  format_version: null
+  storage_location: null
+tpch-sf1-iceberg:
+  name: tpch-sf1-iceberg
+  benchmark_type: tpch
+  type: static
+  format: iceberg
+  scale_factor: 1.0
+  size_bytes: null
+  location: iceberg.tpch_sf1
+  tables:
+  - nation
+  - region
+  - customer
+  - supplier
+  - part
+  - partsupp
+  - orders
+  - lineitem
+  row_counts:
+    nation: 25
+    region: 5
+    customer: 150000
+    supplier: 10000
+    part: 200000
+    partsupp: 800000
+    orders: 1500000
+    lineitem: 6001215
+  checksums: {}
+  properties:
+    source_dataset: tpch-sf1
+    partitioned: false
+    storage_location: default
+  created_at: '2025-12-17T17:44:13.443881'
+  generator: iceberg_loader
+  iceberg_catalog: iceberg
+  iceberg_schema: tpch_sf1
+  snapshot_ids:
+    nation: 6408123490978902382
+    region: 7545707638087716191
+    customer: 7882135788652348792
+    supplier: 4734532727403699960
+    part: 1793102882376416761
+    partsupp: 3466664643117725585
+    orders: 1139539681758440873
+    lineitem: 3312152660155888039
+  snapshot_timestamps:
+    nation: '2025-12-17 17:44:00.926000+00:00'
+    region: '2025-12-17 17:44:01.252000+00:00'
+    customer: '2025-12-17 17:44:03.105000+00:00'
+    supplier: '2025-12-17 17:44:03.544000+00:00'
+    part: '2025-12-17 17:44:04.405000+00:00'
+    partsupp: '2025-12-17 17:44:06.069000+00:00'
+    orders: '2025-12-17 17:44:08.917000+00:00'
+    lineitem: '2025-12-17 17:44:12.797000+00:00'
   manifest_counts: {}
   format_version: 2
   storage_location: null

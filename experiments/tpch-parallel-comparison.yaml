@@ -1,0 +1,51 @@
+# TPC-H Parallel Execution with Connection Pooling
+# This experiment runs TPC-H queries in parallel using connection pooling
+
+name: "tpch-sf1"
+description: "TPC-H queries executed in parallel with connection pooling"
+
+# System configuration
+system: "trino"
+
+# Connection parameters
+connection:
+  host: "localhost"
+  port: 8080
+  user: "tribench"
+  catalog: "iceberg"
+  schema: "tpch"
+
+# Execution parameters
+runs: 3
+warmup_runs: 1
+timeout_seconds: 300
+max_retries: 2
+
+# Parallel execution with connection pooling
+# parallel_queries: 4  # Execute up to 4 queries concurrently
+
+# TPC-H Queries (same subset as sequential)
+query_files:
+  - "apps/tpch/queries/q01.sql"
+  - "apps/tpch/queries/q03.sql"
+  - "apps/tpch/queries/q05.sql"
+  - "apps/tpch/queries/q06.sql"
+  - "apps/tpch/queries/q10.sql"
+  - "apps/tpch/queries/q12.sql"
+  - "apps/tpch/queries/q14.sql"
+  - "apps/tpch/queries/q19.sql"
+
+# Validation rules
+validation:
+  min_success_rate: 0.95
+
+# Storage options
+result_storage:
+  enable_database: true
+  enable_json: true
+
+# Monitoring (optional)
+monitoring:
+  enabled: true
+  resource_monitoring: true
+  query_monitoring: true

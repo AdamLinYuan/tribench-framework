@@ -1,0 +1,48 @@
+# ============================================================================
+# TPC-H Subquery/Complex Queries Demo
+# ============================================================================
+# Focuses on queries with subqueries, EXISTS, IN, and complex predicates
+# Queries: Q4 (Order Priority), Q11 (Important Stock), Q22 (Global Sales Opp)
+
+name: "tpch-subquery-demo"
+description: "TPC-H subquery-focused queries demonstrating complex query patterns"
+
+system: "trino"
+
+connection:
+  host: "localhost"
+  port: 8080
+  user: "tribench"
+  catalog: "iceberg"
+  schema: "tpch"
+
+# Execution parameters
+runs: 3
+warmup_runs: 1
+timeout_seconds: 180
+max_retries: 2
+
+# Subquery-focused queries
+query_files:
+  - "apps/tpch/queries/q04.sql"  # Order Priority Checking - EXISTS subquery
+  - "apps/tpch/queries/q11.sql"  # Important Stock Identification - correlated subquery
+  - "apps/tpch/queries/q22.sql"  # Global Sales Opportunity - complex subqueries
+
+validation:
+  min_success_rate: 0.90
+  max_execution_time_variance: 0.50
+
+metrics:
+  - execution_time
+  - rows_returned
+  - cpu_time
+  - memory_usage
+  - data_scanned
+
+metadata:
+  benchmark: "TPC-H"
+  scale_factor: 0.01
+  dataset: "tpch-tiny"
+  query_type: "subquery"
+  tags: ["demo", "tpch", "iceberg", "subquery", "complex"]
+  purpose: "Demo subquery and complex query performance"

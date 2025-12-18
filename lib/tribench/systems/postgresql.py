@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional
 import requests
 
 from ..core.system import System
+from ..defaults import Defaults
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +44,8 @@ class PostgreSQLSystem(System):
         super().__init__(name="postgresql", config=config)
         
         self.version = version
-        self.host = config.get("tribench.systems.postgresql.host", "localhost")
-        self.port = config.get("tribench.systems.postgresql.port", 5432)
+        self.host = config.get("tribench.systems.postgresql.host", Defaults.PostgreSQL.HOST)
+        self.port = config.get("tribench.systems.postgresql.port", Defaults.PostgreSQL.PORT)
         self.databases = config.get("tribench.systems.postgresql.databases", {})
         
         # Docker configuration
@@ -97,7 +98,7 @@ class PostgreSQLSystem(System):
             logger.error(f"PostgreSQL setup failed: {e}")
             raise
     
-    def start(self, timeout: int = 60) -> None:
+    def start(self, timeout: int = Defaults.Timeouts.POSTGRESQL) -> None:
         """
         Start PostgreSQL container.
         
@@ -284,7 +285,7 @@ class PostgreSQLSystem(System):
         """Create Docker network if it doesn't exist."""
         try:
             subprocess.run(
-                ["docker", "network", "create", "tribench-network"],
+                ["docker", "network", "create", Defaults.ServiceNames.NETWORK],
                 capture_output=True,
                 check=False  # Don't fail if network already exists
             )
@@ -314,7 +315,7 @@ class PostgreSQLSystem(System):
             logger.debug(f"Health check failed: {e}")
             return False
     
-    def _wait_for_health(self, timeout: int = 60, interval: int = 2) -> None:
+    def _wait_for_health(self, timeout: int = Defaults.Timeouts.POSTGRESQL, interval: int = 2) -> None:
         """
         Wait for PostgreSQL to become healthy.
         

@@ -2,10 +2,13 @@
 
 import time
 import logging
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List, Tuple, Union
 from pathlib import Path
 import trino
 from trino.exceptions import TrinoUserError, TrinoQueryError
+
+from ..defaults import Defaults
+from ..config import ConnectionConfig, ConnectionPool
 
 logger = logging.getLogger(__name__)
 
@@ -27,37 +30,69 @@ class QueryExecutor:
     """
     
     def __init__(self, 
-                 host: str = "localhost",
-                 port: int = 8080,
-                 user: str = "tribench",
-                 catalog: str = "memory",
-                 schema: str = "default",
-                 timeout_seconds: int = 300,
-                 max_retries: int = 3):
+                 connection: Optional[Union[ConnectionConfig, Dict[str, Any]]] = None,
+                 host: Optional[str] = None,
+                 port: Optional[int] = None,
+                 user: Optional[str] = None,
+                 catalog: Optional[str] = None,
+                 schema: Optional[str] = None,
+                 timeout_seconds: int = Defaults.Timeouts.QUERY,
+                 max_retries: int = Defaults.Retry.DEFAULT_MAX_RETRIES):
         """
         Initialize the QueryExecutor.
         
         Args:
-            host: Trino coordinator host
-            port: Trino coordinator port
-            user: Trino user
-            catalog: Default catalog
-            schema: Default schema
+            connection: ConnectionConfig instance or dict with connection params.
+                       If provided, individual params (host, port, etc.) are ignored.
+            host: Trino coordinator host (deprecated, use connection param)
+            port: Trino coordinator port (deprecated, use connection param)
+            user: Trino user (deprecated, use connection param)
+            catalog: Default catalog (deprecated, use connection param)
+            schema: Default schema (deprecated, use connection param)
             timeout_seconds: Query execution timeout
             max_retries: Maximum number of retry attempts
+            
+        Examples:
+            # New style with ConnectionConfig
+            config = ConnectionConfig.from_defaults()
+            executor = QueryExecutor(connection=config)
+            
+            # New style with dict
+            executor = QueryExecutor(connection={'host': 'localhost', 'port': 8080})
+            
+            # Old style (backward compatible)
+            executor = QueryExecutor(host='localhost', port=8080, user='admin')
         """
-        self.host = host
-        self.port = port
-        self.user = user
-        self.catalog = catalog
-        self.schema = schema
+        # Handle connection parameter (new style)
+        if connection is not None:
+            if isinstance(connection, ConnectionConfig):
+                self.config = connection
+            elif isinstance(connection, dict):
+                self.config = ConnectionConfig.from_dict(connection)
+            else:
+                raise TypeError(
+                    f"connection must be ConnectionConfig or dict, got {type(connection)}"
+                )
+        # Handle individual parameters (old style, backward compatible)
+        elif any(param is not None for param in [host, port, user, catalog, schema]):
+            self.config = ConnectionConfig(
+                host=host or Defaults.Trino.HOST,
+                port=port or Defaults.Trino.PORT,
+                user=user or Defaults.Trino.USER,
+                catalog=catalog or Defaults.Trino.CATALOG,
+                schema=schema or Defaults.Trino.SCHEMA,
+            )
+        # No parameters provided, use defaults
+        else:
+            self.config = ConnectionConfig.from_defaults()
+        
         self.timeout_seconds = timeout_seconds
         self.max_retries = max_retries
         
         self._connection: Optional[trino.dbapi.Connection] = None
         self._cursor: Optional[trino.dbapi.Cursor] = None
         
-        logger.debug(f"QueryExecutor initialized: {self.user}@{self.host}:{self.port}/{self.catalog}.{self.schema}")
+        logger.debug(f"QueryExecutor initialized: {self.config}")
     
     def connect(self) -> None:
         """
@@ -67,16 +102,9 @@ class QueryExecutor:
             QueryExecutionError: If connection fails
         """
         try:
-            self._connection = trino.dbapi.connect(
-                host=self.host,
-                port=self.port,
-                user=self.user,
-                catalog=self.catalog,
-                schema=self.schema,
-                http_scheme="http",
-            )
+            self._connection = self.config.connect()
             self._cursor = self._connection.cursor()
-            logger.info(f"Connected to Trino at {self.host}:{self.port}")
+            logger.info(f"Connected to Trino at {self.config.host}:{self.config.port}")
             
         except Exception as e:
             raise QueryExecutionError(f"Failed to connect to Trino: {e}") from e
@@ -306,4 +334,132 @@ class QueryExecutor:
         """Context manager exit."""
         self.disconnect()
         return False
+    
+    def execute_with_pool(self,
+                         query: str,
+                         pool: ConnectionPool,
+                         fetch_results: bool = True) -> Tuple[List[Tuple], Dict[str, Any]]:
+        """Execute a query using a connection from the pool.
+        
+        This method is designed for concurrent query execution scenarios
+        where multiple queries run in parallel using pooled connections.
+        
+        Args:
+            query: SQL query string
+            pool: ConnectionPool instance to use
+            fetch_results: Whether to fetch and return results
+            
+        Returns:
+            Tuple of (rows, metadata)
+            
+        Raises:
+            QueryExecutionError: If query execution fails
+            
+        Example:
+            config = ConnectionConfig.from_defaults()
+            pool = ConnectionPool(config, pool_size=5)
+            executor = QueryExecutor(connection=config)
+            
+            # Execute multiple queries concurrently
+            from concurrent.futures import ThreadPoolExecutor
+            
+            queries = ["SELECT 1", "SELECT 2", "SELECT 3"]
+            with ThreadPoolExecutor(max_workers=3) as thread_pool:
+                futures = [
+                    thread_pool.submit(executor.execute_with_pool, q, pool)
+                    for q in queries
+                ]
+                results = [f.result() for f in futures]
+        """
+        query_preview = str(query)[:100] if query else "None"
+        logger.info(f"Executing pooled query: {query_preview}...")
+        
+        start_time = time.time()
+        rows = []
+        metadata = {
+            "query": str(query) if query else None,
+            "success": False,
+            "execution_time_seconds": 0,
+            "rows_returned": 0,
+            "error": None,
+            "pooled": True,
+        }
+        
+        try:
+            # Acquire connection from pool
+            with pool.acquire() as conn:
+                cursor = conn.cursor()
+                
+                try:
+                    # Execute query
+                    cursor.execute(query)
+                    
+                    # Fetch results if requested
+                    if fetch_results:
+                        rows = cursor.fetchall()
+                        metadata["rows_returned"] = len(rows)
+                    else:
+                        cursor.fetchall()
+                        metadata["rows_returned"] = 0
+                    
+                    # Calculate execution time
+                    execution_time = time.time() - start_time
+                    metadata["execution_time_seconds"] = execution_time
+                    metadata["success"] = True
+                    
+                    # Get query statistics
+                    if hasattr(cursor, 'stats') and cursor.stats:
+                        try:
+                            stats = cursor.stats
+                            metadata.update({
+                                "query_id": stats.get("queryId"),
+                                "state": stats.get("state"),
+                                "queued_time_ms": stats.get("queuedTimeMillis"),
+                                "elapsed_time_ms": stats.get("elapsedTimeMillis"),
+                                "cpu_time_ms": stats.get("cpuTimeMillis"),
+                                "scheduled_time_ms": stats.get("scheduledTimeMillis"),
+                                "processed_rows": stats.get("processedRows"),
+                                "processed_bytes": stats.get("processedBytes"),
+                                "peak_memory_bytes": stats.get("peakMemoryBytes"),
+                            })
+                        except Exception as e:
+                            logger.warning(f"Failed to extract query statistics: {e}")
+                    
+                    logger.info(
+                        f"Pooled query completed in {execution_time:.2f}s, "
+                        f"returned {len(rows)} rows"
+                    )
+                    
+                finally:
+                    cursor.close()
+            
+            return rows, metadata
+            
+        except TrinoUserError as e:
+            execution_time = time.time() - start_time
+            metadata["execution_time_seconds"] = execution_time
+            metadata["error"] = str(e)
+            metadata["error_type"] = "user_error"
+            metadata["error_code"] = e.error_code if hasattr(e, 'error_code') else None
+            
+            logger.error(f"Pooled query failed with user error: {e}")
+            raise QueryExecutionError(f"Query execution failed: {e}") from e
+            
+        except TrinoQueryError as e:
+            execution_time = time.time() - start_time
+            metadata["execution_time_seconds"] = execution_time
+            metadata["error"] = str(e)
+            metadata["error_type"] = "query_error"
+            
+            logger.error(f"Pooled query failed with query error: {e}")
+            raise QueryExecutionError(f"Query execution failed: {e}") from e
+            
+        except Exception as e:
+            execution_time = time.time() - start_time
+            metadata["execution_time_seconds"] = execution_time
+            metadata["error"] = str(e)
+            metadata["error_type"] = "unknown_error"
+            
+            logger.error(f"Pooled query failed with unexpected error: {e}")
+            raise QueryExecutionError(f"Query execution failed: {e}") from e
 

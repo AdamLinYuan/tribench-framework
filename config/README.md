@@ -105,26 +105,288 @@ tribench {
 
 ## Host Configurations
 
-Create a host-specific configuration in `config/hosts/<your-hostname>/application.conf`:
+Host-specific configurations allow you to customize TriBench for your specific machine without modifying the framework defaults.
 
+### Quick Start: Create Your Own Host Config
+
+1. **Find your hostname:**
+   ```bash
+   hostname
+   # Example output: macbook-pro.local or dev-server
+   ```
+
+2. **Create your host directory:**
+   ```bash
+   mkdir -p config/hosts/$(hostname)
+   ```
+
+3. **Create `application.conf` in your host directory:**
+   ```bash
+   touch config/hosts/$(hostname)/application.conf
+   ```
+
+4. **Start with this template:**
+   ```hocon
+   # config/hosts/<your-hostname>/application.conf
+   # Host-specific configuration overrides
+   
+   tribench {
+     # Override system resource allocations
+     systems {
+       trino {
+         coordinator {
+           jvm.heap = "4G"  # Adjust based on your RAM
+           port = 8080      # Change if port conflicts
+         }
+       }
+       
+       postgresql {
+         # Override default credentials for local dev
+         username = "myuser"
+         password = "mypassword"
+       }
+       
+       minio {
+         # Use different ports if needed
+         port = 9000
+         console_port = 9001
+       }
+     }
+     
+     # Custom paths for your machine
+     app.path {
+       # Use /tmp for temporary data on dev machines
+       downloads = "/tmp/tribench/downloads"
+       systems = "/tmp/tribench/systems"
+       
+       # Or use custom directories
+       # datasets = "/mnt/data/tribench/datasets"
+       # results = "/home/user/tribench-results"
+     }
+     
+     # Kubernetes settings (if using K8s)
+     kubernetes {
+       context = "docker-desktop"  # or "kind-tribench" or your cluster name
+       namespace = "tribench"
+     }
+   }
+   ```
+
+5. **Test your configuration:**
+   ```bash
+   tribench config show  # View merged configuration
+   tribench config validate  # Check for errors
+   ```
+
+### Common Customization Scenarios
+
+#### Scenario 1: Developer Laptop (Limited Resources)
 ```hocon
-# Override for development machine
 tribench {
-    systems {
-        trino {
-            coordinator.jvm.heap = "4G"  # More RAM on dev machine
-        }
+  systems {
+    trino {
+      coordinator.jvm.heap = "2G"  # Lower memory usage
     }
-    
-    # Custom paths
-    app.path {
-        downloads = "/tmp/tribench/downloads"
-        systems = "/tmp/tribench/systems"
-    }
+  }
+  
+  # Use local temp directories
+  app.path {
+    downloads = "/tmp/tribench/downloads"
+    systems = "/tmp/tribench/systems"
+  }
+  
+  # Smaller datasets for testing
+  datasets {
+    tpch.scale_factors = ["tiny"]
+  }
 }
 ```
 
-The framework automatically detects your hostname and loads the appropriate config.
+#### Scenario 2: High-Performance Server
+```hocon
+tribench {
+  systems {
+    trino {
+      coordinator.jvm.heap = "16G"  # More RAM available
+      
+      # Add worker nodes
+      workers = [
+        { host = "worker1", jvm.heap = "32G" }
+        { host = "worker2", jvm.heap = "32G" }
+      ]
+    }
+  }
+  
+  # Use dedicated storage
+  app.path {
+    datasets = "/mnt/nvme/tribench/datasets"
+    systems = "/opt/tribench/systems"
+  }
+  
+  # Run more experiments in parallel
+  execution.parallel_experiments = 4
+}
+```
+
+#### Scenario 3: Remote Cluster (Kubernetes)
+```hocon
+tribench {
+  kubernetes {
+    context = "gke_my-project_us-central1_tribench-cluster"
+    namespace = "tribench-prod"
+  }
+  
+  systems {
+    trino {
+      # Use Helm chart for deployment
+      helm_chart = "trinodb/trino"
+      helm_release = "tribench-trino"
+    }
+  }
+  
+  # Store results in cloud database
+  database.results {
+    url = "jdbc:postgresql://cloudsql-proxy:5432/tribench"
+    username = ${CLOUD_DB_USER}
+    password = ${CLOUD_DB_PASSWORD}
+  }
+}
+```
+
+#### Scenario 4: Custom Port Assignments
+```hocon
+tribench {
+  systems {
+    trino {
+      coordinator.port = 9080  # Avoid conflict with other services
+    }
+    
+    minio {
+      port = 19000           # Custom MinIO API port
+      console_port = 19001   # Custom console port
+    }
+    
+    postgresql {
+      port = 15432           # Custom PostgreSQL port
+    }
+    
+    hive_metastore {
+      port = 19083           # Custom Hive Metastore port
+    }
+  }
+}
+```
+
+### Using Environment Variables
+
+For sensitive data or deployment-specific values, use environment variables:
+
+```hocon
+tribench {
+  systems {
+    minio {
+      # Required: Must be set in environment
+      access_key = ${MINIO_ACCESS_KEY}
+      secret_key = ${MINIO_SECRET_KEY}
+    }
+    
+    postgresql {
+      # Optional: Use default if not set
+      host = ${?POSTGRES_HOST}
+      password = ${?POSTGRES_PASSWORD}
+    }
+  }
+  
+  database.results {
+    # Mix of env vars and defaults
+    url = "jdbc:postgresql://"${?DB_HOST:-localhost}":5432/tribench"
+    username = ${?RESULTS_DB_USER:-tribench}
+    password = ${RESULTS_DB_PASSWORD}  # Required
+  }
+}
+```
+
+Set environment variables before running:
+```bash
+export MINIO_ACCESS_KEY="my-access-key"
+export MINIO_SECRET_KEY="my-secret-key"
+export RESULTS_DB_PASSWORD="secure-password"
+
+tribench experiment run my-experiment.yaml
+```
+
+### Framework Defaults Reference
+
+All framework defaults are defined in `lib/tribench/defaults.py` and documented in `reference.conf`. Here are the key defaults you might want to override:
+
+| Setting | Default | Override In |
+|---------|---------|-------------|
+| Trino host | `localhost` | `tribench.systems.trino.coordinator.host` |
+| Trino port | `8080` | `tribench.systems.trino.coordinator.port` |
+| Trino user | `tribench` | `tribench.systems.trino.coordinator.user` |
+| MinIO host | `localhost` | `tribench.systems.minio.host` |
+| MinIO port | `9000` | `tribench.systems.minio.port` |
+| PostgreSQL host | `localhost` | `tribench.systems.postgresql.host` |
+| PostgreSQL port | `5432` | `tribench.systems.postgresql.port` |
+| K8s context | `kind-tribench` | `tribench.kubernetes.context` |
+| K8s namespace | `tribench` | `tribench.kubernetes.namespace` |
+| Query timeout | `300s` | `tribench.execution.query.timeout` |
+| Max retries | `3` | `tribench.execution.max_retries` |
+
+See `reference.conf` → `tribench.defaults` section for the complete list.
+
+### Configuration Precedence
+
+Configurations are merged in this order (lowest to highest priority):
+
+1. **Code defaults** (`lib/tribench/defaults.py`) - Hard-coded fallbacks
+2. **Reference config** (`config/reference.conf`) - Framework defaults
+3. **Host config** (`config/hosts/<hostname>/application.conf`) - Your overrides
+4. **Experiment config** (`experiments/<name>.yaml`) - Experiment-specific
+5. **Environment variables** - Runtime overrides
+
+Example:
+```hocon
+# reference.conf: port = 8080
+# hosts/laptop/application.conf: port = 9080
+# experiment.yaml: port = 8888
+# Result: port = 8888 (experiment wins)
+```
+
+### Validation and Debugging
+
+**View merged configuration:**
+```bash
+tribench config show
+tribench config show --section systems.trino
+```
+
+**Validate configuration:**
+```bash
+tribench config validate
+tribench config validate --experiment experiments/my-test.yaml
+```
+
+**Debug configuration loading:**
+```bash
+tribench --verbose config show  # Shows which files are loaded
+```
+
+**Check for conflicts:**
+```bash
+# See which config file sets a specific value
+tribench config trace tribench.systems.trino.coordinator.port
+```
+
+### Best Practices
+
+1. **Start small**: Copy only the sections you need to override from `reference.conf`
+2. **Add comments**: Explain why you're overriding a setting
+3. **Use version control**: Commit your host config (but not secrets!)
+4. **Test incrementally**: Validate after each change
+5. **Document custom values**: Create a README in your host directory
+6. **Use environment variables for secrets**: Never commit passwords
+7. **Keep it organized**: Group related settings together
 
 ## Experiment Configurations
 

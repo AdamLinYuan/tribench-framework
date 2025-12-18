@@ -15,6 +15,7 @@ from enum import Enum
 from typing import Dict, Any, List, Optional, Callable
 
 from .base import Metric
+from tribench.defaults import Defaults
 
 logger = logging.getLogger(__name__)
 
@@ -437,7 +438,7 @@ def create_disk_space_alert(threshold_percent: float = 85.0) -> AlertThreshold:
     )
 
 
-def create_query_timeout_alert(threshold_seconds: float = 300.0) -> AlertThreshold:
+def create_query_timeout_alert(threshold_seconds: float = Defaults.Timeouts.QUERY) -> AlertThreshold:
     """
     Create query timeout alert threshold.
     
@@ -455,5 +456,5 @@ def create_query_timeout_alert(threshold_seconds: float = 300.0) -> AlertThresho
         severity=AlertSeverity.INFO,
         message=f"Query running longer than {threshold_seconds}s",
         consecutive_violations=1,
-        cooldown_seconds=300,
+        cooldown_seconds=Defaults.Timeouts.QUERY,
     )

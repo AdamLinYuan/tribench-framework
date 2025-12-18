@@ -8,6 +8,9 @@ from pathlib import Path
 import yaml
 import logging
 
+from ..defaults import Defaults
+from ..config import ConnectionConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,10 +28,11 @@ class ExperimentConfig:
     # Execution parameters
     runs: int = 1  # Number of times to execute
     warmup_runs: int = 0  # Number of warmup runs (not measured)
-    timeout_seconds: int = 300  # Query timeout
-    max_retries: int = 3  # Maximum retry attempts on failure
+    timeout_seconds: int = Defaults.Timeouts.QUERY  # Query timeout
+    max_retries: int = Defaults.Retry.DEFAULT_MAX_RETRIES  # Maximum retry attempts on failure
+    parallel_queries: int = 1  # Number of concurrent queries (1 = sequential)
     
-    # Connection parameters
+    # Connection parameters (dict will be converted to ConnectionConfig by consumer)
     connection: Dict[str, Any] = field(default_factory=dict)  # System connection config
     
     # Validation rules
@@ -113,8 +117,9 @@ class ExperimentConfig:
                 "query_files": normalize_to_list(data.get("query_files")),
                 "runs": data.get("runs", 1),
                 "warmup_runs": data.get("warmup_runs", 0),
-                "timeout_seconds": data.get("timeout_seconds", 300),
-                "max_retries": data.get("max_retries", 3),
+                "timeout_seconds": data.get("timeout_seconds", Defaults.Timeouts.QUERY),
+                "max_retries": data.get("max_retries", Defaults.Retry.DEFAULT_MAX_RETRIES),
+                "parallel_queries": data.get("parallel_queries", 1),
                 "connection": data.get("connection", {}),
                 "validation": data.get("validation", {}),
                 "metrics": data.get("metrics", ["execution_time", "rows_returned"]),
@@ -163,6 +168,7 @@ class ExperimentConfig:
             "warmup_runs": self.warmup_runs,
             "timeout_seconds": self.timeout_seconds,
             "max_retries": self.max_retries,
+            "parallel_queries": self.parallel_queries,
             "connection": self.connection,
             "validation": self.validation,
             "metrics": self.metrics,

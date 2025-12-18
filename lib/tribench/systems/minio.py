@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional, List
 import requests
 
 from ..core.system import System
+from ..defaults import Defaults
 
 logger = logging.getLogger(__name__)
 
@@ -43,11 +44,11 @@ class MinIOSystem(System):
         super().__init__(name="minio", config=config)
         
         self.version = version
-        self.host = config.get("tribench.systems.minio.host", "localhost")
-        self.port = config.get("tribench.systems.minio.port", 9000)
-        self.console_port = config.get("tribench.systems.minio.console_port", 9001)
-        self.access_key = config.get("tribench.systems.minio.access_key", "minioadmin")
-        self.secret_key = config.get("tribench.systems.minio.secret_key", "minioadmin")
+        self.host = config.get("tribench.systems.minio.host", Defaults.MinIO.HOST)
+        self.port = config.get("tribench.systems.minio.port", Defaults.MinIO.PORT)
+        self.console_port = config.get("tribench.systems.minio.console_port", Defaults.MinIO.CONSOLE_PORT)
+        self.access_key = config.get("tribench.systems.minio.access_key", Defaults.MinIO.ACCESS_KEY)
+        self.secret_key = config.get("tribench.systems.minio.secret_key", Defaults.MinIO.SECRET_KEY)
         self.region = config.get("tribench.systems.minio.region", "us-east-1")
         self.buckets = config.get("tribench.systems.minio.buckets", ["warehouse", "datasets"])
         
@@ -96,7 +97,7 @@ class MinIOSystem(System):
             logger.error(f"MinIO setup failed: {e}")
             raise
     
-    def start(self, timeout: int = 60) -> None:
+    def start(self, timeout: int = Defaults.Timeouts.MINIO) -> None:
         """
         Start MinIO container.
         
@@ -278,7 +279,7 @@ class MinIOSystem(System):
         """Create Docker network if it doesn't exist."""
         try:
             subprocess.run(
-                ["docker", "network", "create", "tribench-network"],
+                ["docker", "network", "create", Defaults.ServiceNames.NETWORK],
                 capture_output=True,
                 check=False  # Don't fail if network already exists
             )
@@ -302,7 +303,7 @@ class MinIOSystem(System):
             logger.debug(f"Health check failed: {e}")
             return False
     
-    def _wait_for_health(self, timeout: int = 60, interval: int = 2) -> None:
+    def _wait_for_health(self, timeout: int = Defaults.Timeouts.MINIO, interval: int = 2) -> None:
         """
         Wait for MinIO to become healthy.
         
@@ -332,7 +333,7 @@ class MinIOSystem(System):
                 # Use mc (MinIO Client) via docker exec
                 result = subprocess.run(
                     [
-                        "docker", "exec", "tribench-minio",
+                        "docker", "exec", Defaults.ServiceNames.MINIO,
                         "mc", "mb", f"local/{bucket}", "--ignore-existing"
                     ],
                     capture_output=True,
@@ -357,7 +358,7 @@ class MinIOSystem(System):
         try:
             result = subprocess.run(
                 [
-                    "docker", "exec", "tribench-minio",
+                    "docker", "exec", Defaults.ServiceNames.MINIO,
                     "mc", "ls", "local/"
                 ],
                 capture_output=True,
@@ -394,7 +395,7 @@ class MinIOSystem(System):
         try:
             result = subprocess.run(
                 [
-                    "docker", "exec", "tribench-minio",
+                    "docker", "exec", Defaults.ServiceNames.MINIO,
                     "mc", "mb", f"local/{bucket_name}", "--ignore-existing"
                 ],
                 capture_output=True,
