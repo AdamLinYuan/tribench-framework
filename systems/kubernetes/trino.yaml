@@ -42,7 +42,7 @@ data:
   node.properties: |
     # Node Properties
     node.environment=tribench
-    node.id=06344664-0656-4718-a977-a204b64356ca
+    node.id=b337b714-3583-4cc1-bdce-8d0662c631f6
     node.data-dir=/data/trino
 
 ---

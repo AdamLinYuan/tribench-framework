@@ -1,0 +1,339 @@
+"""
+Kubernetes system implementation.
+
+Manages system lifecycle on Kubernetes using native manifests.
+"""
+
+import logging
+import subprocess
+from typing import Dict, Any, Optional
+from pathlib import Path
+
+from tribench.core.system import System
+from tribench.systems.hive_metastore import HiveMetastoreSystem
+from tribench.defaults import Defaults
+
+from .cluster import KindClusterManager
+from .kubectl import KubectlOperator
+from .manifests import ManifestGenerator
+from .port_forward import PortForwarder
+
+logger = logging.getLogger(__name__)
+
+# Default Kind cluster configuration path
+DEFAULT_KIND_CONFIG = Path("config/kubernetes/kind-config.yaml")
+
+
+class KubernetesSystem(System):
+    """
+    System implementation for Kubernetes-based deployments.
+    
+    Manages lifecycle using generated Kubernetes manifests applied via kubectl.
+    Can also manage the Kind cluster itself (create/delete).
+    """
+    
+    def __init__(self, name: str, config: Dict[str, Any]):
+        """
+        Initialize Kubernetes system.
+        
+        Args:
+            name: System name
+            config: Configuration dictionary
+        """
+        super().__init__(name, config)
+        self.context = config.get("context", Defaults.Kubernetes.CONTEXT)
+        self.namespace = config.get("namespace", Defaults.Kubernetes.NAMESPACE)
+        self.cluster_name = self.context.replace("kind-", "") if self.context.startswith("kind-") else "tribench"
+        
+        # Paths for generated manifests
+        self.systems_path = Path("systems/kubernetes")
+        self.trino_manifest = self.systems_path / "trino.yaml"
+        self.minio_manifest = self.systems_path / "minio.yaml"
+        self.postgres_manifest = self.systems_path / "postgres.yaml"
+        self.hive_manifest = self.systems_path / "hive-metastore.yaml"
+        
+        # Configuration
+        self.kind_config = Path(config.get("kind_config", DEFAULT_KIND_CONFIG))
+        self.local_port = config.get("local_port", Defaults.Trino.PORT)
+        self.container_port = config.get("container_port", Defaults.Trino.PORT)
+        self.timeout = config.get("timeout", Defaults.Timeouts.K8S_DEPLOYMENT)
+        self.config_tree = config.get("config_tree")
+        
+        # Initialize components
+        self.cluster = KindClusterManager(self.cluster_name, self.context, self.kind_config)
+        self.kubectl = KubectlOperator(self.context, self.namespace)
+        self.manifests = ManifestGenerator(self.config_tree, self.context, self.namespace)
+        self.port_forwarder = PortForwarder(self.context, self.namespace, self.local_port, self.container_port)
+    
+    # ========== Kind Cluster Management ==========
+    
+    def cluster_exists(self) -> bool:
+        """Check if the Kind cluster exists."""
+        return self.cluster.exists()
+    
+    def cluster_status(self) -> Dict[str, Any]:
+        """Get detailed cluster status."""
+        return self.cluster.status()
+    
+    def create_cluster(self, force: bool = False) -> bool:
+        """Create the Kind cluster."""
+        return self.cluster.create(force)
+    
+    def delete_cluster(self) -> bool:
+        """Delete the Kind cluster."""
+        self.stop_port_forwarding()
+        return self.cluster.delete()
+    
+    def ensure_cluster(self) -> bool:
+        """Ensure the Kind cluster exists and matches configuration."""
+        return self.cluster.ensure()
+    
+    # ========== Setup and Manifest Generation ==========
+    
+    def setup(self, component: str = "all") -> None:
+        """
+        Prepare Kubernetes environment.
+        
+        Args:
+            component: Component to setup ('trino', 'minio', 'hive-metastore', or 'all')
+        """
+        logger.info(f"Setting up Kubernetes system '{self.name}' in namespace '{self.namespace}' for component '{component}'")
+        
+        # Create systems directory
+        self.systems_path.mkdir(parents=True, exist_ok=True)
+        
+        # Verify connection
+        self.kubectl.verify_cluster()
+        
+        # Create namespace
+        self.kubectl.ensure_namespace()
+        
+        # Generate manifests
+        logger.info("Generating Kubernetes manifests")
+        
+        if component in ["all", "trino"]:
+            self.manifests.generate_trino(self.trino_manifest)
+        
+        if component in ["all", "minio"]:
+            self.manifests.generate_minio(self.minio_manifest)
+        
+        if component in ["all", "hive-metastore"]:
+            self.manifests.generate_postgres(self.postgres_manifest)
+            self._load_postgres_image()
+            self.manifests.generate_hive_metastore(self.hive_manifest)
+            self._build_and_load_hive_image()
+    
+    def _load_postgres_image(self):
+        """Pull PostgreSQL image and load into Kind."""
+        image = "postgres:13"
+        cluster_name = self._get_kind_cluster_name()
+        
+        if cluster_name:
+            logger.info(f"Loading {image} into Kind cluster '{cluster_name}'...")
+            try:
+                # Pull locally first
+                subprocess.run(["docker", "pull", image], check=True)
+                
+                # Save and load via archive
+                archive_path = Path("postgres-13.tar")
+                logger.info(f"Saving {image} to {archive_path}...")
+                subprocess.run(["docker", "save", "-o", str(archive_path), image], check=True)
+                
+                logger.info(f"Loading archive into Kind...")
+                subprocess.run(
+                    ["kind", "load", "image-archive", str(archive_path), "--name", cluster_name],
+                    check=True
+                )
+                
+                # Clean up
+                if archive_path.exists():
+                    archive_path.unlink()
+            except subprocess.CalledProcessError as e:
+                logger.warning(f"Failed to load image {image} into Kind: {e}")
+                # Clean up in case of error
+                if Path("postgres-13.tar").exists():
+                    Path("postgres-13.tar").unlink()
+        else:
+            logger.info(f"Skipping kind load for {image} (not identified as a Kind cluster)")
+    
+    def _build_and_load_hive_image(self):
+        """Build Hive Metastore image and load into Kind."""
+        logger.info("Building and loading Hive Metastore image...")
+        
+        hive_sys = HiveMetastoreSystem(config=self.config_tree if self.config_tree else {})
+        hive_sys.system_dir.mkdir(parents=True, exist_ok=True)
+        hive_sys._generate_dockerfile()
+        
+        image_tag = f"tribench-hive-metastore:{hive_sys.version}"
+        
+        # Build
+        logger.info(f"Building Docker image {image_tag}...")
+        subprocess.run(
+            ["docker", "build", "-t", image_tag, "."],
+            cwd=hive_sys.system_dir,
+            check=True
+        )
+        
+        # Load into Kind
+        cluster_name = self._get_kind_cluster_name()
+        if cluster_name:
+            logger.info(f"Loading image into Kind cluster '{cluster_name}'...")
+            subprocess.run(
+                ["kind", "load", "docker-image", image_tag, "--name", cluster_name],
+                check=True
+            )
+    
+    def _get_kind_cluster_name(self) -> Optional[str]:
+        """Determine the Kind cluster name from the current context."""
+        if self.context.startswith("kind-"):
+            return self.context.replace("kind-", "")
+        
+        try:
+            result = subprocess.run(["kind", "get", "clusters"], capture_output=True, text=True)
+            if result.returncode == 0:
+                clusters = result.stdout.strip().splitlines()
+                if "desktop" in clusters and self.context == "docker-desktop":
+                    return "desktop"
+                if len(clusters) == 1:
+                    return clusters[0]
+        except FileNotFoundError:
+            pass
+        
+        return None
+    
+    # ========== Deployment Management ==========
+    
+    def start(self, component: str = "all") -> None:
+        """
+        Deploy system using generated manifests.
+        
+        Args:
+            component: Component to start ('trino', 'minio', 'hive-metastore', or 'all')
+        """
+        self.kubectl.ensure_namespace()
+        
+        # Deploy MinIO
+        if component in ["all", "minio"]:
+            logger.info(f"Deploying MinIO from {self.minio_manifest}")
+            if not self.minio_manifest.exists():
+                self.manifests.generate_minio(self.minio_manifest)
+            
+            self.kubectl.apply_manifest(self.minio_manifest)
+            self.kubectl.wait_for_rollout("deployment/minio")
+            self.kubectl.ensure_bucket("minio", "warehouse")
+        
+        # Deploy PostgreSQL
+        if component in ["all", "hive-metastore"]:
+            logger.info("Deploying PostgreSQL...")
+            if not self.postgres_manifest.exists():
+                self.manifests.generate_postgres(self.postgres_manifest)
+            
+            self.kubectl.apply_manifest(self.postgres_manifest)
+            self.kubectl.wait_for_rollout("deployment/postgresql")
+        
+        # Deploy Hive Metastore
+        if component in ["all", "hive-metastore"]:
+            logger.info("Deploying Hive Metastore...")
+            if not self.hive_manifest.exists():
+                self.manifests.generate_hive_metastore(self.hive_manifest)
+            
+            self.kubectl.apply_manifest(self.hive_manifest)
+            self.kubectl.wait_for_rollout("deployment/hive-metastore")
+        
+        # Deploy Trino
+        if component in ["all", "trino"]:
+            logger.info(f"Generating fresh Trino manifest with current cluster state...")
+            self.manifests.generate_trino(self.trino_manifest)
+            
+            logger.info(f"Deploying Trino from {self.trino_manifest}")
+            self.kubectl.apply_manifest(self.trino_manifest)
+            self.kubectl.wait_for_rollout("deployment/trino-coordinator")
+            self.kubectl.wait_for_rollout("deployment/trino-worker", log_errors=False)
+            
+            self._is_running = True
+            logger.info(f"System '{self.name}' started successfully")
+            self.start_port_forwarding()
+    
+    def stop(self, component: str = "all") -> None:
+        """
+        Stop systems by scaling deployments to 0.
+        
+        Args:
+            component: Component to stop
+        """
+        if component in ["all", "trino"]:
+            self.stop_port_forwarding()
+            logger.info(f"Stopping Trino (scaling to 0)...")
+            self.kubectl.scale_deployment("trino-coordinator", 0, log_errors=False)
+            self.kubectl.scale_deployment("trino-worker", 0, log_errors=False)
+            self._is_running = False
+        
+        if component in ["all", "minio"]:
+            logger.info(f"Stopping MinIO (scaling to 0)...")
+            self.kubectl.scale_deployment("minio", 0, log_errors=False)
+        
+        if component in ["all", "hive-metastore"]:
+            logger.info("Stopping Hive Metastore and PostgreSQL (scaling to 0)...")
+            self.kubectl.scale_deployment("hive-metastore", 0, log_errors=False)
+            self.kubectl.scale_deployment("postgresql", 0, log_errors=False)
+    
+    def teardown(self, component: str = "all") -> None:
+        """
+        Uninstall systems by deleting resources.
+        
+        Args:
+            component: Component to teardown
+        """
+        logger.info(f"Tearing down system '{self.name}' (component: {component})")
+        
+        self.stop_port_forwarding()
+        
+        if component in ["all", "trino"]:
+            logger.info(f"Deleting Trino resources...")
+            self.kubectl.delete_manifest(self.trino_manifest, log_errors=False)
+            self._is_running = False
+        
+        if component in ["all", "minio"]:
+            logger.info(f"Deleting MinIO resources...")
+            self.kubectl.delete_manifest(self.minio_manifest, log_errors=False)
+        
+        if component in ["all", "hive-metastore"]:
+            logger.info("Deleting Hive Metastore and PostgreSQL resources...")
+            self.kubectl.delete_manifest(self.hive_manifest, log_errors=False)
+            self.kubectl.delete_manifest(self.postgres_manifest, log_errors=False)
+    
+    def status(self) -> Dict[str, Any]:
+        """Get system status from Kubernetes."""
+        status = self.kubectl.get_status()
+        self._is_running = status.get("running", False)
+        return status
+    
+    # ========== Port Forwarding ==========
+    
+    def is_port_forwarding_active(self) -> bool:
+        """Check if port forwarding is currently active."""
+        return self.port_forwarder.is_active()
+    
+    def ensure_port_forwarding(self) -> bool:
+        """Ensure port forwarding is active."""
+        if self.port_forwarder.is_active():
+            logger.info(f"Port forwarding already active on port {self.local_port}")
+            return True
+        
+        # Check if Trino is running
+        status = self.status()
+        if not status.get("running"):
+            logger.warning("Trino is not running in Kubernetes. Start it first.")
+            return False
+        
+        logger.info("Port forwarding not active, starting...")
+        self.start_port_forwarding()
+        return self.port_forwarder.is_active()
+    
+    def start_port_forwarding(self) -> None:
+        """Start kubectl port-forward."""
+        self.port_forwarder.start()
+    
+    def stop_port_forwarding(self) -> None:
+        """Stop the port forwarding process."""
+        self.port_forwarder.stop()
