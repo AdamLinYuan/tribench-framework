@@ -178,6 +178,17 @@ def cluster(ctx, action, kind_config, force, dry_run, verbose):
             k8s.create_cluster(force=force)
             click.secho(f"✓ Kind cluster created successfully", fg='green')
             
+            # Install metrics-server for monitoring
+            click.echo("\nInstalling metrics-server for pod monitoring...")
+            try:
+                if k8s.install_metrics_server():
+                    click.secho("✓ metrics-server installed", fg='green')
+                else:
+                    click.secho("⚠ metrics-server installation may have failed", fg='yellow')
+            except Exception as e:
+                click.secho(f"⚠ Failed to install metrics-server: {e}", fg='yellow')
+                click.echo("  You can install it later with: kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml")
+            
             # Show status
             status = k8s.cluster_status()
             click.echo(f"\nCluster nodes:")
@@ -225,6 +236,16 @@ def cluster(ctx, action, kind_config, force, dry_run, verbose):
             click.echo("Creating new cluster...")
             k8s.create_cluster()
             click.secho(f"✓ Kind cluster recreated successfully", fg='green')
+            
+            # Install metrics-server for monitoring
+            click.echo("\nInstalling metrics-server for pod monitoring...")
+            try:
+                if k8s.install_metrics_server():
+                    click.secho("✓ metrics-server installed", fg='green')
+                else:
+                    click.secho("⚠ metrics-server installation may have failed", fg='yellow')
+            except Exception as e:
+                click.secho(f"⚠ Failed to install metrics-server: {e}", fg='yellow')
             
             # Show status
             status = k8s.cluster_status()

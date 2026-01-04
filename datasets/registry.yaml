@@ -177,28 +177,28 @@ tpch-sf1-iceberg:
     source_dataset: tpch-sf1
     partitioned: false
     storage_location: default
-  created_at: '2025-12-18T23:15:36.086899'
+  created_at: '2025-12-19T12:33:21.421558'
   generator: iceberg_loader
   iceberg_catalog: iceberg
   iceberg_schema: tpch_sf1
   snapshot_ids:
-    nation: 495529374632224213
-    region: 4128161346437155786
-    customer: 1689245654346945542
-    supplier: 5863771666033169164
-    part: 9036066033010453460
-    partsupp: 5968909136666881412
-    orders: 1291172314925888129
-    lineitem: 3583416190003222883
+    nation: 8283669988127154758
+    region: 4813755681681115579
+    customer: 6611341530930247962
+    supplier: 2442304681037913495
+    part: 8870783986054464457
+    partsupp: 1363440585848290526
+    orders: 6433395733886590506
+    lineitem: 7879267079042289321
   snapshot_timestamps:
-    nation: '2025-12-18 23:15:22.843000+00:00'
-    region: '2025-12-18 23:15:23.927000+00:00'
-    customer: '2025-12-18 23:15:25.800000+00:00'
-    supplier: '2025-12-18 23:15:26.265000+00:00'
-    part: '2025-12-18 23:15:27.278000+00:00'
-    partsupp: '2025-12-18 23:15:29.037000+00:00'
-    orders: '2025-12-18 23:15:31.161000+00:00'
-    lineitem: '2025-12-18 23:15:35.325000+00:00'
+    nation: '2025-12-19 12:33:05.709000+00:00'
+    region: '2025-12-19 12:33:06.827000+00:00'
+    customer: '2025-12-19 12:33:08.917000+00:00'
+    supplier: '2025-12-19 12:33:09.396000+00:00'
+    part: '2025-12-19 12:33:10.706000+00:00'
+    partsupp: '2025-12-19 12:33:12.627000+00:00'
+    orders: '2025-12-19 12:33:15.594000+00:00'
+    lineitem: '2025-12-19 12:33:20.492000+00:00'
   manifest_counts: {}
   format_version: 2
   storage_location: null

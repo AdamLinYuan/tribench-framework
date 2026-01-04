@@ -44,6 +44,9 @@ class ExperimentConfig:
     # Additional metadata
     metadata: Dict[str, Any] = field(default_factory=dict)
     
+    # Store raw config for accessing additional fields (e.g., monitoring config)
+    raw_config: Dict[str, Any] = field(default_factory=dict)
+    
     @staticmethod
     def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> None:
         """
@@ -146,6 +149,9 @@ class ExperimentConfig:
                 # Use deep merge for CLI overrides to support nested updates (e.g. connection params)
                 cls._deep_merge(config_data, cli_overrides)
                 logger.debug(f"Applied CLI overrides: {cli_overrides}")
+            
+            # Store raw config for accessing additional fields (like monitoring)
+            config_data['raw_config'] = data
             
             logger.info(f"Loaded experiment config: {config_data['name']}")
             return cls(**config_data)

@@ -1,0 +1,101 @@
+id,run_id,timestamp,metric_type,metric_name,value,value_text,unit,labels
+361,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent_total,36.8,,percent,{}
+362,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,76.9,,percent,{'core': '0'}
+363,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,67.0,,percent,{'core': '1'}
+364,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,66.7,,percent,{'core': '2'}
+365,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,65.9,,percent,{'core': '3'}
+366,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,8.7,,percent,{'core': '4'}
+367,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,5.5,,percent,{'core': '5'}
+368,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,8.6,,percent,{'core': '6'}
+369,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,3.3,,percent,{'core': '7'}
+370,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,35.9,,percent,{'core': '8'}
+371,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,33.0,,percent,{'core': '9'}
+372,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,37.0,,percent,{'core': '10'}
+373,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,33.7,,percent,{'core': '11'}
+374,3,2025-12-19T12:36:56.920494,system_resource,memory_used,6.5755157470703125,,GB,{}
+375,3,2025-12-19T12:36:56.920494,system_resource,memory_percent,81.9,,percent,{}
+376,3,2025-12-19T12:36:56.920494,system_resource,swap_used,4.8702392578125,,GB,{}
+377,3,2025-12-19T12:36:56.920494,system_resource,swap_percent,81.2,,percent,{}
+378,3,2025-12-19T12:36:56.920494,system_resource,disk_read,7.7734375,,MB,{}
+379,3,2025-12-19T12:36:56.920494,system_resource,disk_write,0.078125,,MB,{}
+380,3,2025-12-19T12:36:56.920494,system_resource,disk_read_count,154.0,,operations,{}
+381,3,2025-12-19T12:36:56.920494,system_resource,disk_write_count,6.0,,operations,{}
+382,3,2025-12-19T12:36:56.920494,system_resource,network_sent,0.0478515625,,MB,{}
+383,3,2025-12-19T12:36:56.920494,system_resource,network_recv,0.0478515625,,MB,{}
+384,3,2025-12-19T12:36:56.920494,system_resource,network_packets_sent,138.0,,packets,{}
+385,3,2025-12-19T12:36:56.920494,system_resource,network_packets_recv,138.0,,packets,{}
+401,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent_total,36.8,,percent,{}
+402,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,76.9,,percent,{'core': '0'}
+403,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,67.0,,percent,{'core': '1'}
+404,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,66.7,,percent,{'core': '2'}
+405,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,65.9,,percent,{'core': '3'}
+406,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,8.7,,percent,{'core': '4'}
+407,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,5.5,,percent,{'core': '5'}
+408,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,8.6,,percent,{'core': '6'}
+409,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,3.3,,percent,{'core': '7'}
+410,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,35.9,,percent,{'core': '8'}
+411,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,33.0,,percent,{'core': '9'}
+412,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,37.0,,percent,{'core': '10'}
+413,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,33.7,,percent,{'core': '11'}
+414,3,2025-12-19T12:36:56.920494,system_resource,memory_used,6.5755157470703125,,GB,{}
+415,3,2025-12-19T12:36:56.920494,system_resource,memory_percent,81.9,,percent,{}
+416,3,2025-12-19T12:36:56.920494,system_resource,swap_used,4.8702392578125,,GB,{}
+417,3,2025-12-19T12:36:56.920494,system_resource,swap_percent,81.2,,percent,{}
+418,3,2025-12-19T12:36:56.920494,system_resource,disk_read,7.7734375,,MB,{}
+419,3,2025-12-19T12:36:56.920494,system_resource,disk_write,0.078125,,MB,{}
+420,3,2025-12-19T12:36:56.920494,system_resource,disk_read_count,154.0,,operations,{}
+421,3,2025-12-19T12:36:56.920494,system_resource,disk_write_count,6.0,,operations,{}
+422,3,2025-12-19T12:36:56.920494,system_resource,network_sent,0.0478515625,,MB,{}
+423,3,2025-12-19T12:36:56.920494,system_resource,network_recv,0.0478515625,,MB,{}
+424,3,2025-12-19T12:36:56.920494,system_resource,network_packets_sent,138.0,,packets,{}
+425,3,2025-12-19T12:36:56.920494,system_resource,network_packets_recv,138.0,,packets,{}
+441,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent_total,36.8,,percent,{}
+442,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,76.9,,percent,{'core': '0'}
+443,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,67.0,,percent,{'core': '1'}
+444,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,66.7,,percent,{'core': '2'}
+445,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,65.9,,percent,{'core': '3'}
+446,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,8.7,,percent,{'core': '4'}
+447,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,5.5,,percent,{'core': '5'}
+448,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,8.6,,percent,{'core': '6'}
+449,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,3.3,,percent,{'core': '7'}
+450,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,35.9,,percent,{'core': '8'}
+451,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,33.0,,percent,{'core': '9'}
+452,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,37.0,,percent,{'core': '10'}
+453,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,33.7,,percent,{'core': '11'}
+454,3,2025-12-19T12:36:56.920494,system_resource,memory_used,6.5755157470703125,,GB,{}
+455,3,2025-12-19T12:36:56.920494,system_resource,memory_percent,81.9,,percent,{}
+456,3,2025-12-19T12:36:56.920494,system_resource,swap_used,4.8702392578125,,GB,{}
+457,3,2025-12-19T12:36:56.920494,system_resource,swap_percent,81.2,,percent,{}
+458,3,2025-12-19T12:36:56.920494,system_resource,disk_read,7.7734375,,MB,{}
+459,3,2025-12-19T12:36:56.920494,system_resource,disk_write,0.078125,,MB,{}
+460,3,2025-12-19T12:36:56.920494,system_resource,disk_read_count,154.0,,operations,{}
+461,3,2025-12-19T12:36:56.920494,system_resource,disk_write_count,6.0,,operations,{}
+462,3,2025-12-19T12:36:56.920494,system_resource,network_sent,0.0478515625,,MB,{}
+463,3,2025-12-19T12:36:56.920494,system_resource,network_recv,0.0478515625,,MB,{}
+464,3,2025-12-19T12:36:56.920494,system_resource,network_packets_sent,138.0,,packets,{}
+465,3,2025-12-19T12:36:56.920494,system_resource,network_packets_recv,138.0,,packets,{}
+481,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent_total,36.8,,percent,{}
+482,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,76.9,,percent,{'core': '0'}
+483,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,67.0,,percent,{'core': '1'}
+484,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,66.7,,percent,{'core': '2'}
+485,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,65.9,,percent,{'core': '3'}
+486,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,8.7,,percent,{'core': '4'}
+487,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,5.5,,percent,{'core': '5'}
+488,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,8.6,,percent,{'core': '6'}
+489,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,3.3,,percent,{'core': '7'}
+490,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,35.9,,percent,{'core': '8'}
+491,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,33.0,,percent,{'core': '9'}
+492,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,37.0,,percent,{'core': '10'}
+493,3,2025-12-19T12:36:56.920494,system_resource,cpu_percent,33.7,,percent,{'core': '11'}
+494,3,2025-12-19T12:36:56.920494,system_resource,memory_used,6.5755157470703125,,GB,{}
+495,3,2025-12-19T12:36:56.920494,system_resource,memory_percent,81.9,,percent,{}
+496,3,2025-12-19T12:36:56.920494,system_resource,swap_used,4.8702392578125,,GB,{}
+497,3,2025-12-19T12:36:56.920494,system_resource,swap_percent,81.2,,percent,{}
+498,3,2025-12-19T12:36:56.920494,system_resource,disk_read,7.7734375,,MB,{}
+499,3,2025-12-19T12:36:56.920494,system_resource,disk_write,0.078125,,MB,{}
+500,3,2025-12-19T12:36:56.920494,system_resource,disk_read_count,154.0,,operations,{}
+501,3,2025-12-19T12:36:56.920494,system_resource,disk_write_count,6.0,,operations,{}
+502,3,2025-12-19T12:36:56.920494,system_resource,network_sent,0.0478515625,,MB,{}
+503,3,2025-12-19T12:36:56.920494,system_resource,network_recv,0.0478515625,,MB,{}
+504,3,2025-12-19T12:36:56.920494,system_resource,network_packets_sent,138.0,,packets,{}
+505,3,2025-12-19T12:36:56.920494,system_resource,network_packets_recv,138.0,,packets,{}

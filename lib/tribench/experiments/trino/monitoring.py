@@ -4,7 +4,7 @@ Handles setup and management of monitoring sessions during experiment execution.
 """
 
 import logging
-from typing import Optional, List, TYPE_CHECKING
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ...config import ConnectionConfig
@@ -19,11 +19,17 @@ try:
         MonitoringConfig,
         ResourceMonitor,
         TrinoMonitor,
+        KubernetesPodMonitor,
     )
     MONITORING_AVAILABLE = True
 except ImportError:
     MONITORING_AVAILABLE = False
     logger.warning("Monitoring module not available - experiments will run without monitoring")
+
+
+def is_monitoring_available() -> bool:
+    """Check if monitoring module is available."""
+    return MONITORING_AVAILABLE
 
 
 class ExperimentMonitoringMixin:
@@ -43,12 +49,13 @@ class ExperimentMonitoringMixin:
     - trino_monitor: Optional[TrinoMonitor]
     """
     
-    def _setup_monitoring(self, connection_config: 'ConnectionConfig') -> None:
+    def _setup_monitoring(self, connection_config: 'ConnectionConfig', kubernetes_config: Optional[Dict[str, Any]] = None) -> None:
         """
         Set up monitoring session with collectors.
         
         Args:
             connection_config: ConnectionConfig for Trino
+            kubernetes_config: Optional Kubernetes monitoring configuration
         """
         if not MONITORING_AVAILABLE:
             logger.warning("Monitoring module not available")
@@ -77,6 +84,21 @@ class ExperimentMonitoringMixin:
                 username=connection_config.user,
             )
             collectors.append(self.trino_monitor)
+            
+            # Add Kubernetes pod monitor if configured
+            if kubernetes_config and kubernetes_config.get('enabled', False):
+                try:
+                    k8s_monitor = KubernetesPodMonitor(
+                        config=monitoring_config,
+                        context=kubernetes_config.get('context', 'kind-tribench'),
+                        namespace=kubernetes_config.get('namespace', 'default'),
+                        label_selector=kubernetes_config.get('label_selector'),
+                        pod_name_pattern=kubernetes_config.get('pod_name_pattern')
+                    )
+                    collectors.append(k8s_monitor)
+                    logger.info("Kubernetes pod monitoring enabled")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize Kubernetes monitoring: {e}")
             
             # Create monitoring session
             self.monitoring_session = MonitoringSession(

@@ -74,10 +74,10 @@ def compare(ctx, experiment_ids, metrics, output, verbose):
                 
                 for qe in query_execs:
                     total_queries += 1
-                    if qe.execution_time:
-                        total_execution_time += qe.execution_time
+                    if qe['execution_time']:
+                        total_execution_time += qe['execution_time']
                     
-                    if qe.status == 'completed':
+                    if qe['status'] == 'completed':
                         succeeded += 1
                     else:
                         failed += 1
@@ -193,14 +193,14 @@ def export(ctx, experiment_id, format, output, include_config, dry_run, verbose)
                     'experiment_name': experiment['name'],
                     'run_id': run['id'],
                     'run_number': run['run_number'],
-                    'query_name': qe.query_name,
-                    'execution_time_ms': qe.execution_time,
-                    'status': qe.status,
-                    'query_id': qe.query_id,
-                    'input_rows': qe.input_rows,
-                    'input_bytes': qe.input_bytes,
-                    'cpu_time_ms': qe.cpu_time_ms,
-                    'peak_memory_bytes': qe.peak_memory_bytes,
+                    'query_name': qe['query_name'],
+                    'execution_time_ms': qe['execution_time'],
+                    'status': qe['status'],
+                    'query_id': qe['query_id'],
+                    'input_rows': qe['input_rows'],
+                    'input_bytes': qe['input_bytes'],
+                    'cpu_time_ms': qe['cpu_time_ms'],
+                    'peak_memory_bytes': qe['peak_memory_bytes'],
                 }
                 all_data.append(row)
         

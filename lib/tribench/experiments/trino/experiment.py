@@ -93,7 +93,9 @@ class TrinoExperiment(
         self.enable_monitoring = enable_monitoring and is_monitoring_available()
         
         if self.enable_monitoring:
-            self._setup_monitoring(connection_config)
+            # Extract Kubernetes config from experiment config if present
+            kubernetes_config = config.raw_config.get('monitoring', {}).get('kubernetes') if hasattr(config, 'raw_config') else None
+            self._setup_monitoring(connection_config, kubernetes_config)
         elif enable_monitoring and not is_monitoring_available():
             logger.warning("Monitoring requested but not available")
         

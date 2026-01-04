@@ -23,6 +23,11 @@ from .trino_monitor import (
     ClusterMetrics,
 )
 
+from .kubernetes_monitor import (
+    KubernetesPodMonitor,
+    PodMetrics,
+)
+
 from .storage import (
     MetricsStorage,
     TimeSeriesData,
@@ -55,6 +60,10 @@ __all__ = [
     "TrinoMonitor",
     "QueryMetrics",
     "ClusterMetrics",
+    
+    # Kubernetes monitoring
+    "KubernetesPodMonitor",
+    "PodMetrics",
     
     # Storage
     "MetricsStorage",

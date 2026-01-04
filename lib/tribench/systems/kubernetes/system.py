@@ -88,6 +88,86 @@ class KubernetesSystem(System):
         """Ensure the Kind cluster exists and matches configuration."""
         return self.cluster.ensure()
     
+    def install_metrics_server(self, force: bool = False) -> bool:
+        """
+        Install metrics-server for Kubernetes pod monitoring.
+        
+        Args:
+            force: Force reinstall even if already installed
+            
+        Returns:
+            True if installation successful, False otherwise
+        """
+        logger.info("Installing metrics-server for Kubernetes monitoring...")
+        
+        try:
+            # Check if metrics-server is already installed
+            if not force:
+                result = subprocess.run(
+                    ["kubectl", "--context", self.context, "-n", "kube-system",
+                     "get", "deployment", "metrics-server"],
+                    capture_output=True,
+                    text=True
+                )
+                
+                if result.returncode == 0:
+                    logger.info("metrics-server already installed")
+                    return True
+            
+            # Install metrics-server from official release
+            logger.info("Applying metrics-server manifests...")
+            result = subprocess.run(
+                ["kubectl", "--context", self.context, "apply", "-f",
+                 "https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml"],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            
+            if result.returncode != 0:
+                logger.error(f"Failed to apply metrics-server manifests: {result.stderr}")
+                return False
+            
+            # For Kind clusters, patch metrics-server to use insecure TLS
+            # (Kind uses self-signed certificates)
+            if self.context.startswith("kind-"):
+                logger.info("Patching metrics-server for Kind (insecure TLS)...")
+                result = subprocess.run(
+                    ["kubectl", "--context", self.context, "-n", "kube-system",
+                     "patch", "deployment", "metrics-server", "--type=json",
+                     "-p", '[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                
+                if result.returncode != 0:
+                    logger.warning(f"Failed to patch metrics-server: {result.stderr}")
+            
+            # Wait for metrics-server to be ready
+            logger.info("Waiting for metrics-server to be ready...")
+            result = subprocess.run(
+                ["kubectl", "--context", self.context, "-n", "kube-system",
+                 "wait", "--for=condition=ready", "pod", "-l", "k8s-app=metrics-server",
+                 "--timeout=60s"],
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode == 0:
+                logger.info("✓ metrics-server installed and ready")
+                return True
+            else:
+                logger.warning(f"metrics-server may not be fully ready: {result.stderr}")
+                return True  # Still return True as it was installed
+                
+        except subprocess.TimeoutExpired:
+            logger.warning("Timeout installing metrics-server, but it may still be initializing")
+            return True
+        except Exception as e:
+            logger.error(f"Error installing metrics-server: {e}")
+            return False
+    
     # ========== Setup and Manifest Generation ==========
     
     def setup(self, component: str = "all") -> None:
