@@ -1,0 +1,152 @@
+"""Dataset generation commands."""
+
+import click
+from pathlib import Path
+from datetime import datetime
+import logging
+
+from tribench.cli.base import dry_run_option, verbose_option, config_option
+from tribench.data.dataset import (
+    TPCHGenerator,
+    DatasetRegistry,
+    DatasetValidator,
+    DatasetMetadata
+)
+from .utils import get_datasets_root
+
+logger = logging.getLogger(__name__)
+
+
+@click.command(name="generate")
+@click.argument("dataset", type=click.Choice(['tpch-tiny', 'tpch-sf1', 'tpch-sf10', 'tpch-sf100']))
+@click.option('--format', 
+              type=click.Choice(['parquet', 'csv']),
+              default='parquet',
+              help='Output format for generated data.')
+@click.option('--output', type=click.Path(), help='Output directory.')
+@click.option('--overwrite', is_flag=True, help='Overwrite existing data.')
+@config_option
+@dry_run_option
+@verbose_option
+@click.pass_context
+def generate(ctx, dataset, format, output, overwrite, config, dry_run, verbose):
+    """Generate a dataset.
+    
+    \b
+    Examples:
+        tribench data generate tpch-sf1
+        tribench data generate tpch-sf1 --format parquet
+        tribench data generate tpch-sf10 --output /data/tpch --dry-run
+    """
+    ctx.obj.dry_run = dry_run or ctx.obj.dry_run
+    ctx.obj.verbose = verbose or ctx.obj.verbose
+    
+    # Parse scale factor from dataset name
+    scale_factor_map = {
+        'tpch-tiny': 0.01,
+        'tpch-sf1': 1.0,
+        'tpch-sf10': 10.0,
+        'tpch-sf100': 100.0
+    }
+    scale_factor = scale_factor_map[dataset]
+    
+    # Determine output directory
+    if output:
+        output_dir = Path(output)
+    else:
+        datasets_root = get_datasets_root(config)
+        output_dir = datasets_root
+    
+    if ctx.obj.verbose:
+        click.echo(f"Dataset: {dataset} (SF={scale_factor})")
+        click.echo(f"Format: {format}")
+        click.echo(f"Output: {output_dir}")
+        if overwrite:
+            click.echo("Overwrite mode enabled")
+    
+    if ctx.obj.dry_run:
+        click.echo(f"[DRY RUN] Would generate dataset: {dataset}")
+        click.echo(f"[DRY RUN] Format: {format}, Output: {output_dir}")
+        return
+    
+    try:
+        # Check if dataset exists
+        dataset_path = output_dir / f"tpch-sf{str(scale_factor).replace('.', '_')}" / format
+        if dataset_path.exists() and not overwrite:
+            click.secho(f"✗ Dataset already exists at {dataset_path}", fg='red')
+            click.echo("Use --overwrite to regenerate")
+            return
+        
+        click.echo(f"Generating {dataset}...")
+        
+        # Generate dataset
+        generator = TPCHGenerator(output_dir)
+        result_path = generator.generate(scale_factor=scale_factor, format=format)
+        
+        click.secho(f"✓ Dataset generated: {result_path}", fg='green')
+        
+        # Validate generated data
+        click.echo("Validating dataset...")
+        validator = DatasetValidator()
+        sf_str = str(scale_factor) if scale_factor >= 1 else 'tiny'
+        validation_result = validator.validate_tpch_dataset(result_path, sf_str)
+        
+        if validation_result['valid']:
+            click.secho("✓ Validation passed", fg='green')
+        else:
+            click.secho("✗ Validation failed:", fg='yellow')
+            for error in validation_result['errors']:
+                click.echo(f"  - {error}")
+        
+        # Register dataset
+        registry_path = output_dir / "registry.yaml"
+        registry = DatasetRegistry(registry_path)
+        
+        # Compute metadata
+        row_counts = {
+            table: validation_result['tables'][table]['row_count']
+            for table in validation_result['tables']
+            if validation_result['tables'][table].get('valid')
+        }
+        
+        checksums = {
+            table: validation_result['tables'][table]['checksum']
+            for table in validation_result['tables']
+            if validation_result['tables'][table].get('valid')
+        }
+        
+        total_size = sum(
+            validation_result['tables'][table].get('size_bytes', 0)
+            for table in validation_result['tables']
+        )
+        
+        metadata = DatasetMetadata(
+            name=dataset,
+            benchmark_type='tpch',  # TPC-H benchmark type
+            type='generated',
+            format=format,
+            scale_factor=scale_factor,
+            size_bytes=total_size,
+            location=str(result_path),
+            tables=list(row_counts.keys()),
+            row_counts=row_counts,
+            checksums=checksums,
+            properties={'tpch_version': '3.0'},
+            created_at=datetime.now().isoformat(),
+            generator='tpch-dbgen'
+        )
+        
+        registry.register(metadata)
+        click.secho(f"✓ Dataset registered in {registry_path}", fg='green')
+        
+        # Display summary
+        click.echo("\nDataset Summary:")
+        click.echo(f"  Tables: {len(row_counts)}")
+        click.echo(f"  Total rows: {sum(row_counts.values()):,}")
+        click.echo(f"  Total size: {total_size / (1024**2):.2f} MB")
+        
+    except Exception as e:
+        click.secho(f"✗ Failed to generate dataset: {e}", fg='red')
+        if ctx.obj.verbose:
+            import traceback
+            traceback.print_exc()

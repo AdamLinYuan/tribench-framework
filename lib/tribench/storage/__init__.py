@@ -12,7 +12,7 @@ from .models import (
     SystemMetric,
     MonitoringMetric,
 )
-from .result_storage import ResultStorage
+from .result.result_storage import ResultStorage
 from .connection import get_db_session, init_database, close_database
 
 __all__ = [
