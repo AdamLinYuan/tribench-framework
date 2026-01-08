@@ -28,10 +28,11 @@ class ManifestGenerator:
         Initialize manifest generator.
         
         Args:
-            config_tree: Full configuration tree
+            config_tree: Full configuration tree (ConfigTree or dict)
             context: Kubernetes context
             namespace: Kubernetes namespace
         """
+        # Store config_tree as-is (ConfigTree methods depend on it)
         self.config_tree = config_tree
         self.context = context
         self.namespace = namespace
@@ -48,7 +49,12 @@ class ManifestGenerator:
         
         # Calculate worker count
         workers_val = get_config_value(self.config_tree, "tribench.systems.trino.workers", 0)
-        if isinstance(workers_val, list):
+        
+        # Handle different types of workers_val
+        if isinstance(workers_val, dict):
+            # If it's a dict/OrderedDict, it means the key wasn't found, use default
+            worker_count = 0
+        elif isinstance(workers_val, list):
             worker_count = len(workers_val)
         else:
             worker_count = int(workers_val)

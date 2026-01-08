@@ -123,8 +123,23 @@ def run_suite(ctx, suite, experiment_filter, runs, timeout, kind, config, dry_ru
             config_loader = ConfigurationLoader()
             cfg = config_loader.load(experiment_config=config) if config else config_loader.load()
             
+            # Pass config properly for context hierarchy
+            k8s_config = {"config_tree": cfg}
+            
+            # Extract kubernetes config if present
+            if cfg:
+                k8s_context = cfg.get("kubernetes.context", None)
+                k8s_namespace = cfg.get("kubernetes.namespace", None)
+                
+                if k8s_context or k8s_namespace:
+                    k8s_config["systems"] = {"kubernetes": {}}
+                    if k8s_context:
+                        k8s_config["systems"]["kubernetes"]["context"] = k8s_context
+                    if k8s_namespace:
+                        k8s_config["systems"]["kubernetes"]["namespace"] = k8s_namespace
+            
             # Create KubernetesSystem instance
-            k8s_system = KubernetesSystem(name="kubernetes", config={"config_tree": cfg})
+            k8s_system = KubernetesSystem(name="kubernetes", config=k8s_config)
             systems_to_manage = [k8s_system]
             
             # Set up K8s systems

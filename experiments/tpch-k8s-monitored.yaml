@@ -12,7 +12,7 @@ connection:
   port: 8080
   user: "tribench"
   catalog: "iceberg"
-  schema: "tpch_sf1"
+  schema: "tpch"  # Changed from tpch_sf1 to match tiny dataset
 
 # Execution parameters
 runs: 1
@@ -28,7 +28,7 @@ monitoring:
   # Kubernetes pod monitoring
   kubernetes:
     enabled: true                  # Enable K8s monitoring
-    context: "tribench-cluster"    # Azure AKS context (or "kind-tribench" for local)
+    context: "gke_tribench_us-central1-a_tribench-cluster"  # GKE context
     namespace: "tribench"           # Namespace where Trino pods run
     label_selector: "app=trino"     # Filter pods by label (optional)
     pod_name_pattern: "trino-.*"    # Filter pods by regex (optional)

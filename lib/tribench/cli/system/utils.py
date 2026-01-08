@@ -9,34 +9,38 @@ from tribench.defaults import Defaults
 
 
 def get_k8s_system(config_tree=None):
-    """Get configured KubernetesSystem instance."""
-    # Try to detect context or use default
-    context = Defaults.Kubernetes.CONTEXT
+    """Get configured KubernetesSystem instance.
     
-    # Check if context is defined in config
+    Args:
+        config_tree: Configuration dictionary (ConfigTree or dict)
+        
+    Returns:
+        KubernetesSystem instance with proper context from config hierarchy
+    """
+    # Build config dict with systems section for hierarchy
+    config = {}
     if config_tree:
-        context = config_tree.get("kubernetes.context", None)
+        # Extract kubernetes config if present (supports both ConfigTree and dict)
+        # Try systems.kubernetes.context (HOCON structure)
+        k8s_context = config_tree.get("systems.kubernetes.context", None)
+        k8s_namespace = config_tree.get("systems.kubernetes.namespace", None)
+        
+        # Fallback to tribench.systems.kubernetes.context (full HOCON structure)
+        if k8s_context is None:
+            k8s_context = config_tree.get("tribench.systems.kubernetes.context", None)
+        if k8s_namespace is None:
+            k8s_namespace = config_tree.get("tribench.systems.kubernetes.namespace", None)
+        
+        if k8s_context or k8s_namespace:
+            config["systems"] = {
+                "kubernetes": {}
+            }
+            if k8s_context:
+                config["systems"]["kubernetes"]["context"] = k8s_context
+            if k8s_namespace:
+                config["systems"]["kubernetes"]["namespace"] = k8s_namespace
 
-    if not context:
-        context = Defaults.Kubernetes.CONTEXT
-        try:
-            import subprocess
-            # Check available contexts
-            result = subprocess.run(["kubectl", "config", "get-contexts", "-o", "name"], capture_output=True, text=True)
-            contexts = result.stdout.strip().split('\n')
-            
-            # Prioritize kind-tribench
-            if Defaults.Kubernetes.CONTEXT in contexts:
-                context = Defaults.Kubernetes.CONTEXT
-            elif "docker-desktop" in contexts:
-                context = "docker-desktop"
-            # If neither, stick to default or maybe first available?
-        except Exception:
-            pass
-
-    config = {
-        "context": context,
-        "namespace": Defaults.Kubernetes.NAMESPACE,
+    config.update({
         "helm_chart": "trinodb/trino",
         "helm_release": Defaults.ServiceNames.TRINO,
         "minio_chart": "minio/minio",
@@ -46,5 +50,6 @@ def get_k8s_system(config_tree=None):
         "timeout": 600,
         "config_tree": config_tree,
         "kind_config": "config/kubernetes/kind-config.yaml",
-    }
+    })
+    
     return KubernetesSystem("k8s-system", config)

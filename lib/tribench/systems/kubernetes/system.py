@@ -38,11 +38,17 @@ class KubernetesSystem(System):
         
         Args:
             name: System name
-            config: Configuration dictionary
+            config: Configuration dictionary (includes systems.kubernetes settings)
         """
         super().__init__(name, config)
-        self.context = config.get("context", Defaults.Kubernetes.CONTEXT)
-        self.namespace = config.get("namespace", Defaults.Kubernetes.NAMESPACE)
+        
+        # Use config hierarchy for context and namespace
+        self.context = Defaults.Kubernetes.get_context(config)
+        self.namespace = Defaults.Kubernetes.get_namespace(config)
+        
+        logger.info(f"Kubernetes context: {self.context}")
+        logger.info(f"Kubernetes namespace: {self.namespace}")
+        
         self.cluster_name = self.context.replace("kind-", "") if self.context.startswith("kind-") else "tribench"
         
         # Paths for generated manifests

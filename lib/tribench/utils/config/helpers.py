@@ -31,7 +31,12 @@ def get_config_value(config: ConfigTree,
         9999
     """
     try:
-        return config.get(path, default)
+        value = config.get(path, default)
+        # Convert ConfigTree to plain types if needed
+        if isinstance(value, ConfigTree):
+            # If it's a nested config, convert to dict
+            return value.as_plain_ordered_dict()
+        return value
     except Exception:
         return default
 

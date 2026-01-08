@@ -11,8 +11,9 @@ Usage:
     host = config.get("trino.host", Defaults.TRINO_HOST)
 """
 
+import os
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, Optional
 
 
 # =============================================================================
@@ -84,14 +85,67 @@ class ServiceNames:
 
 class Kubernetes:
     """Default Kubernetes configuration."""
-    CONTEXT: Final[str] = "kind-tribench"
-    NAMESPACE: Final[str] = "tribench"
+    # Default values (can be overridden by config/environment)
+    CONTEXT: str = "kind-tribench"  # Default to local Kind cluster
+    NAMESPACE: str = "tribench"
     
     # Service names in K8s
     SERVICE_TRINO: Final[str] = "tribench-trino"
     SERVICE_MINIO: Final[str] = "tribench-minio"
     SERVICE_POSTGRESQL: Final[str] = "tribench-postgresql"
     SERVICE_HIVE_METASTORE: Final[str] = "tribench-hive-metastore"
+    
+    @staticmethod
+    def get_context(config: Optional[dict] = None) -> str:
+        """Get Kubernetes context with proper priority.
+        
+        Priority: ENV > Config > Default
+        
+        Args:
+            config: Configuration dictionary (from config files)
+            
+        Returns:
+            Kubernetes context name
+        """
+        # 1. Check environment variable (highest priority)
+        env_context = os.getenv('TRIBENCH_K8S_CONTEXT')
+        if env_context:
+            return env_context
+        
+        # 2. Check config dict
+        if config and 'systems' in config:
+            k8s_config = config.get('systems', {}).get('kubernetes', {})
+            if 'context' in k8s_config:
+                return k8s_config['context']
+        
+        # 3. Fall back to default
+        return Kubernetes.CONTEXT
+    
+    @staticmethod
+    def get_namespace(config: Optional[dict] = None) -> str:
+        """Get Kubernetes namespace with proper priority.
+        
+        Priority: ENV > Config > Default
+        
+        Args:
+            config: Configuration dictionary (from config files)
+            
+        Returns:
+            Kubernetes namespace
+        """
+        # 1. Check environment variable (highest priority)
+        env_namespace = os.getenv('TRIBENCH_K8S_NAMESPACE')
+        if env_namespace:
+            return env_namespace
+        
+        # 2. Check config dict
+        if config and 'systems' in config:
+            k8s_config = config.get('systems', {}).get('kubernetes', {})
+            if 'namespace' in k8s_config:
+                return k8s_config['namespace']
+        
+        # 3. Fall back to default
+        return Kubernetes.NAMESPACE
 
 
 # =============================================================================

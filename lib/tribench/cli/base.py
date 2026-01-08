@@ -83,9 +83,9 @@ def ensure_k8s_port_forwarding(config=None, echo=click.echo, silent_if_active=Fa
     """
     from tribench.systems.kubernetes_system import KubernetesSystem
     
+    # Pass config to use proper context hierarchy
     k8s_config = {
-        "context": Defaults.Kubernetes.CONTEXT,
-        "namespace": Defaults.Kubernetes.NAMESPACE,
+        "systems": config.get("systems", {}),  # Pass systems config
         "local_port": Defaults.Trino.PORT,
         "container_port": Defaults.Trino.PORT,
         "config_tree": config

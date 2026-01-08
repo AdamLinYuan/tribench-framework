@@ -215,7 +215,8 @@ tribench sys teardown minio
 
 - **Structured Experiment Definition**: YAML-based experiment configurations
 - **Experiment Suites**: Group related experiments with shared configuration defaults
-- **Configuration Hierarchy**: Suite defaults → Experiment YAML → CLI overrides
+- **Configuration Hierarchy**: Environment variables → Config files → Defaults
+- **Cloud-Agnostic Deployment**: Works on Kind (local), GKE, AKS, EKS without code changes
 - **Environment Management**: Host-specific configurations and system lifecycle
 - **Apache Iceberg Integration**: Full support for Iceberg tables with metadata tracking
   - Automated catalog configuration with Hive Metastore
@@ -224,9 +225,54 @@ tribench sys teardown minio
   - Comprehensive validation framework
   - Registry-based metadata persistence
 - **Resource Monitoring**: CPU, memory, I/O, and network usage tracking
+- **Kubernetes Monitoring**: Pod-level metrics collection for cloud deployments
 - **Result Storage**: Structured storage in databases for analysis
 - **Reproducibility**: Version-controlled bundles for sharing
 - **Extensibility**: Plugin architecture for custom benchmarks
+
+## Configuration
+
+TriBench uses a hierarchical configuration system that allows deployment across different environments without code changes.
+
+### Configuration Priority
+
+Values are resolved in this order (highest to lowest):
+
+1. **Environment Variables** (highest priority)
+2. **Configuration Files** (via `--config` flag)
+3. **Hardcoded Defaults** (fallback)
+
+### Environment Variables
+
+**Kubernetes Configuration:**
+```bash
+# Override Kubernetes context
+export TRIBENCH_K8S_CONTEXT="gke_tribench_us-central1-a_tribench-cluster"
+
+# Override namespace
+export TRIBENCH_K8S_NAMESPACE="production"
+```
+
+**Quick Examples:**
+```bash
+# Local development (default)
+unset TRIBENCH_K8S_CONTEXT
+tribench sys setup all --kind
+
+# Google Cloud (GKE)
+export TRIBENCH_K8S_CONTEXT="gke_tribench_us-central1-a_tribench-cluster"
+tribench sys setup all --kind
+
+# Azure (AKS)
+export TRIBENCH_K8S_CONTEXT="aks-tribench-cluster"
+tribench sys setup all --kind
+
+# AWS (EKS)
+export TRIBENCH_K8S_CONTEXT="arn:aws:eks:us-east-1:123456789012:cluster/tribench"
+tribench sys setup all --kind
+```
+
+For complete configuration documentation, see [CONFIGURATION.md](docs/CONFIGURATION.md).
 
 ## Experiment Suites
 
