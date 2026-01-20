@@ -201,6 +201,11 @@ class QueryExecutor:
                         "processed_rows": stats.get("processedRows"),
                         "processed_bytes": stats.get("processedBytes"),
                         "peak_memory_bytes": stats.get("peakMemoryBytes"),
+                        # HIGH priority: Spill metrics for memory pressure analysis
+                        "spilled_bytes": stats.get("spilledBytes"),
+                        # MEDIUM priority: Parallelism metrics
+                        "total_splits": stats.get("totalSplits"),
+                        "completed_splits": stats.get("completedSplits"),
                     })
                 except Exception as e:
                     logger.warning(f"Failed to extract query statistics: {e}")

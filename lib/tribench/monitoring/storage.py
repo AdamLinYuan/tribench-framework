@@ -399,7 +399,7 @@ class MetricsStorage:
         from .base import MetricType
         return Metric(
             timestamp=datetime.fromisoformat(data["timestamp"]),
-            metric_type=MetricType(data["type"]),  # Use metric_type, not type
+            metric_type=MetricType(data.get("metric_type", data.get("type"))),  # Support both keys for backward compatibility
             name=data["name"],
             value=data["value"],
             unit=data.get("unit", ""),

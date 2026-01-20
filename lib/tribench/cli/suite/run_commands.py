@@ -5,7 +5,7 @@ import sys
 import logging
 from pathlib import Path
 
-from tribench.cli.base import dry_run_option, verbose_option, config_option, kind_option, ensure_k8s_port_forwarding, auto_ensure_trino_connection
+from tribench.cli.base import dry_run_option, verbose_option, config_option, kind_option, should_use_kubernetes, ensure_k8s_port_forwarding, auto_ensure_trino_connection
 from tribench.core.experiment_suite import ExperimentSuite
 from tribench.core.experiment_registry import ExperimentRegistry
 from tribench.systems.kubernetes_system import KubernetesSystem
@@ -41,13 +41,20 @@ def run_suite(ctx, suite, experiment_filter, runs, timeout, kind, config, dry_ru
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
+    # Load configuration to determine backend
+    config_loader = ConfigurationLoader()
+    full_config = config_loader.load(experiment_config=config) if config else config_loader.load()
+    
+    # Determine backend
+    use_k8s = should_use_kubernetes(kind, full_config)
+    
     # Handle Kubernetes port forwarding
-    if kind:
-        if not ensure_k8s_port_forwarding():
+    if use_k8s:
+        if not ensure_k8s_port_forwarding(full_config):
             return
     else:
         # Auto-detect and ensure Trino connection
-        auto_ensure_trino_connection()
+        auto_ensure_trino_connection(full_config)
     
     # Set up logging level
     if ctx.obj.verbose:
@@ -114,22 +121,18 @@ def run_suite(ctx, suite, experiment_filter, runs, timeout, kind, config, dry_ru
         started_systems = []
         already_running_systems = []
         
-        if kind:
+        if use_k8s:
             click.echo(f"\n{'='*60}")
             click.echo("Phase 1: Kubernetes System Lifecycle Management")
             click.echo(f"{'='*60}\n")
             
-            # Load config for KubernetesSystem
-            config_loader = ConfigurationLoader()
-            cfg = config_loader.load(experiment_config=config) if config else config_loader.load()
-            
             # Pass config properly for context hierarchy
-            k8s_config = {"config_tree": cfg}
+            k8s_config = {"config_tree": full_config}
             
             # Extract kubernetes config if present
-            if cfg:
-                k8s_context = cfg.get("kubernetes.context", None)
-                k8s_namespace = cfg.get("kubernetes.namespace", None)
+            if full_config:
+                k8s_context = full_config.get("kubernetes.context", None)
+                k8s_namespace = full_config.get("kubernetes.namespace", None)
                 
                 if k8s_context or k8s_namespace:
                     k8s_config["systems"] = {"kubernetes": {}}

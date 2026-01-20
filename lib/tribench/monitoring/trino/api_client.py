@@ -7,12 +7,23 @@ Handles HTTP communication with Trino coordinator.
 import logging
 import time
 import requests
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
 from urllib.parse import urljoin
 
 from .models import QueryMetrics, ClusterMetrics
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_get_value(data: Any, default=None) -> Union[int, float, None]:
+    """Safely extract value that might be a float/int or dict with 'value' key."""
+    if data is None:
+        return default
+    if isinstance(data, (int, float)):
+        return data
+    if isinstance(data, dict):
+        return data.get('value', default)
+    return default
 
 
 class TrinoAPIClient:
@@ -21,18 +32,27 @@ class TrinoAPIClient:
     def __init__(self, 
                  base_url: str,
                  auth: Optional[tuple] = None,
+                 user: Optional[str] = None,
                  timeout: int = 10):
         """
         Initialize API client.
         
         Args:
             base_url: Base URL for Trino coordinator
-            auth: Optional (username, password) tuple
+            auth: Optional (username, password) tuple for HTTP basic auth (deprecated)
+            user: Trino user for X-Trino-User header (recommended)
             timeout: Request timeout in seconds
         """
         self.base_url = base_url
         self.auth = auth
         self.timeout = timeout
+        
+        # Trino uses X-Trino-User header for authentication
+        self.headers = {}
+        if user:
+            self.headers['X-Trino-User'] = user
+        elif auth and auth[0]:
+            self.headers['X-Trino-User'] = auth[0]
         
         # Cache for cluster info
         self._cluster_cache: Optional[ClusterMetrics] = None
@@ -47,7 +67,7 @@ class TrinoAPIClient:
             requests.exceptions.RequestException: If connection fails
         """
         url = urljoin(self.base_url, "/v1/info")
-        response = requests.get(url, auth=self.auth, timeout=self.timeout)
+        response = requests.get(url, headers=self.headers, timeout=self.timeout)
         response.raise_for_status()
     
     def get_cluster_metrics(self) -> Optional[ClusterMetrics]:
@@ -66,13 +86,13 @@ class TrinoAPIClient:
         try:
             # Get cluster info
             info_url = urljoin(self.base_url, "/v1/info")
-            info_response = requests.get(info_url, auth=self.auth, timeout=self.timeout)
+            info_response = requests.get(info_url, headers=self.headers, timeout=self.timeout)
             info_response.raise_for_status()
             info_data = info_response.json()
             
             # Get cluster stats
             cluster_url = urljoin(self.base_url, "/v1/cluster")
-            cluster_response = requests.get(cluster_url, auth=self.auth, timeout=self.timeout)
+            cluster_response = requests.get(cluster_url, headers=self.headers, timeout=self.timeout)
             cluster_response.raise_for_status()
             cluster_data = cluster_response.json()
             
@@ -131,7 +151,7 @@ class TrinoAPIClient:
         try:
             # Query endpoint: /v1/query/{queryId}
             url = urljoin(self.base_url, f"/v1/query/{query_id}")
-            response = requests.get(url, auth=self.auth, timeout=self.timeout)
+            response = requests.get(url, headers=self.headers, timeout=self.timeout)
             
             if response.status_code == 404:
                 logger.debug(f"Query not found: {query_id}")
@@ -149,25 +169,25 @@ class TrinoAPIClient:
                 state=data.get("state", "UNKNOWN"),
                 query=data.get("query", ""),
                 
-                # Timing
-                queued_time_ms=query_stats.get("queuedTime", {}).get("value"),
-                planning_time_ms=query_stats.get("planningTime", {}).get("value"),
-                analysis_time_ms=query_stats.get("analysisTime", {}).get("value"),
-                execution_time_ms=query_stats.get("executionTime", {}).get("value"),
-                elapsed_time_ms=query_stats.get("elapsedTime", {}).get("value"),
+                # Timing - safely handle both float and dict responses
+                queued_time_ms=_safe_get_value(query_stats.get("queuedTime")),
+                planning_time_ms=_safe_get_value(query_stats.get("planningTime")),
+                analysis_time_ms=_safe_get_value(query_stats.get("analysisTime")),
+                execution_time_ms=_safe_get_value(query_stats.get("executionTime")),
+                elapsed_time_ms=_safe_get_value(query_stats.get("elapsedTime")),
                 
                 # Resources
-                cpu_time_ms=query_stats.get("totalCpuTime", {}).get("value"),
-                scheduled_time_ms=query_stats.get("totalScheduledTime", {}).get("value"),
-                blocked_time_ms=query_stats.get("totalBlockedTime", {}).get("value"),
-                peak_memory_bytes=query_stats.get("peakMemoryReservation", {}).get("value"),
+                cpu_time_ms=_safe_get_value(query_stats.get("totalCpuTime")),
+                scheduled_time_ms=_safe_get_value(query_stats.get("totalScheduledTime")),
+                blocked_time_ms=_safe_get_value(query_stats.get("totalBlockedTime")),
+                peak_memory_bytes=_safe_get_value(query_stats.get("peakMemoryReservation")),
                 
                 # Data processing
                 input_rows=query_stats.get("rawInputPositions"),
-                input_bytes=query_stats.get("rawInputDataSize", {}).get("value"),
+                input_bytes=_safe_get_value(query_stats.get("rawInputDataSize")),
                 output_rows=query_stats.get("outputPositions"),
-                output_bytes=query_stats.get("outputDataSize", {}).get("value"),
-                physical_input_bytes=query_stats.get("physicalInputDataSize", {}).get("value"),
+                output_bytes=_safe_get_value(query_stats.get("outputDataSize")),
+                physical_input_bytes=_safe_get_value(query_stats.get("physicalInputDataSize")),
                 
                 # Query state
                 create_time=query_stats.get("createTime"),
@@ -206,7 +226,7 @@ class TrinoAPIClient:
         """
         try:
             url = urljoin(self.base_url, f"/v1/query/{query_id}")
-            response = requests.get(url, auth=self.auth, timeout=self.timeout)
+            response = requests.get(url, headers=self.headers, timeout=self.timeout)
             
             if response.status_code == 404:
                 return None
@@ -241,7 +261,7 @@ class TrinoAPIClient:
         """
         try:
             url = urljoin(self.base_url, f"/v1/query/{query_id}")
-            response = requests.get(url, auth=self.auth, timeout=self.timeout)
+            response = requests.get(url, headers=self.headers, timeout=self.timeout)
             
             if response.status_code == 404:
                 return []
@@ -282,16 +302,16 @@ class TrinoAPIClient:
                 "queued_drivers": stats.get("queuedDrivers"),
                 "running_drivers": stats.get("runningDrivers"),
                 "completed_drivers": stats.get("completedDrivers"),
-                "cumulative_memory_bytes": stats.get("cumulativeUserMemory", {}).get("value"),
-                "peak_memory_bytes": stats.get("userMemoryReservation", {}).get("value"),
-                "total_cpu_time_ms": stats.get("totalCpuTime", {}).get("value"),
-                "total_scheduled_time_ms": stats.get("totalScheduledTime", {}).get("value"),
+                "cumulative_memory_bytes": _safe_get_value(stats.get("cumulativeUserMemory")),
+                "peak_memory_bytes": _safe_get_value(stats.get("userMemoryReservation")),
+                "total_cpu_time_ms": _safe_get_value(stats.get("totalCpuTime")),
+                "total_scheduled_time_ms": _safe_get_value(stats.get("totalScheduledTime")),
                 "raw_input_positions": stats.get("rawInputPositions"),
-                "raw_input_data_size_bytes": stats.get("rawInputDataSize", {}).get("value"),
+                "raw_input_data_size_bytes": _safe_get_value(stats.get("rawInputDataSize")),
                 "processed_input_positions": stats.get("processedInputPositions"),
-                "processed_input_data_size_bytes": stats.get("processedInputDataSize", {}).get("value"),
+                "processed_input_data_size_bytes": _safe_get_value(stats.get("processedInputDataSize")),
                 "output_positions": stats.get("outputPositions"),
-                "output_data_size_bytes": stats.get("outputDataSize", {}).get("value"),
+                "output_data_size_bytes": _safe_get_value(stats.get("outputDataSize")),
             }
         
         # Recursively extract sub-stages
@@ -323,19 +343,19 @@ class TrinoAPIClient:
             "running_drivers": stats.get("runningDrivers", 0),
             "completed_drivers": stats.get("completedDrivers", 0),
             
-            # Resource metrics
-            "cumulative_memory_bytes": stats.get("cumulativeUserMemory", {}).get("value", 0),
-            "peak_memory_bytes": stats.get("userMemoryReservation", {}).get("value", 0),
-            "total_cpu_time_ms": stats.get("totalCpuTime", {}).get("value", 0),
-            "total_scheduled_time_ms": stats.get("totalScheduledTime", {}).get("value", 0),
+            # Resource metrics - safely handle both float and dict
+            "cumulative_memory_bytes": _safe_get_value(stats.get("cumulativeUserMemory"), 0),
+            "peak_memory_bytes": _safe_get_value(stats.get("userMemoryReservation"), 0),
+            "total_cpu_time_ms": _safe_get_value(stats.get("totalCpuTime"), 0),
+            "total_scheduled_time_ms": _safe_get_value(stats.get("totalScheduledTime"), 0),
             
             # Data metrics
             "raw_input_rows": stats.get("rawInputPositions", 0),
-            "raw_input_bytes": stats.get("rawInputDataSize", {}).get("value", 0),
+            "raw_input_bytes": _safe_get_value(stats.get("rawInputDataSize"), 0),
             "processed_input_rows": stats.get("processedInputPositions", 0),
-            "processed_input_bytes": stats.get("processedInputDataSize", {}).get("value", 0),
+            "processed_input_bytes": _safe_get_value(stats.get("processedInputDataSize"), 0),
             "output_rows": stats.get("outputPositions", 0),
-            "output_bytes": stats.get("outputDataSize", {}).get("value", 0),
+            "output_bytes": _safe_get_value(stats.get("outputDataSize"), 0),
         }
         
         stages.append(stage_metrics)
@@ -344,3 +364,73 @@ class TrinoAPIClient:
         sub_stages = stage_data.get("subStages", [])
         for sub_stage in sub_stages:
             self._extract_stage_metrics(sub_stage, stages)
+    
+    def get_worker_info(self) -> List[Dict[str, Any]]:
+        """
+        Get information about all Trino workers.
+        
+        Returns:
+            List of worker information dictionaries with stats
+        """
+        try:
+            # Get worker info from /v1/node endpoint
+            url = urljoin(self.base_url, "/v1/node")
+            response = requests.get(url, headers=self.headers, timeout=self.timeout)
+            
+            if response.status_code == 404:
+                logger.debug("Worker info endpoint not available (404)")
+                return []
+            
+            response.raise_for_status()
+            nodes_data = response.json()
+            
+            if not nodes_data or not isinstance(nodes_data, list):
+                return []
+            
+            workers = []
+            for idx, node in enumerate(nodes_data):
+                if not isinstance(node, dict):
+                    continue
+                    
+                worker_info = {
+                    "node_id": node.get("nodeIdentifier") or node.get("uri", f"node-{idx}"),
+                    "uri": node.get("uri"),
+                    "version": node.get("nodeVersion"),
+                    "state": node.get("state", "ACTIVE" if node.get("lastResponseTime") else "UNKNOWN"),
+                    "coordinator": node.get("coordinator", False),
+                    "last_response_time": node.get("lastResponseTime"),
+                    "age": node.get("age"),
+                    "recent_requests": node.get("recentRequests"),
+                    "recent_failures": node.get("recentFailures"),
+                    "recent_successes": node.get("recentSuccesses"),
+                }
+                
+                # Extract memory pool information if available
+                memory_info = node.get("memoryInfo")
+                if memory_info and isinstance(memory_info, dict):
+                    pools = memory_info.get("pools", {})
+                    worker_info["memory"] = {
+                        "total_bytes": _safe_get_value(memory_info.get("totalNodeMemory")),
+                        "available_bytes": _safe_get_value(memory_info.get("availableNodeMemory")),
+                    }
+                    
+                    # Extract pool-specific info
+                    for pool_name, pool_data in pools.items():
+                        if isinstance(pool_data, dict):
+                            worker_info["memory"][f"{pool_name}_bytes"] = _safe_get_value(pool_data.get("maxBytes"))
+                            worker_info["memory"][f"{pool_name}_reserved_bytes"] = _safe_get_value(pool_data.get("reservedBytes"))
+                            worker_info["memory"][f"{pool_name}_free_bytes"] = _safe_get_value(pool_data.get("freeBytes"))
+                
+                workers.append(worker_info)
+            
+            return workers
+        
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                logger.debug(f"Worker info endpoint not available (404): {e}")
+            else:
+                logger.warning(f"Failed to collect worker info: {e}")
+            return []
+        except Exception as e:
+            logger.debug(f"Failed to collect worker info: {e}")
+            return []

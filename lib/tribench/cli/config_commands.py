@@ -185,7 +185,7 @@ def validate_config(experiment: Optional[str], verbose: bool):
         
         # Report results
         if errors:
-            click.echo("❌ Configuration validation failed:", err=True)
+            click.echo(" Configuration validation failed:", err=True)
             for error in errors:
                 click.echo(f"  ERROR: {error}", err=True)
             sys.exit(1)
@@ -194,7 +194,7 @@ def validate_config(experiment: Optional[str], verbose: bool):
             for warning in warnings:
                 click.echo(f"  WARNING: {warning}")
         else:
-            click.echo("✅ Configuration is valid")
+            click.echo(" Configuration is valid")
         
         if verbose:
             click.echo(f"\nConfiguration loaded from:", err=True)
@@ -205,7 +205,7 @@ def validate_config(experiment: Optional[str], verbose: bool):
                 click.echo(f"  - Experiment: {experiment}", err=True)
                 
     except Exception as e:
-        click.echo(f"❌ Configuration validation failed: {e}", err=True)
+        click.echo(f" Configuration validation failed: {e}", err=True)
         if verbose:
             import traceback
             traceback.print_exc()
@@ -302,9 +302,9 @@ def trace_config(key: str, experiment: Optional[str], verbose: bool):
         # Show final value
         final_value = exp_value if exp_value is not None else (host_value if host_value is not None else ref_value)
         if final_value is not None:
-            click.echo(f"\n✅ Final value: {final_value}")
+            click.echo(f"\n Final value: {final_value}")
         else:
-            click.echo(f"\n❌ Key not found in any configuration layer")
+            click.echo(f"\n Key not found in any configuration layer")
             
             # Try to suggest similar keys
             click.echo("\nPossible alternatives:")
@@ -378,6 +378,81 @@ def show_defaults(section: str):
         print_section("Retry Configuration", Defaults.Retry)
     
     click.echo("\nSee config/reference.conf for full documentation.")
+
+
+@config_group.command(name="profile")
+@click.argument('action', type=click.Choice(['show', 'set', 'clear', 'list']))
+@click.argument('profile_name', required=False)
+def manage_profile(action: str, profile_name: Optional[str]):
+    """
+    Manage active configuration profile.
+    
+    The active profile determines which host config is loaded by default.
+    Once set, it persists across sessions until changed or cleared.
+    
+    \b
+    Actions:
+        show   - Display the currently active profile
+        set    - Set the active profile (requires PROFILE_NAME)
+        clear  - Clear active profile (revert to hostname detection)
+        list   - List all available profiles
+    
+    \b
+    Examples:
+        tribench config profile show
+        tribench config profile set gcp-gke
+        tribench config profile set Mac.mynet
+        tribench config profile clear
+        tribench config profile list
+    """
+    loader = ConfigurationLoader()
+    
+    if action == 'show':
+        active = loader.get_active_profile()
+        if active:
+            click.secho(f"Active profile: {active}", fg='green')
+            config_path = loader.hosts_path / f"{active}.conf"
+            click.echo(f"Config file: {config_path}")
+        else:
+            click.echo("No active profile (using hostname detection)")
+            hostname = __import__('platform').node()
+            click.echo(f"Current hostname: {hostname}")
+    
+    elif action == 'set':
+        if not profile_name:
+            click.secho("Error: PROFILE_NAME required for 'set' action", fg='red', err=True)
+            click.echo("Usage: tribench config profile set PROFILE_NAME")
+            sys.exit(1)
+        
+        if loader.set_active_profile(profile_name):
+            click.secho(f"✓ Active profile set to: {profile_name}", fg='green')
+        else:
+            click.secho(f"✗ Failed to set profile: {profile_name}", fg='red', err=True)
+            click.echo(f"\nAvailable profiles:")
+            for conf_file in sorted(loader.hosts_path.glob("*.conf")):
+                click.echo(f"  - {conf_file.stem}")
+            sys.exit(1)
+    
+    elif action == 'clear':
+        loader.clear_active_profile()
+        click.secho("✓ Active profile cleared", fg='green')
+        hostname = __import__('platform').node()
+        click.echo(f"Will now use hostname detection: {hostname}")
+    
+    elif action == 'list':
+        click.echo("Available profiles:")
+        active = loader.get_active_profile()
+        
+        conf_files = sorted(loader.hosts_path.glob("*.conf"))
+        if not conf_files:
+            click.echo("  (no profiles found)")
+        else:
+            for conf_file in conf_files:
+                profile_name = conf_file.stem
+                marker = " [ACTIVE]" if profile_name == active else ""
+                click.echo(f"  - {profile_name}{marker}")
+        
+        click.echo(f"\nProfiles directory: {loader.hosts_path}")
 
 
 if __name__ == "__main__":

@@ -44,6 +44,58 @@ def kind_option(f):
     )(f)
 
 
+def should_use_kubernetes(kind: bool, config) -> bool:
+    """
+    Determine whether to use Kubernetes backend based on flags and configuration.
+    
+    Args:
+        kind: Value of --kind flag (True if explicitly set)
+        config: Configuration tree (ConfigTree or dict)
+    
+    Returns:
+        True if Kubernetes backend should be used, False for Docker Compose
+    
+    Priority:
+        1. Explicit --kind flag (highest priority)
+        2. Configuration default (tribench.defaults.backend)
+        3. Docker Compose (fallback default)
+    
+    Example:
+        >>> # User explicitly requests Kubernetes
+        >>> should_use_kubernetes(kind=True, config={})
+        True
+        
+        >>> # Config sets Kubernetes as default
+        >>> config = {'tribench': {'defaults': {'backend': 'kubernetes'}}}
+        >>> should_use_kubernetes(kind=False, config=config)
+        True
+        
+        >>> # No explicit flag, Docker default in config
+        >>> config = {'tribench': {'defaults': {'backend': 'docker'}}}
+        >>> should_use_kubernetes(kind=False, config=config)
+        False
+    """
+    # Explicit flag takes precedence
+    if kind:
+        return True
+    
+    # Check configuration default
+    try:
+        if hasattr(config, 'get'):
+            # ConfigTree object
+            backend = config.get('tribench.defaults.backend', 'docker')
+        elif isinstance(config, dict):
+            # Plain dict
+            backend = config.get('tribench', {}).get('defaults', {}).get('backend', 'docker')
+        else:
+            backend = 'docker'
+        
+        return backend == 'kubernetes'
+    except Exception:
+        # Fallback to Docker if config access fails
+        return False
+
+
 def is_k8s_deployment_active() -> bool:
     """
     Check if Kubernetes deployment is active by looking for:
@@ -82,6 +134,10 @@ def ensure_k8s_port_forwarding(config=None, echo=click.echo, silent_if_active=Fa
         True if port forwarding is now active, False otherwise
     """
     from tribench.systems.kubernetes_system import KubernetesSystem
+    
+    # Handle None config
+    if config is None:
+        config = {}
     
     # Pass config to use proper context hierarchy
     k8s_config = {

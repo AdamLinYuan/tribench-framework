@@ -4,7 +4,7 @@ import click
 import sys
 import logging
 from pathlib import Path
-from tribench.cli.base import cli, dry_run_option, verbose_option, config_option, kind_option, ensure_k8s_port_forwarding, auto_ensure_trino_connection
+from tribench.cli.base import cli, dry_run_option, verbose_option, config_option, kind_option, should_use_kubernetes, ensure_k8s_port_forwarding, auto_ensure_trino_connection
 from tribench.core.experiment import ExperimentConfig
 from tribench.experiments import TrinoExperiment
 
@@ -60,13 +60,21 @@ def run(ctx, experiment, runs, warmup, timeout, host, port, parallel, no_monitor
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
+    # Load configuration to determine backend
+    from tribench.utils.config import ConfigurationLoader
+    config_loader = ConfigurationLoader()
+    full_config = config_loader.load(experiment_config=config) if config else config_loader.load()
+    
+    # Determine backend
+    use_k8s = should_use_kubernetes(kind, full_config)
+    
     # Handle Kubernetes port forwarding
-    if kind:
-        if not ensure_k8s_port_forwarding():
+    if use_k8s:
+        if not ensure_k8s_port_forwarding(full_config):
             return
     else:
         # Auto-detect and ensure Trino connection
-        auto_ensure_trino_connection()
+        auto_ensure_trino_connection(full_config)
     
     # Set up logging level
     if ctx.obj.verbose:

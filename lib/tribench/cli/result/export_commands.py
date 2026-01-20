@@ -11,21 +11,24 @@ from tribench.cli.base import dry_run_option, verbose_option
 from .utils import get_storage
 
 
-@click.command(name="compare")
+@click.command(name="summary")
 @click.argument("experiment_ids", nargs=-1, required=True)
 @click.option('--metrics', help='Metrics to compare (comma-separated).')
 @click.option('--output', type=click.Path(), help='Save comparison to file.')
 @verbose_option
 @click.pass_context
 def compare(ctx, experiment_ids, metrics, output, verbose):
-    """Compare multiple experiment results.
+    """Generate comparison summary for multiple experiments.
+    
+    Shows side-by-side statistics for quick comparison.
+    For statistical analysis, use 'tribench res analyze compare'.
     
     \b
     Examples:
-        tribench res compare exp-001 exp-002
-        tribench res compare 1 2 3
-        tribench res compare 1 2 --metrics execution_time
-        tribench res compare 1 2 --output comparison.json
+        tribench res summary exp-001 exp-002
+        tribench res summary 1 2 3
+        tribench res summary 1 2 --metrics execution_time
+        tribench res summary 1 2 --output comparison.json
     """
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
@@ -201,6 +204,14 @@ def export(ctx, experiment_id, format, output, include_config, dry_run, verbose)
                     'input_bytes': qe['input_bytes'],
                     'cpu_time_ms': qe['cpu_time_ms'],
                     'peak_memory_bytes': qe['peak_memory_bytes'],
+                    # Advanced query metrics
+                    'planning_time_ms': qe.get('planning_time_ms'),
+                    'analysis_time_ms': qe.get('analysis_time_ms'),
+                    'spilled_bytes': qe.get('spilled_bytes'),
+                    'total_splits': qe.get('total_splits'),
+                    'completed_splits': qe.get('completed_splits'),
+                    'total_tasks': qe.get('total_tasks'),
+                    'query_plan_hash': qe.get('query_plan_hash'),
                 }
                 all_data.append(row)
         

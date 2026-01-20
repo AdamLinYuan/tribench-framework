@@ -5,7 +5,7 @@ Commands for setting up, starting, stopping, and tearing down systems.
 """
 
 import click
-from tribench.cli.base import dry_run_option, verbose_option, config_option
+from tribench.cli.base import dry_run_option, verbose_option, config_option, should_use_kubernetes
 from tribench.systems.trino import TrinoSystem
 from tribench.systems.postgresql import PostgreSQLSystem
 from tribench.systems.minio import MinIOSystem
@@ -35,12 +35,20 @@ def setup(ctx, system, version, kind, config, dry_run, verbose):
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
+    # Load configuration first to check backend default
+    loader = ConfigurationLoader()
+    cfg = loader.load(experiment_config=config) if config else loader.load()
+    
+    # Determine backend
+    use_k8s = should_use_kubernetes(kind, cfg)
+    
     if ctx.obj.verbose:
         click.echo(f"Setting up system: {system}")
         if version:
             click.echo(f"Version: {version}")
-        if kind:
-            click.echo("Backend: Kubernetes")
+        backend_name = "Kubernetes" if use_k8s else "Docker Compose"
+        backend_source = "flag" if kind else "config default"
+        click.echo(f"Backend: {backend_name} (from {backend_source})")
         if config:
             click.echo(f"Config: {config}")
     
@@ -48,13 +56,9 @@ def setup(ctx, system, version, kind, config, dry_run, verbose):
         click.echo(f"[DRY RUN] Would setup {system}")
         return
     
-    if kind:
+    if use_k8s:
         try:
             click.echo(f"Setting up {system} on Kubernetes...")
-            
-            # Load configuration to pass to K8s system
-            loader = ConfigurationLoader()
-            cfg = loader.load(experiment_config=config) if config else loader.load()
             
             k8s = get_k8s_system(config_tree=cfg)
             k8s.setup(component=system)
@@ -170,22 +174,26 @@ def start(ctx, system, kind, config, dry_run, verbose):
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
+    # Load configuration first to check backend default
+    loader = ConfigurationLoader()
+    cfg = loader.load(experiment_config=config) if config else loader.load()
+    
+    # Determine backend
+    use_k8s = should_use_kubernetes(kind, cfg)
+    
     if ctx.obj.verbose:
         click.echo(f"Starting system: {system}")
-        if kind:
-            click.echo("Backend: Kubernetes")
+        backend_name = "Kubernetes" if use_k8s else "Docker Compose"
+        backend_source = "flag" if kind else "config default"
+        click.echo(f"Backend: {backend_name} (from {backend_source})")
     
     if ctx.obj.dry_run:
         click.echo(f"[DRY RUN] Would start {system}")
         return
     
-    if kind:
+    if use_k8s:
         try:
             click.echo(f"Starting {system} on Kubernetes...")
-            
-            # Load configuration to pass to K8s system
-            loader = ConfigurationLoader()
-            cfg = loader.load(experiment_config=config) if config else loader.load()
             
             k8s = get_k8s_system(config_tree=cfg)
             k8s.start(component=system)
@@ -271,10 +279,11 @@ def start(ctx, system, kind, config, dry_run, verbose):
 @click.argument("system", type=click.Choice(['trino', 'postgresql', 'minio', 'hive-metastore', 'all']))
 @click.option('--force', is_flag=True, help='Force stop without graceful shutdown.')
 @click.option('--kind', is_flag=True, help='Use Kubernetes backend (Kind/Helm).')
+@config_option
 @dry_run_option
 @verbose_option
 @click.pass_context
-def stop(ctx, system, force, kind, dry_run, verbose):
+def stop(ctx, system, force, kind, config, dry_run, verbose):
     """Stop a system.
     
     \b
@@ -286,21 +295,29 @@ def stop(ctx, system, force, kind, dry_run, verbose):
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
+    # Load configuration first to check backend default
+    loader = ConfigurationLoader()
+    cfg = loader.load(experiment_config=config) if config else loader.load()
+    
+    # Determine backend
+    use_k8s = should_use_kubernetes(kind, cfg)
+    
     if ctx.obj.verbose:
         click.echo(f"Stopping system: {system}")
         if force:
             click.echo("Force stop enabled")
-        if kind:
-            click.echo("Backend: Kubernetes")
+        backend_name = "Kubernetes" if use_k8s else "Docker Compose"
+        backend_source = "flag" if kind else "config default"
+        click.echo(f"Backend: {backend_name} (from {backend_source})")
     
     if ctx.obj.dry_run:
         click.echo(f"[DRY RUN] Would stop {system}")
         return
     
-    if kind:
+    if use_k8s:
         try:
             click.echo(f"Stopping {system} on Kubernetes...")
-            k8s = get_k8s_system()
+            k8s = get_k8s_system(config_tree=cfg)
             k8s.stop(component=system)
             click.secho(f"✓ Kubernetes {system} stopped successfully", fg='green')
         except Exception as e:
@@ -364,11 +381,12 @@ def stop(ctx, system, force, kind, dry_run, verbose):
 @click.argument("system", type=click.Choice(['trino', 'postgresql', 'minio', 'hive-metastore', 'all']))
 @click.option('--keep-data', is_flag=True, help='Keep data after teardown.')
 @click.option('--kind', is_flag=True, help='Use Kubernetes backend (Kind/Helm).')
+@config_option
 @click.confirmation_option(prompt='Are you sure you want to tear down the system?')
 @dry_run_option
 @verbose_option
 @click.pass_context
-def teardown(ctx, system, keep_data, kind, dry_run, verbose):
+def teardown(ctx, system, keep_data, kind, config, dry_run, verbose):
     """Tear down a system (destructive operation).
     
     \b
@@ -380,21 +398,29 @@ def teardown(ctx, system, keep_data, kind, dry_run, verbose):
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
+    # Load configuration first to check backend default
+    loader = ConfigurationLoader()
+    cfg = loader.load(experiment_config=config) if config else loader.load()
+    
+    # Determine backend
+    use_k8s = should_use_kubernetes(kind, cfg)
+    
     if ctx.obj.verbose:
         click.echo(f"Tearing down system: {system}")
         if keep_data:
             click.echo("Will keep data after teardown")
-        if kind:
-            click.echo("Backend: Kubernetes")
+        backend_name = "Kubernetes" if use_k8s else "Docker Compose"
+        backend_source = "flag" if kind else "config default"
+        click.echo(f"Backend: {backend_name} (from {backend_source})")
     
     if ctx.obj.dry_run:
         click.echo(f"[DRY RUN] Would teardown {system}")
         return
     
-    if kind:
+    if use_k8s:
         try:
             click.echo(f"Tearing down {system} on Kubernetes...")
-            k8s = get_k8s_system()
+            k8s = get_k8s_system(config_tree=cfg)
             k8s.teardown(component=system)
             click.secho(f"✓ Kubernetes {system} teardown complete", fg='green')
         except Exception as e:

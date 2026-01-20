@@ -24,8 +24,8 @@ spec:
     spec:
       containers:
       - name: metastore
-        image: tribench-hive-metastore:{{ config.tribench.systems.hive_metastore.version }}
-        imagePullPolicy: Never
+        image: {{ config.tribench.systems.hive_metastore.kubernetes.image }}
+        imagePullPolicy: {{ config.tribench.systems.hive_metastore.kubernetes.imagePullPolicy }}
         ports:
         - containerPort: 9083
         env:

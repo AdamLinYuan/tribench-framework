@@ -36,6 +36,8 @@ spec:
           mountPath: /etc/trino
         - name: catalog-volume
           mountPath: /etc/trino/catalog
+        - name: data-volume
+          mountPath: /var/trino
         livenessProbe:
           httpGet:
             path: /v1/info
@@ -55,6 +57,8 @@ spec:
       - name: catalog-volume
         configMap:
           name: trino-catalog
+      - name: data-volume
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -88,6 +92,8 @@ spec:
           mountPath: /etc/trino
         - name: catalog-volume
           mountPath: /etc/trino/catalog
+        - name: data-volume
+          mountPath: /var/trino
         livenessProbe:
           httpGet:
             path: /v1/info
@@ -107,6 +113,8 @@ spec:
       - name: catalog-volume
         configMap:
           name: trino-catalog
+      - name: data-volume
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

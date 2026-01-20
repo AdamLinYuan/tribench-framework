@@ -6,7 +6,6 @@ from .statistical import StatisticalAnalyzer
 
 logger = logging.getLogger(__name__)
 
-
 class ComparisonAnalyzer:
     """
     Compares benchmark results         # Get all experiments

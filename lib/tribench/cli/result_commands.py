@@ -11,9 +11,10 @@ from tribench.cli.base import cli
 # Import from new locations
 from tribench.cli.result import (
     show,
+    show_queries,
     list_results,
     export,
-    compare,
+    summary,
     analyze_group,
     delete,
     archive,
@@ -40,8 +41,9 @@ def result_group():
 
 # Register commands
 result_group.add_command(show)
+result_group.add_command(show_queries)
 result_group.add_command(list_results)
-result_group.add_command(compare)
+result_group.add_command(summary)
 result_group.add_command(export)
 result_group.add_command(analyze_group)
 result_group.add_command(delete)

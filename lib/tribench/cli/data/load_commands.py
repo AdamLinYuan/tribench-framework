@@ -5,7 +5,7 @@ from pathlib import Path
 from datetime import datetime
 import logging
 
-from tribench.cli.base import dry_run_option, verbose_option, config_option, kind_option, ensure_k8s_port_forwarding, auto_ensure_trino_connection
+from tribench.cli.base import dry_run_option, verbose_option, config_option, kind_option, should_use_kubernetes, ensure_k8s_port_forwarding, auto_ensure_trino_connection
 from tribench.data.dataset import DatasetRegistry, DatasetMetadata
 from tribench.data.iceberg_loader import IcebergDataLoader
 from .utils import get_datasets_root, get_trino_connection_params
@@ -55,8 +55,11 @@ def load(ctx, dataset, system, catalog, schema, storage, partition, validate, ki
     full_config = config_loader.load(experiment_config=config)
     datasets_root = get_datasets_root(config)
     
+    # Determine backend
+    use_k8s = should_use_kubernetes(kind, full_config)
+    
     # Handle Kubernetes port forwarding
-    if kind:
+    if use_k8s:
         if not ensure_k8s_port_forwarding(full_config):
             return
     else:

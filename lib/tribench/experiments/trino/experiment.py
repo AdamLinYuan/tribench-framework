@@ -23,6 +23,14 @@ from .queries import collect_queries, validate_results
 
 logger = logging.getLogger(__name__)
 
+# Import Trino API client for fetching detailed metrics
+try:
+    from ...monitoring.trino.api_client import TrinoAPIClient
+    API_CLIENT_AVAILABLE = True
+except ImportError:
+    API_CLIENT_AVAILABLE = False
+    logger.debug("TrinoAPIClient not available - detailed metrics will not be fetched")
+
 
 class TrinoExperiment(
     ExperimentMonitoringMixin,
@@ -71,6 +79,21 @@ class TrinoExperiment(
         
         # Connection pool for parallel query execution (lazy initialization)
         self._connection_pool: Optional[ConnectionPool] = None
+        
+        # Initialize Trino API client for fetching detailed metrics (HIGH priority task)
+        self.api_client: Optional[TrinoAPIClient] = None
+        if API_CLIENT_AVAILABLE:
+            try:
+                base_url = f"http://{connection_config.host}:{connection_config.port}"
+                # Pass user for X-Trino-User header authentication
+                self.api_client = TrinoAPIClient(
+                    base_url=base_url, 
+                    user=connection_config.user,
+                    timeout=10
+                )
+                logger.debug("Trino API client initialized for detailed metrics collection")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Trino API client: {e}")
         
         # Storage configuration
         self.enable_json = enable_json
@@ -297,6 +320,10 @@ class TrinoExperiment(
                 fetch_results=True
             )
             
+            # HIGH PRIORITY: Enrich metadata with planning/analysis time and stage metrics via API
+            if query_metadata and query_metadata.get("query_id"):
+                self._enrich_query_metadata(query_metadata)
+            
             # Track query in monitoring
             if query_metadata and query_metadata.get("query_id"):
                 self._track_query_in_monitoring(query_metadata["query_id"])
@@ -416,6 +443,73 @@ class TrinoExperiment(
             get_time=get_time,
             status_success=status_success,
         )
+    
+    def _enrich_query_metadata(self, metadata: Dict[str, Any]) -> None:
+        """
+        Enrich query metadata with detailed metrics from Trino API.
+        
+        HIGH PRIORITY: Fetch planning/analysis time breakdown and stage-level metrics.
+        MEDIUM PRIORITY: Calculate query plan hash for plan regression detection.
+        
+        Args:
+            metadata: Query metadata dictionary to enrich (modified in place)
+        """
+        if not self.api_client:
+            return
+        
+        query_id = metadata.get("query_id")
+        if not query_id:
+            return
+        
+        try:
+            # Fetch detailed query metrics from API
+            query_metrics = self.api_client.get_query_metrics(query_id)
+            
+            if query_metrics:
+                # HIGH PRIORITY: Store planning and analysis time breakdown
+                if query_metrics.planning_time_ms is not None:
+                    metadata["planning_time_ms"] = query_metrics.planning_time_ms
+                if query_metrics.analysis_time_ms is not None:
+                    metadata["analysis_time_ms"] = query_metrics.analysis_time_ms
+                if query_metrics.execution_time_ms is not None:
+                    metadata["execution_time_ms"] = query_metrics.execution_time_ms
+                
+                # Add any missing metrics from API that weren't in cursor.stats
+                if "spilled_bytes" not in metadata and query_metrics.input_bytes:
+                    # Note: Spill metrics might be in stage-level data
+                    pass
+                
+                # Also capture blocked time if available
+                if query_metrics.blocked_time_ms is not None:
+                    metadata["blocked_time_ms"] = query_metrics.blocked_time_ms
+            
+            # HIGH PRIORITY: Fetch stage-level metrics for detailed query analysis
+            stage_metrics = self.api_client.get_stage_metrics(query_id)
+            if stage_metrics:
+                metadata["stage_metrics"] = stage_metrics
+                
+                # Aggregate stage-level metrics for storage
+                total_tasks = sum(s.get("total_tasks", 0) for s in stage_metrics)
+                if total_tasks > 0:
+                    metadata["total_tasks"] = total_tasks
+            
+            # MEDIUM PRIORITY: Get query plan and calculate hash for plan regression detection
+            query_plan = self.api_client.get_query_plan(query_id)
+            if query_plan:
+                import hashlib
+                import json
+                
+                # Store the plan for detailed analysis
+                metadata["query_plan"] = query_plan
+                
+                # Calculate plan hash (SHA256 of plan JSON)
+                plan_str = json.dumps(query_plan, sort_keys=True)
+                plan_hash = hashlib.sha256(plan_str.encode()).hexdigest()
+                metadata["query_plan_hash"] = plan_hash
+                
+        except Exception as e:
+            logger.debug(f"Failed to enrich query metadata for {query_id}: {e}")
+            # Don't fail the query if enrichment fails
     
     def cleanup(self) -> None:
         """Clean up resources after experiment completion."""

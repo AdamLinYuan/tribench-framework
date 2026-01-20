@@ -51,6 +51,7 @@ class ConfigurationLoader:
         self.config_path = self.root_path / "config"
         self.reference_config_path = self.config_path / "reference.conf"
         self.hosts_path = self.config_path / "hosts"
+        self.profile_file = self.root_path / ".tribench-profile"
         
         # Load environment variables from .env file
         if load_env:
@@ -76,13 +77,7 @@ class ConfigurationLoader:
             load_dotenv(env_path, override=False)
             logger.info(f"Loaded environment variables from: {env_path}")
         else:
-            # Try to find .env in parent directories
-            found_env = find_dotenv(usecwd=True)
-            if found_env:
-                load_dotenv(found_env, override=False)
-                logger.info(f"Loaded environment variables from: {found_env}")
-            else:
-                logger.debug("No .env file found - using system environment only")
+            logger.debug("No .env file found - using system environment only")
     
     def get_env(self, key: str, default: Optional[str] = None) -> Optional[str]:
         """
@@ -129,9 +124,7 @@ class ConfigurationLoader:
                 exp_config = self._load_experiment_config(experiment_config)
                 config = ConfigTree.merge_configs(config, exp_config)
                 logger.info(f"Merged experiment configuration: {experiment_config}")
-            
-            # Resolve environment variables
-            config = self._resolve_env_vars(config)
+
             
             return config
             
@@ -152,35 +145,96 @@ class ConfigurationLoader:
                 f"Failed to parse reference config: {e}"
             ) from e
     
+    def get_active_profile(self) -> Optional[str]:
+        """
+        Get the active configuration profile name.
+        
+        Returns:
+            Profile name (without .conf extension) or None
+        """
+        if self.profile_file.exists():
+            try:
+                profile = self.profile_file.read_text().strip()
+                if profile:
+                    logger.debug(f"Active profile: {profile}")
+                    return profile
+            except Exception as e:
+                logger.warning(f"Failed to read profile file: {e}")
+        return None
+    
+    def set_active_profile(self, profile_name: str) -> bool:
+        """
+        Set the active configuration profile.
+        
+        Args:
+            profile_name: Profile name (with or without .conf extension)
+        
+        Returns:
+            True if profile was set successfully
+        """
+        # Strip .conf extension if provided
+        if profile_name.endswith('.conf'):
+            profile_name = profile_name[:-5]
+        
+        # Verify profile exists
+        config_path = self.hosts_path / f"{profile_name}.conf"
+        if not config_path.exists():
+            logger.error(f"Profile not found: {config_path}")
+            return False
+        
+        try:
+            self.profile_file.write_text(profile_name)
+            logger.info(f"✓ Active profile set to: {profile_name}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to set profile: {e}")
+            return False
+    
+    def clear_active_profile(self) -> None:
+        """Clear the active profile, reverting to hostname-based detection."""
+        if self.profile_file.exists():
+            self.profile_file.unlink()
+            logger.info("✓ Active profile cleared (will use hostname detection)")
+    
     def _load_host_config(self, host_name: Optional[str] = None) -> Optional[ConfigTree]:
         """
         Load host-specific configuration.
         
+        Priority:
+        1. Active profile (from .tribench-profile)
+        2. Explicit host_name parameter
+        3. Auto-detected hostname
+        
         Args:
-            host_name: Host name. If None, auto-detect using platform.node()
+            host_name: Host name. If None, checks active profile then auto-detects.
         
         Returns:
             Host configuration or None if not found
         """
+        # Priority 1: Check for active profile
         if host_name is None:
-            host_name = platform.node().split('.')[0]  # Get hostname without domain
+            active_profile = self.get_active_profile()
+            if active_profile:
+                host_name = active_profile
+                logger.info(f"Using active profile: {host_name}")
         
-        # Try multiple config file formats
-        possible_paths = [
-            self.hosts_path / host_name / "application.conf",
-            self.hosts_path / f"{host_name}.conf",
-        ]
+        # Priority 2/3: Use provided host_name or auto-detect hostname
+        if host_name is None:
+            host_name = platform.node()
+            logger.debug(f"Auto-detected hostname: {host_name}")
         
-        for config_path in possible_paths:
-            if config_path.exists():
-                logger.debug(f"Loading host config from: {config_path}")
-                try:
-                    return ConfigFactory.parse_file(str(config_path))
-                except Exception as e:
-                    logger.warning(f"Failed to parse host config {config_path}: {e}")
-                    continue
+        # Look for flat file: hosts/{hostname}.conf
+        config_path = self.hosts_path / f"{host_name}.conf"
         
-        logger.warning(f"No host configuration found for: {host_name}")
+        if config_path.exists():
+            logger.debug(f"Loading host config from: {config_path}")
+            try:
+                return ConfigFactory.parse_file(str(config_path))
+            except Exception as e:
+                logger.warning(f"Failed to parse host config {config_path}: {e}")
+                return None
+        
+        logger.warning(f"No host configuration is being applied")
         return None
     
     def _load_experiment_config(self, config_path: Path) -> ConfigTree:
@@ -209,28 +263,6 @@ class ConfigurationLoader:
                 f"Failed to parse experiment config {config_path}: {e}"
             ) from e
     
-    def _resolve_env_vars(self, config: ConfigTree) -> ConfigTree:
-        """
-        Resolve environment variable references in configuration.
-        
-        HOCON already supports ${?ENV_VAR} syntax, but this provides
-        additional resolution for nested structures and validates that
-        environment variables are properly loaded.
-        
-        Args:
-            config: Configuration tree
-        
-        Returns:
-            Configuration with resolved environment variables
-        
-        Note:
-            Environment variables loaded from .env file are available
-            through os.getenv() and HOCON's ${?VAR} syntax.
-        """
-        # HOCON's ConfigFactory already resolves ${?VAR} syntax
-        # This is handled automatically during parsing
-        # The .env file loaded in __init__ makes those variables available
-        return config
     
     def validate(self, config: ConfigTree, schema: Optional[Dict[str, Any]] = None) -> List[str]:
         """

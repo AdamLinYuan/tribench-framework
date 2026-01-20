@@ -164,6 +164,17 @@ class QueryExecution(Base):
     physical_input_bytes = Column(BigInteger, nullable=True)
     peak_memory_bytes = Column(BigInteger, nullable=True)
     
+    # Spill metrics (HIGH priority - memory pressure analysis)
+    spilled_bytes = Column(BigInteger, nullable=True)  # Total bytes spilled to disk
+    
+    # Parallelism metrics (MEDIUM priority - parallelism analysis)
+    total_splits = Column(Integer, nullable=True)  # Total number of splits
+    completed_splits = Column(Integer, nullable=True)  # Completed splits
+    total_tasks = Column(Integer, nullable=True)  # Total number of tasks
+    
+    # Query plan tracking (MEDIUM priority - plan regression detection)
+    query_plan_hash = Column(String(64), nullable=True)  # SHA256 hash of query plan
+    
     # Results
     rows_returned = Column(Integer, nullable=True)
     result_checksum = Column(String(64), nullable=True)  # SHA256 for validation

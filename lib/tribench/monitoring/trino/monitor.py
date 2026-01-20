@@ -62,8 +62,13 @@ class TrinoMonitor(MetricCollector):
         # Authentication
         auth = (username, password) if username and password else None
         
-        # Initialize API client
-        self.api_client = TrinoAPIClient(base_url, auth, timeout)
+        # Initialize API client - use keyword args to avoid positional parameter confusion
+        self.api_client = TrinoAPIClient(
+            base_url=base_url,
+            auth=auth,
+            user=username,
+            timeout=timeout
+        )
         
         # Tracked queries
         self.tracked_queries: List[str] = []

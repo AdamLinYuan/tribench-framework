@@ -1,0 +1,81 @@
+# TPC-H Kubernetes Monitoring Example
+
+name: "tpch-gcp"
+description: "TPC-H queries with Kubernetes pod monitoring enabled"
+
+# System configuration
+system: "trino"
+
+# Connection parameters
+connection:
+  host: "localhost"
+  port: 8080
+  user: "tribench"
+  catalog: "iceberg"
+  schema: "tpch"  # Changed from tpch_sf1 to match tiny dataset
+
+# Execution parameters
+runs: 1
+warmup_runs: 0
+timeout_seconds: 120
+max_retries: 2
+
+# Monitoring configuration
+monitoring:
+  enabled: true
+  interval_seconds: 5.0  # Collect metrics every 5 seconds
+  
+  # Kubernetes pod monitoring
+  kubernetes:
+    enabled: true                  # Enable K8s monitoring
+    context: "gke_tribench_us-central1-a_tribench-cluster"  # GKE context
+    namespace: "tribench"           # Namespace where Trino pods run
+    label_selector: "app=trino"     # Filter pods by label (optional)
+    pod_name_pattern: "trino-.*"    # Filter pods by regex (optional)
+
+# TPC-H Queries (subset for quick testing)
+query_files:
+  - "apps/tpch/queries/q01.sql"
+  - "apps/tpch/queries/q02.sql"
+  - "apps/tpch/queries/q03.sql"
+  - "apps/tpch/queries/q04.sql"
+  - "apps/tpch/queries/q05.sql"
+  - "apps/tpch/queries/q06.sql"
+  - "apps/tpch/queries/q07.sql"
+  - "apps/tpch/queries/q08.sql"
+  - "apps/tpch/queries/q09.sql"
+  - "apps/tpch/queries/q10.sql"
+  - "apps/tpch/queries/q11.sql"
+  - "apps/tpch/queries/q12.sql"
+  - "apps/tpch/queries/q13.sql"
+  - "apps/tpch/queries/q14.sql"
+  - "apps/tpch/queries/q15.sql"
+  - "apps/tpch/queries/q16.sql"
+  - "apps/tpch/queries/q17.sql"
+  - "apps/tpch/queries/q18.sql"
+  - "apps/tpch/queries/q19.sql"
+  - "apps/tpch/queries/q20.sql"
+  - "apps/tpch/queries/q21.sql"
+  - "apps/tpch/queries/q22.sql"
+
+# Validation rules
+validation:
+  min_success_rate: 0.95
+  max_execution_time_variance: 0.3
+
+# Metrics to collect
+metrics:
+  - execution_time
+  - rows_returned
+  - cpu_time
+  - memory_usage
+  - data_scanned
+
+# Metadata
+metadata:
+  benchmark: "TPC-H"
+  scale_factor: 1
+  dataset: "tpch-sf1-iceberg"
+  dataset_location: "iceberg.tpch_sf1"
+  format: "iceberg"
+  tags: ["tpch", "iceberg", "kubernetes", "monitoring"]

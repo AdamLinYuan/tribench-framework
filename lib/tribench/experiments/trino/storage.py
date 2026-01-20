@@ -197,6 +197,49 @@ class ExperimentStorageMixin:
             query_end_time = datetime.now()
             query_start_time = query_end_time - timedelta(seconds=duration)
             
+            # Extract Trino-specific metrics from metadata
+            metrics = {}
+            if query_metadata:
+                # HIGH PRIORITY: Planning and analysis time breakdown
+                if "planning_time_ms" in query_metadata:
+                    metrics["planning_time_ms"] = query_metadata["planning_time_ms"]
+                if "analysis_time_ms" in query_metadata:
+                    metrics["analysis_time_ms"] = query_metadata["analysis_time_ms"]
+                if "execution_time_ms" in query_metadata:
+                    metrics["execution_time_ms"] = query_metadata["execution_time_ms"]
+                
+                # Existing timing metrics
+                if "cpu_time_ms" in query_metadata:
+                    metrics["cpu_time_ms"] = query_metadata["cpu_time_ms"]
+                if "scheduled_time_ms" in query_metadata:
+                    metrics["scheduled_time_ms"] = query_metadata["scheduled_time_ms"]
+                if "blocked_time_ms" in query_metadata:
+                    metrics["blocked_time_ms"] = query_metadata["blocked_time_ms"]
+                
+                # Data processing metrics
+                if "processed_rows" in query_metadata:
+                    metrics["input_rows"] = query_metadata["processed_rows"]
+                if "processed_bytes" in query_metadata:
+                    metrics["input_bytes"] = query_metadata["processed_bytes"]
+                if "peak_memory_bytes" in query_metadata:
+                    metrics["peak_memory_bytes"] = query_metadata["peak_memory_bytes"]
+                
+                # HIGH PRIORITY: Spill metrics for memory pressure analysis
+                if "spilled_bytes" in query_metadata:
+                    metrics["spilled_bytes"] = query_metadata["spilled_bytes"]
+                
+                # MEDIUM PRIORITY: Parallelism metrics
+                if "total_splits" in query_metadata:
+                    metrics["total_splits"] = query_metadata["total_splits"]
+                if "completed_splits" in query_metadata:
+                    metrics["completed_splits"] = query_metadata["completed_splits"]
+                if "total_tasks" in query_metadata:
+                    metrics["total_tasks"] = query_metadata["total_tasks"]
+                
+                # MEDIUM PRIORITY: Query plan hash for plan regression detection
+                if "query_plan_hash" in query_metadata:
+                    metrics["query_plan_hash"] = query_metadata["query_plan_hash"]
+            
             self.result_storage.add_query_execution(
                 run_id=run_id,
                 query_name=query_name,
@@ -208,6 +251,7 @@ class ExperimentStorageMixin:
                 error_message=str(error) if error else None,
                 query_id=query_metadata.get("query_id") if query_metadata else None,
                 metadata=query_metadata if query_metadata else None,
+                **metrics,  # Pass all extracted metrics as keyword arguments
             )
         except Exception as e:
             logger.error(f"Failed to save query execution to database: {e}")

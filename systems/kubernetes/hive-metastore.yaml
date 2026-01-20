@@ -175,8 +175,8 @@ spec:
     spec:
       containers:
       - name: metastore
-        image: tribench-hive-metastore:4.0.0
-        imagePullPolicy: Never
+        image: us-central1-docker.pkg.dev/tribench/tribench/hive-metastore:4.0.0
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 9083
         env:

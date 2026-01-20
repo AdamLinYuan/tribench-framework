@@ -140,6 +140,14 @@ class QueryStore:
                     "output_bytes": qe.output_bytes,
                     "physical_input_bytes": qe.physical_input_bytes,
                     "peak_memory_bytes": qe.peak_memory_bytes,
+                    # HIGH PRIORITY: Spill metrics for memory pressure analysis
+                    "spilled_bytes": qe.spilled_bytes,
+                    # MEDIUM PRIORITY: Parallelism metrics
+                    "total_splits": qe.total_splits,
+                    "completed_splits": qe.completed_splits,
+                    "total_tasks": qe.total_tasks,
+                    # MEDIUM PRIORITY: Query plan hash for plan regression detection
+                    "query_plan_hash": qe.query_plan_hash,
                     # Results
                     "rows_returned": qe.rows_returned,
                     "result_checksum": qe.result_checksum,
