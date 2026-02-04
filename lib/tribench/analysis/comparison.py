@@ -112,9 +112,9 @@ class ComparisonAnalyzer:
             query_comparisons[query_name] = comparison
             
             # Track improvements and regressions
-            if comparison.get('is_regression'):
+            if comparison['verdict']['is_regression']:
                 overall_regressions.append(query_name)
-            elif comparison.get('is_improvement'):
+            elif comparison['verdict']['is_improvement']:
                 overall_improvements.append(query_name)
         
         result["comparisons"] = query_comparisons

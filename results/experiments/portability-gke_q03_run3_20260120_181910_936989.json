@@ -1,0 +1,33 @@
+{
+  "experiment_name": "portability-gke",
+  "experiment_type": "trino_query",
+  "timestamp": "2026-01-20T18:19:10.936989",
+  "duration_seconds": 1.9458670616149902,
+  "status": "success",
+  "execution_time": 0.7512152194976807,
+  "cpu_time": null,
+  "memory_usage": null,
+  "data_scanned": 2606336,
+  "rows_returned": 10,
+  "system_metrics": {
+    "query_id": "20260120_181909_00322_a4pwe",
+    "state": "FINISHED",
+    "cpu_time_ms": 56,
+    "queued_time_ms": 1,
+    "elapsed_time_ms": 405,
+    "scheduled_time_ms": null,
+    "processed_rows": 80606,
+    "processed_bytes": 2606336,
+    "peak_memory_bytes": 244392,
+    "retry_attempts": 0
+  },
+  "validation_passed": true,
+  "validation_errors": [],
+  "metadata": {
+    "query_name": "q03",
+    "run_number": 3,
+    "query_source": "/Users/adamyuan/Documents/UofG/Yr 4/Dissertation/Code/tribench-framework/apps/tpch/queries/q03.sql"
+  },
+  "error_message": null,
+  "error_traceback": null
+}

@@ -1,0 +1,33 @@
+{
+  "experiment_name": "reproducibility-validation",
+  "experiment_type": "trino_query",
+  "timestamp": "2026-01-20T17:30:51.653461",
+  "duration_seconds": 3.0181801319122314,
+  "status": "success",
+  "execution_time": 1.8431847095489502,
+  "cpu_time": null,
+  "memory_usage": null,
+  "data_scanned": 6221549,
+  "rows_returned": 173,
+  "system_metrics": {
+    "query_id": "20260120_173048_00121_a4pwe",
+    "state": "FINISHED",
+    "cpu_time_ms": 467,
+    "queued_time_ms": 1,
+    "elapsed_time_ms": 1581,
+    "scheduled_time_ms": null,
+    "processed_rows": 168600,
+    "processed_bytes": 6221549,
+    "peak_memory_bytes": 4598746,
+    "retry_attempts": 0
+  },
+  "validation_passed": true,
+  "validation_errors": [],
+  "metadata": {
+    "query_name": "q09",
+    "run_number": 1,
+    "query_source": "/Users/adamyuan/Documents/UofG/Yr 4/Dissertation/Code/tribench-framework/apps/tpch/queries/q09.sql"
+  },
+  "error_message": null,
+  "error_traceback": null
+}

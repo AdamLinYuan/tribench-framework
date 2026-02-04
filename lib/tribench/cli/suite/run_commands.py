@@ -131,11 +131,11 @@ def run_suite(ctx, suite, experiment_filter, runs, timeout, kind, config, dry_ru
             
             # Extract kubernetes config if present
             if full_config:
-                k8s_context = full_config.get("kubernetes.context", None)
-                k8s_namespace = full_config.get("kubernetes.namespace", None)
+                k8s_context = full_config.get("tribench.kubernetes.context", None)
+                k8s_namespace = full_config.get("tribench.kubernetes.namespace", None)
                 
                 if k8s_context or k8s_namespace:
-                    k8s_config["systems"] = {"kubernetes": {}}
+                    k8s_config = {"systems": {"kubernetes": {}}}
                     if k8s_context:
                         k8s_config["systems"]["kubernetes"]["context"] = k8s_context
                     if k8s_namespace:

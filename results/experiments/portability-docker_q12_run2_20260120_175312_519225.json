@@ -1,0 +1,33 @@
+{
+  "experiment_name": "portability-docker",
+  "experiment_type": "trino_query",
+  "timestamp": "2026-01-20T17:53:12.519225",
+  "duration_seconds": 1.957291841506958,
+  "status": "success",
+  "execution_time": 0.775566816329956,
+  "cpu_time": null,
+  "memory_usage": null,
+  "data_scanned": 2411927,
+  "rows_returned": 2,
+  "system_metrics": {
+    "query_id": "20260120_175310_00244_a4pwe",
+    "state": "FINISHED",
+    "cpu_time_ms": 36,
+    "queued_time_ms": 0,
+    "elapsed_time_ms": 355,
+    "scheduled_time_ms": null,
+    "processed_rows": 75482,
+    "processed_bytes": 2411927,
+    "peak_memory_bytes": 108904,
+    "retry_attempts": 0
+  },
+  "validation_passed": true,
+  "validation_errors": [],
+  "metadata": {
+    "query_name": "q12",
+    "run_number": 2,
+    "query_source": "/Users/adamyuan/Documents/UofG/Yr 4/Dissertation/Code/tribench-framework/apps/tpch/queries/q12.sql"
+  },
+  "error_message": null,
+  "error_traceback": null
+}

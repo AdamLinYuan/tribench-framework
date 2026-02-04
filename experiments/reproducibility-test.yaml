@@ -1,0 +1,47 @@
+# RQ1: Reproducibility Validation Experiment
+# Tests result consistency across repeated executions
+
+name: "reproducibility-validation"
+description: "Test result consistency across 10 runs on Kind cluster"
+
+# System configuration
+system: "trino"
+
+# Connection parameters
+connection:
+  host: "localhost"
+  port: 8080
+  user: "tribench"
+  catalog: "iceberg"
+  schema: "tpch"
+
+# Execution parameters
+runs: 10  # Repeated executions for statistical analysis
+warmup_runs: 0  # No warmup - test cold start consistency
+timeout_seconds: 300  # 5 minutes per query
+max_retries: 1
+
+# Monitoring configuration
+monitoring:
+  enabled: true
+  interval_seconds: 1.0  # 1-second granularity for detailed tracking
+  
+  # Kubernetes pod monitoring
+  kubernetes:
+    enabled: true
+    context: "kind-tribench"
+    namespace: "tribench"
+    label_selector: "app=trino"
+    pod_name_pattern: "trino-.*"
+
+# Query selection: Simple, Medium, Complex
+# Simple scan (Q1), Medium join (Q3), Complex join (Q9)
+query_files:
+  - "apps/tpch/queries/q01.sql"  # Simple scan
+  - "apps/tpch/queries/q03.sql"  # Medium join
+  - "apps/tpch/queries/q09.sql"  # Complex join
+
+# Validation
+validation:
+  min_success_rate: 1.0  # All queries must succeed
+  result_comparison: true  # Verify result correctness

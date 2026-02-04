@@ -1,0 +1,5 @@
+Baseline Execution - Direct Trino CLI
+======================================
+Query: apps/tpch/queries/q09.sql
+Timestamp: Tue Jan 20 18:51:15 GMT 2026
+

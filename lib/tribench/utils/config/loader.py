@@ -6,6 +6,7 @@ Handles hierarchical configuration loading from reference, host, and experiment 
 
 import os
 import platform
+import subprocess
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from pyhocon import ConfigFactory, ConfigTree
@@ -164,7 +165,7 @@ class ConfigurationLoader:
     
     def set_active_profile(self, profile_name: str) -> bool:
         """
-        Set the active configuration profile.
+        Set the active configuration profile and switch kubectl context if needed.
         
         Args:
             profile_name: Profile name (with or without .conf extension)
@@ -183,6 +184,26 @@ class ConfigurationLoader:
             return False
         
         try:
+            # Load the profile config to get kubernetes context
+            profile_config = ConfigFactory.parse_file(str(config_path))
+            k8s_context = profile_config.get("tribench.kubernetes.context", None)
+            
+            # If profile has a kubernetes context, switch kubectl context
+            if k8s_context:
+                try:
+                    result = subprocess.run(
+                        ["kubectl", "config", "use-context", k8s_context],
+                        capture_output=True,
+                        text=True,
+                        check=True
+                    )
+                    logger.info(f"✓ Switched kubectl context to: {k8s_context}")
+                except subprocess.CalledProcessError as e:
+                    logger.warning(f"Failed to switch kubectl context to {k8s_context}: {e.stderr.strip()}")
+                    logger.warning("Continuing with profile switch, but kubectl context may be incorrect")
+                except FileNotFoundError:
+                    logger.warning("kubectl not found - skipping context switch")
+            
             self.profile_file.write_text(profile_name)
             logger.info(f"✓ Active profile set to: {profile_name}")
             return True

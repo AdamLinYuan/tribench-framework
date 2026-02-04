@@ -1,0 +1,33 @@
+{
+  "experiment_name": "portability-kind",
+  "experiment_type": "trino_query",
+  "timestamp": "2026-01-20T17:45:55.948560",
+  "duration_seconds": 1.7683968544006348,
+  "status": "success",
+  "execution_time": 0.6470050811767578,
+  "cpu_time": null,
+  "memory_usage": null,
+  "data_scanned": 1871549,
+  "rows_returned": 4,
+  "system_metrics": {
+    "query_id": "20260120_174554_00198_a4pwe",
+    "state": "FINISHED",
+    "cpu_time_ms": 34,
+    "queued_time_ms": 0,
+    "elapsed_time_ms": 410,
+    "scheduled_time_ms": null,
+    "processed_rows": 60175,
+    "processed_bytes": 1871549,
+    "peak_memory_bytes": 8400,
+    "retry_attempts": 0
+  },
+  "validation_passed": true,
+  "validation_errors": [],
+  "metadata": {
+    "query_name": "q01",
+    "run_number": 7,
+    "query_source": "/Users/adamyuan/Documents/UofG/Yr 4/Dissertation/Code/tribench-framework/apps/tpch/queries/q01.sql"
+  },
+  "error_message": null,
+  "error_traceback": null
+}

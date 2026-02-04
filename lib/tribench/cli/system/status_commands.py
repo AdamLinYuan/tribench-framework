@@ -57,6 +57,12 @@ def status(ctx, system, kind, config, verbose):
                 click.secho(f"✗ Kubernetes Status Error: {status_info['error']}", fg='red')
             else:
                 click.secho("Kubernetes System Status:", fg='blue', bold=True)
+                
+                # Show context and namespace
+                context = cfg.get('tribench.kubernetes.context', 'default')
+                namespace = cfg.get('tribench.kubernetes.namespace', 'default')
+                click.echo(f"  Context: {context}")
+                click.echo(f"  Namespace: {namespace}")
                 click.echo(f"  Running: {status_info['running']}")
                 
                 click.echo("  Pods:")
@@ -135,20 +141,50 @@ def status(ctx, system, kind, config, verbose):
     # Implement system status check
     systems_to_check = ['trino', 'postgresql', 'minio', 'hive-metastore'] if system == 'all' else [system]
     
+    # Calculate running status first
+    any_running = False
+    status_results = {}
+    
+    # Pre-check all systems
     for sys_name in systems_to_check:
+        try:
+            if sys_name == 'trino':
+                trino = TrinoSystem()
+                status_results[sys_name] = trino.status()
+            elif sys_name == 'postgresql':
+                postgresql = PostgreSQLSystem()
+                status_results[sys_name] = postgresql.status()
+            elif sys_name == 'minio':
+                minio = MinIOSystem()
+                status_results[sys_name] = minio.status()
+            elif sys_name == 'hive-metastore':
+                hive_metastore = HiveMetastoreSystem()
+                status_results[sys_name] = hive_metastore.status()
+            
+            if status_results.get(sys_name, {}).get('running'):
+                any_running = True
+        except Exception:
+            status_results[sys_name] = {'running': False, 'error': True}
+    
+    # Docker status with consistent format
+    click.secho("Docker System Status:", fg='blue', bold=True)
+    click.echo(f"  Backend: docker-compose")
+    click.echo(f"  Running: {any_running}")
+    
+    for sys_name in systems_to_check:
+        status_info = status_results.get(sys_name, {})
+        
         if sys_name == 'trino':
             try:
-                trino = TrinoSystem()
-                status_info = trino.status()
-                
-                if status_info['running']:
-                    click.secho(f"✓ Trino: Running", fg='green')
+                if status_info.get('running'):
+                    click.secho(f"\n  Trino:", fg='green', bold=True)
+                    click.echo(f"    Status: Running")
                     if status_info.get('healthy'):
-                        click.echo(f"  Health: OK")
+                        click.echo(f"    Health: OK")
                     if status_info.get('http_port'):
-                        click.echo(f"  HTTP Port: {status_info['http_port']}")
+                        click.echo(f"    HTTP Port: {status_info['http_port']}")
                     if status_info.get('endpoint'):
-                        click.echo(f"  Endpoint: {status_info['endpoint']}")
+                        click.echo(f"    Endpoint: {status_info['endpoint']}")
                     
                     # Get worker statistics via API
                     try:
@@ -201,73 +237,75 @@ def status(ctx, system, kind, config, verbose):
                         
                     except Exception as e:
                         if ctx.obj.verbose:
-                            click.secho(f"  ⚠ Could not retrieve worker statistics: {e}", fg='yellow')
+                            click.secho(f"    ⚠ Could not retrieve worker statistics: {e}", fg='yellow')
                 else:
-                    click.secho(f"✗ Trino: Not running", fg='yellow')
+                    click.secho(f"\n  Trino:", fg='yellow', bold=True)
+                    click.echo(f"    Status: Not running")
             except Exception as e:
-                click.secho(f"✗ Failed to check Trino status: {e}", fg='red')
+                click.secho(f"\n  Trino:", fg='red', bold=True)
+                click.echo(f"    Status: Error - {e}")
                 if ctx.obj.verbose:
                     import traceback
                     traceback.print_exc()
         elif sys_name == 'postgresql':
             try:
-                postgresql = PostgreSQLSystem()
-                status_info = postgresql.status()
-                
-                if status_info['running']:
-                    click.secho(f"✓ PostgreSQL: Running", fg='green')
+                if status_info.get('running'):
+                    click.secho(f"\n  PostgreSQL:", fg='green', bold=True)
+                    click.echo(f"    Status: Running")
                     if status_info.get('healthy'):
-                        click.echo(f"  Health: OK")
+                        click.echo(f"    Health: OK")
                     if status_info.get('port'):
-                        click.echo(f"  Port: {status_info['port']}")
+                        click.echo(f"    Port: {status_info['port']}")
                     if status_info.get('databases'):
-                        click.echo(f"  Databases: {', '.join(status_info['databases'])}")
+                        click.echo(f"    Databases: {', '.join(status_info['databases'])}")
                 else:
-                    click.secho(f"✗ PostgreSQL: Not running", fg='yellow')
+                    click.secho(f"\n  PostgreSQL:", fg='yellow', bold=True)
+                    click.echo(f"    Status: Not running")
             except Exception as e:
-                click.secho(f"✗ Failed to check PostgreSQL status: {e}", fg='red')
+                click.secho(f"\n  PostgreSQL:", fg='red', bold=True)
+                click.echo(f"    Status: Error - {e}")
                 if ctx.obj.verbose:
                     import traceback
                     traceback.print_exc()
         elif sys_name == 'minio':
             try:
-                minio = MinIOSystem()
-                status_info = minio.status()
-                
-                if status_info['running']:
-                    click.secho(f"✓ MinIO: Running", fg='green')
+                if status_info.get('running'):
+                    click.secho(f"\n  MinIO:", fg='green', bold=True)
+                    click.echo(f"    Status: Running")
                     if status_info.get('healthy'):
-                        click.echo(f"  Health: OK")
+                        click.echo(f"    Health: OK")
                     if status_info.get('api_port'):
-                        click.echo(f"  API Port: {status_info['api_port']}")
+                        click.echo(f"    API Port: {status_info['api_port']}")
                     if status_info.get('console_port'):
-                        click.echo(f"  Console Port: {status_info['console_port']}")
+                        click.echo(f"    Console Port: {status_info['console_port']}")
                     if status_info.get('endpoint'):
-                        click.echo(f"  Endpoint: {status_info['endpoint']}")
+                        click.echo(f"    Endpoint: {status_info['endpoint']}")
                 else:
-                    click.secho(f"✗ MinIO: Not running", fg='yellow')
+                    click.secho(f"\n  MinIO:", fg='yellow', bold=True)
+                    click.echo(f"    Status: Not running")
             except Exception as e:
-                click.secho(f"✗ Failed to check MinIO status: {e}", fg='red')
+                click.secho(f"\n  MinIO:", fg='red', bold=True)
+                click.echo(f"    Status: Error - {e}")
                 if ctx.obj.verbose:
                     import traceback
                     traceback.print_exc()
         elif sys_name == 'hive-metastore':
             try:
-                hive_metastore = HiveMetastoreSystem()
-                status_info = hive_metastore.status()
-                
-                if status_info['running']:
-                    click.secho(f"✓ Hive Metastore: Running", fg='green')
+                if status_info.get('running'):
+                    click.secho(f"\n  Hive Metastore:", fg='green', bold=True)
+                    click.echo(f"    Status: Running")
                     if status_info.get('healthy'):
-                        click.echo(f"  Health: OK")
+                        click.echo(f"    Health: OK")
                     if status_info.get('port'):
-                        click.echo(f"  Thrift Port: {status_info['port']}")
+                        click.echo(f"    Thrift Port: {status_info['port']}")
                     if status_info.get('warehouse'):
-                        click.echo(f"  Warehouse: {status_info['warehouse']}")
+                        click.echo(f"    Warehouse: {status_info['warehouse']}")
                 else:
-                    click.secho(f"✗ Hive Metastore: Not running", fg='yellow')
+                    click.secho(f"\n  Hive Metastore:", fg='yellow', bold=True)
+                    click.echo(f"    Status: Not running")
             except Exception as e:
-                click.secho(f"✗ Failed to check Hive Metastore status: {e}", fg='red')
+                click.secho(f"\n  Hive Metastore:", fg='red', bold=True)
+                click.echo(f"    Status: Error - {e}")
                 if ctx.obj.verbose:
                     import traceback
                     traceback.print_exc()

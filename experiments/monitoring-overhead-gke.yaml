@@ -1,0 +1,56 @@
+# RQ1 Dimension 3: Framework Overhead Test - GKE (Monitoring Enabled)
+# Tests monitoring overhead on Google Kubernetes Engine
+
+name: "monitoring-overhead-gke-enabled"
+description: "Monitoring overhead test on GKE cluster with monitoring enabled"
+
+# System configuration
+system: "trino"
+
+# Connection parameters
+connection:
+  host: "localhost"
+  port: 8080
+  user: "tribench"
+  catalog: "iceberg"
+  schema: "tpch"
+
+# Execution parameters
+runs: 10  # Statistical consistency
+warmup_runs: 2  # Stabilize JIT
+timeout_seconds: 600  # Allow longer for complex queries
+max_retries: 1
+
+# Monitoring configuration - ENABLED
+monitoring:
+  enabled: true
+  interval_seconds: 1.0
+  
+  kubernetes:
+    enabled: true
+    context: "gke_tribench-project_us-central1_tribench-cluster"  # Update with actual GKE context
+    namespace: "tribench"
+    label_selector: "app=trino"
+    pod_name_pattern: "trino-.*"
+
+# Query selection: Representative queries to measure overhead (same as Kind)
+query_files:
+  - "apps/tpch/queries/q01.sql"  # Simple scan
+  - "apps/tpch/queries/q03.sql"  # Medium join
+  - "apps/tpch/queries/q09.sql"  # Complex join
+
+# Validation
+validation:
+  min_success_rate: 1.0
+
+# Metadata for analysis
+metadata:
+  benchmark: "tpch"
+  scale_factor: "sf1"
+  monitoring_enabled: true
+  infrastructure: "gke"
+  tags:
+    - "rq1"
+    - "overhead-test"
+    - "monitoring-enabled"
+    - "gke"

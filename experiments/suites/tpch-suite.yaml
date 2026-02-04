@@ -18,11 +18,10 @@ defaults:
     benchmark_version: "3.0"
 
 # Experiments in this suite
-experiments:  
+experiments:
   # Iceberg-based experiment
-  - path: ../tpch-iceberg-tiny.yaml
+  - path: ../tpch-gcp.yaml
     runs: 2
     description: "TPC-H queries on Iceberg format"
-
 
 

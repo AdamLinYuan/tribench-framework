@@ -192,43 +192,104 @@ def archive(ctx, days, output, delete_archived, dry_run, verbose):
 
 
 @click.command(name="monitoring")
-@click.argument("run_id", type=int)
+@click.argument("experiment_id", type=int)
+@click.option('--run', 'run_number', type=int, help='Specific run number to show metrics for. If not specified, shows aggregate across all runs.')
 @click.option('--metric-type', help='Filter by metric type (e.g., system_resource, trino_jmx).')
 @click.option('--metric-name', help='Filter by metric name (e.g., cpu_percent, memory_used).')
 @click.option('--summary', is_flag=True, help='Show summary statistics instead of raw data.')
 @click.option('--limit', type=int, default=100, help='Maximum number of metrics to show (default: 100).')
 @click.option('--export', type=click.Path(), help='Export metrics to CSV file.')
 @click.pass_context
-def show_monitoring(ctx, run_id: int, metric_type: Optional[str], metric_name: Optional[str], 
-                   summary: bool, limit: int, export: Optional[str]):
-    """Show monitoring metrics for a specific run.
+def show_monitoring(ctx, experiment_id: int, run_number: Optional[int], metric_type: Optional[str], 
+                   metric_name: Optional[str], summary: bool, limit: int, export: Optional[str]):
+    """Show monitoring metrics for an experiment.
     
-    Display resource monitoring data collected during an experiment run.
+    Display resource monitoring data collected during an experiment.
+    By default shows aggregated metrics across all runs. Use --run to specify a single run.
     Use --summary to see aggregated statistics, or view raw time-series data.
     
     Examples:
-        tribench res monitoring 22 --summary
-        tribench res monitoring 22 --metric-type system_resource
-        tribench res monitoring 22 --metric-name cpu_percent --limit 50
-        tribench res monitoring 22 --export metrics.csv
+        tribench res monitoring 13 --summary  (aggregate across all runs)
+        tribench res monitoring 13 --run 5 --summary  (specific run only)
+        tribench res monitoring 13 --metric-type system_resource
+        tribench res monitoring 13 --run 3 --metric-name cpu_percent --limit 50
+        tribench res monitoring 13 --export metrics.csv
     """
     storage = get_storage()
     if not storage:
         return
     
     try:
-        if summary:
-            # Show summary statistics
-            stats = storage.get_monitoring_metrics_summary(run_id, metric_name=metric_name)
-            
-            if not stats:
-                click.secho(f"✗ No monitoring metrics found for run {run_id}", fg='yellow')
+        # Get experiment information
+        experiment_info = storage.get_experiment_by_id(experiment_id)
+        if not experiment_info:
+            click.secho(f"✗ Experiment {experiment_id} not found", fg='red')
+            return
+        
+        # Get all runs for the experiment
+        exp_runs = storage.get_experiment_runs(experiment_id)
+        if not exp_runs:
+            click.secho(f"✗ No runs found for experiment {experiment_id}", fg='yellow')
+            return
+        
+        if run_number is not None:
+            # Show metrics for specific run
+            run_info = next((r for r in exp_runs if r['run_number'] == run_number), None)
+            if not run_info:
+                click.secho(f"✗ Run {run_number} not found for experiment {experiment_id}", fg='red')
                 return
+            run_ids = [run_info['id']]
+            display_run_info = f"Run: {run_info['run_number']} (Run ID: {run_info['id']})"
+        else:
+            # Aggregate metrics across all runs
+            run_ids = [r['id'] for r in exp_runs]
+            display_run_info = f"Aggregated across {len(run_ids)} runs"
+        
+        if summary:
+            # Collect and aggregate statistics from all specified runs
+            all_stats = {}
+            
+            for run_id in run_ids:
+                stats = storage.get_monitoring_metrics_summary(run_id, metric_name=metric_name)
+                if stats:
+                    for metric_name_key, metric_stats in stats.items():
+                        if metric_name_key not in all_stats:
+                            all_stats[metric_name_key] = {
+                                'counts': [],
+                                'mins': [],
+                                'maxs': [],
+                                'means': []
+                            }
+                        all_stats[metric_name_key]['counts'].append(metric_stats['count'])
+                        all_stats[metric_name_key]['mins'].append(metric_stats['min'])
+                        all_stats[metric_name_key]['maxs'].append(metric_stats['max'])
+                        all_stats[metric_name_key]['means'].append(metric_stats['mean'])
+            
+            if not all_stats:
+                click.secho(f"✗ No monitoring metrics found", fg='yellow')
+                return
+            
+            # Calculate aggregated statistics
+            aggregated_stats = {}
+            for metric_name_key, values in all_stats.items():
+                aggregated_stats[metric_name_key] = {
+                    'count': sum(values['counts']),
+                    'min': min(values['mins']) if values['mins'] else None,
+                    'max': max(values['maxs']) if values['maxs'] else None,
+                    'mean': sum(values['means']) / len(values['means']) if values['means'] else None
+                }
+            
+            # Display experiment and run information
+            click.echo("\n" + "=" * 86)
+            click.echo(f"Experiment ID: {experiment_id}")
+            click.echo(f"Experiment Name: {experiment_info.get('name', 'N/A')}")
+            click.echo(f"{display_run_info}")
+            click.echo("=" * 86)
             
             click.echo(f"\n{'Metric Name':<40} {'Count':<10} {'Min':<12} {'Max':<12} {'Mean':<12}")
             click.echo("=" * 86)
             
-            for name, summary_stats in sorted(stats.items()):
+            for name, summary_stats in sorted(aggregated_stats.items()):
                 min_val = f"{summary_stats['min']:.2f}" if summary_stats['min'] is not None else "N/A"
                 max_val = f"{summary_stats['max']:.2f}" if summary_stats['max'] is not None else "N/A"
                 mean_val = f"{summary_stats['mean']:.2f}" if summary_stats['mean'] is not None else "N/A"
@@ -236,9 +297,15 @@ def show_monitoring(ctx, run_id: int, metric_type: Optional[str], metric_name: O
                 click.echo(f"{name:<40} {summary_stats['count']:<10} {min_val:<12} {max_val:<12} {mean_val:<12}")
             
             click.echo()
-            click.secho(f"✓ Showing summary for {len(stats)} metrics", fg='green')
+            click.secho(f"✓ Showing summary for {len(aggregated_stats)} metrics", fg='green')
         
         else:
+            # Show raw metrics - need to handle multiple runs
+            if len(run_ids) > 1:
+                click.secho("⚠ Raw metrics view requires a specific run. Use --run <number> or add --summary for aggregated view.", fg='yellow')
+                return
+            
+            run_id = run_ids[0]
             # Show raw metrics
             metrics = storage.get_monitoring_metrics(
                 run_id=run_id,

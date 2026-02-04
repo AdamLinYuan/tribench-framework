@@ -63,14 +63,6 @@ validation:
   min_success_rate: 0.95
   max_execution_time_variance: 0.3
 
-# Metrics to collect
-metrics:
-  - execution_time
-  - rows_returned
-  - cpu_time
-  - memory_usage
-  - data_scanned
-
 # Metadata
 metadata:
   benchmark: "TPC-H"

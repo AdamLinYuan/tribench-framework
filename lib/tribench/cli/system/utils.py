@@ -21,15 +21,9 @@ def get_k8s_system(config_tree=None):
     config = {}
     if config_tree:
         # Extract kubernetes config if present (supports both ConfigTree and dict)
-        # Try systems.kubernetes.context (HOCON structure)
-        k8s_context = config_tree.get("systems.kubernetes.context", None)
-        k8s_namespace = config_tree.get("systems.kubernetes.namespace", None)
-        
-        # Fallback to tribench.systems.kubernetes.context (full HOCON structure)
-        if k8s_context is None:
-            k8s_context = config_tree.get("tribench.systems.kubernetes.context", None)
-        if k8s_namespace is None:
-            k8s_namespace = config_tree.get("tribench.systems.kubernetes.namespace", None)
+        # Use canonical path from reference.conf: tribench.kubernetes.context
+        k8s_context = config_tree.get("tribench.kubernetes.context", None)
+        k8s_namespace = config_tree.get("tribench.kubernetes.namespace", None)
         
         if k8s_context or k8s_namespace:
             config["systems"] = {

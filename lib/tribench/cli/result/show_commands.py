@@ -298,7 +298,7 @@ def show(ctx, experiment_id, format, metrics, runs, queries, verbose):
                 exp_runs = storage.get_experiment_runs(experiment['id'])
                 click.echo(f"\nTotal Runs: {len(exp_runs)}")
                 click.echo("\n" + "-" * 100)
-                click.echo(f"{'Run':<6} {'Status':<12} {'Duration(s)':<15} {'Queries':<10} {'Success':<10} {'Failed':<10} {'Monitoring':<12}")
+                click.echo(f"{'Run ID':<8} {'Run':<6} {'Status':<12} {'Duration(s)':<15} {'Queries':<10} {'Success':<10} {'Failed':<10} {'Monitoring':<12}")
                 click.echo("-" * 100)
                 
                 for r in exp_runs:
@@ -319,7 +319,7 @@ def show(ctx, experiment_id, format, metrics, runs, queries, verbose):
                         monitoring_info = "N/A"
                     
                     click.echo(
-                        f"{r['run_number']:<6} {r['status']:<12} {duration:<15} "
+                        f"{r['id']:<8} {r['run_number']:<6} {r['status']:<12} {duration:<15} "
                         f"{r.get('queries_total') or 0:<10} {r.get('queries_succeeded') or 0:<10} "
                         f"{r.get('queries_failed') or 0:<10} {monitoring_info:<12}"
                     )

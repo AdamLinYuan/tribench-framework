@@ -1,0 +1,136 @@
+{
+  "baseline": {
+    "experiment_id": 9,
+    "name": "monitoring-overhead-gke-disabled",
+    "type": "trino_query"
+  },
+  "current": {
+    "experiment_id": 8,
+    "name": "monitoring-overhead-gke-enabled",
+    "type": "trino_query"
+  },
+  "comparisons": {
+    "q01": {
+      "query_name": "q01",
+      "baseline": {
+        "mean": 1.7026710987091065,
+        "median": 1.6831694841384888,
+        "stdev": 0.04423592212801539,
+        "min": 1.6638541221618652,
+        "max": 1.788142204284668,
+        "count": 10
+      },
+      "current": {
+        "mean": 1.7023035764694214,
+        "median": 1.6929106712341309,
+        "stdev": 0.030656099103450667,
+        "min": 1.670971155166626,
+        "max": 1.759856939315796,
+        "count": 10
+      },
+      "difference": {
+        "mean_diff_seconds": -0.0003675222396850586,
+        "percent_change": -0.021585040115128427,
+        "median_diff_seconds": 0.00974118709564209
+      },
+      "statistical_test": {
+        "t_statistic": 0.0215942622001392,
+        "p_value": 0.9830091921316819,
+        "is_significant": false,
+        "significance_level": 0.05
+      },
+      "verdict": {
+        "is_faster": true,
+        "is_improvement": false,
+        "is_regression": false,
+        "status": "no_change"
+      }
+    },
+    "q03": {
+      "query_name": "q03",
+      "baseline": {
+        "mean": 1.8075618267059326,
+        "median": 1.8151276111602783,
+        "stdev": 0.041542893367323114,
+        "min": 1.7430939674377441,
+        "max": 1.8624200820922852,
+        "count": 10
+      },
+      "current": {
+        "mean": 1.8962876081466675,
+        "median": 1.784968614578247,
+        "stdev": 0.23937219200042856,
+        "min": 1.727828025817871,
+        "max": 2.41534686088562,
+        "count": 10
+      },
+      "difference": {
+        "mean_diff_seconds": 0.08872578144073495,
+        "percent_change": 4.908589024721062,
+        "median_diff_seconds": -0.03015899658203125
+      },
+      "statistical_test": {
+        "t_statistic": -1.1548680232556683,
+        "p_value": 0.2632463124921621,
+        "is_significant": false,
+        "significance_level": 0.05
+      },
+      "verdict": {
+        "is_faster": false,
+        "is_improvement": false,
+        "is_regression": false,
+        "status": "no_change"
+      }
+    },
+    "q09": {
+      "query_name": "q09",
+      "baseline": {
+        "mean": 2.010132908821106,
+        "median": 2.0201070308685303,
+        "stdev": 0.07400216322105375,
+        "min": 1.9198918342590332,
+        "max": 2.1358630657196045,
+        "count": 10
+      },
+      "current": {
+        "mean": 2.12504460811615,
+        "median": 2.084136486053467,
+        "stdev": 0.16029093389404517,
+        "min": 1.9534051418304443,
+        "max": 2.424031972885132,
+        "count": 10
+      },
+      "difference": {
+        "mean_diff_seconds": 0.11491169929504386,
+        "percent_change": 5.716621960208431,
+        "median_diff_seconds": 0.06402945518493652
+      },
+      "statistical_test": {
+        "t_statistic": -2.058255590580491,
+        "p_value": 0.054342211875852156,
+        "is_significant": false,
+        "significance_level": 0.05
+      },
+      "verdict": {
+        "is_faster": false,
+        "is_improvement": false,
+        "is_regression": false,
+        "status": "no_change"
+      }
+    }
+  },
+  "summary": {
+    "total_queries_compared": 3,
+    "improvements": 0,
+    "regressions": 0,
+    "no_significant_change": 3,
+    "improved_queries": [],
+    "regressed_queries": [],
+    "overall_performance_change": {
+      "baseline_mean_time": 1.8401219447453816,
+      "current_mean_time": 1.9078785975774128,
+      "percent_change": 3.6821827501984803,
+      "is_faster": false
+    }
+  }
+}

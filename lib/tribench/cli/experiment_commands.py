@@ -22,6 +22,7 @@ def experiment_group():
 
 @experiment_group.command(name="run")
 @click.argument("experiment", type=click.Path(exists=True))
+@click.option('--name', help='Override experiment name/ID for this run.')
 @click.option('--runs', type=int, help='Override number of runs to execute.')
 @click.option('--warmup', type=int, help='Override number of warmup runs.')
 @click.option('--timeout', type=int, help='Override timeout in seconds.')
@@ -40,7 +41,7 @@ def experiment_group():
 @dry_run_option
 @verbose_option
 @click.pass_context
-def run(ctx, experiment, runs, warmup, timeout, host, port, parallel, no_monitoring, save_json, no_storage, kind, config, dry_run, verbose):
+def run(ctx, experiment, name, runs, warmup, timeout, host, port, parallel, no_monitoring, save_json, no_storage, kind, config, dry_run, verbose):
     """Execute an experiment.
     
     For Kubernetes deployments, use --kind to ensure port forwarding is active.
@@ -48,6 +49,7 @@ def run(ctx, experiment, runs, warmup, timeout, host, port, parallel, no_monitor
     \b
     Examples:
         tribench exp run experiments/tpch-sf1.yaml
+        tribench exp run experiments/tpch-sf1.yaml --name trial_1
         tribench exp run experiments/tpch-sf1.yaml --runs 3 --warmup 1
         tribench exp run experiments/test-simple.yaml --timeout 60 --dry-run
         tribench exp run experiments/tpch-sf1.yaml --no-monitoring
@@ -59,6 +61,11 @@ def run(ctx, experiment, runs, warmup, timeout, host, port, parallel, no_monitor
     """
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
+    
+    # Validate custom name if provided
+    if name and not name.strip():
+        click.secho(f"✗ Error: Experiment name cannot be empty", fg='red')
+        sys.exit(1)
     
     # Load configuration to determine backend
     from tribench.utils.config import ConfigurationLoader
@@ -87,6 +94,8 @@ def run(ctx, experiment, runs, warmup, timeout, host, port, parallel, no_monitor
     try:
         # Build CLI overrides dictionary
         cli_overrides = {}
+        if name:
+            cli_overrides['name'] = name
         if runs is not None:
             cli_overrides['runs'] = runs
         if warmup is not None:

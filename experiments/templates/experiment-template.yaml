@@ -1,0 +1,149 @@
+# TriBench Experiment Configuration Template
+# This file shows all available configuration options for experiments
+
+# ==============================================================================
+# REQUIRED FIELDS
+# ==============================================================================
+
+# Unique name for this experiment
+name: "experiment-name"
+
+# Human-readable description
+description: "Description of what this experiment does"
+
+# System to benchmark (currently only "trino" is supported)
+system: "trino"
+
+
+# ==============================================================================
+# QUERY DEFINITION (at least one method required)
+# ==============================================================================
+
+# Method 1: Inline SQL queries
+queries:
+  - "SELECT COUNT(*) FROM table1"
+  - "SELECT * FROM table2 LIMIT 10"
+
+# Method 2: Query files (paths relative to project root)
+query_files:
+  - "apps/tpch/queries/q01.sql"
+  - "apps/tpch/queries/q02.sql"
+
+# Optional: Dataset name (for reference/metadata only)
+dataset: "tpch-sf1"
+
+
+# ==============================================================================
+# EXECUTION PARAMETERS
+# ==============================================================================
+
+# Number of times to execute all queries
+runs: 3
+
+# Number of warmup runs (executed but not measured)
+warmup_runs: 1
+
+# Query timeout in seconds
+timeout_seconds: 300
+
+# Maximum retry attempts for failed queries
+max_retries: 2
+
+# Number of concurrent queries (1 = sequential, >1 = parallel execution)
+parallel_queries: 1
+
+
+# ==============================================================================
+# CONNECTION PARAMETERS
+# ==============================================================================
+
+connection:
+  # Trino coordinator host (default: localhost)
+  host: "localhost"
+  
+  # Trino coordinator port (default: 8080)
+  port: 8080
+  
+  # Trino user for authentication
+  user: "admin"
+  
+  # Optional: Password for authentication
+  # password: "secret"
+  
+  # Catalog to use for queries
+  catalog: "iceberg"
+  
+  # Schema/database to use for queries
+  schema: "tpch"
+  
+  # Optional: Additional connection parameters
+  # http_scheme: "https"
+  # verify: false
+
+
+# ==============================================================================
+# MONITORING CONFIGURATION (optional)
+# ==============================================================================
+
+monitoring:
+  # Enable monitoring (requires monitoring module)
+  enabled: true
+  
+  # Metrics collection interval in seconds
+  interval_seconds: 5.0
+  
+  # Kubernetes pod monitoring (optional)
+  kubernetes:
+    # Enable Kubernetes monitoring
+    enabled: true
+    
+    # Kubernetes context name (from kubectl config)
+    context: "kind-tribench"
+    
+    # Namespace where pods are running
+    namespace: "tribench"
+    
+    # Optional: Filter pods by label (e.g., "app=trino")
+    label_selector: "app=trino"
+    
+    # Optional: Filter pods by name pattern (regex)
+    pod_name_pattern: "trino-.*"
+
+
+# ==============================================================================
+# VALIDATION RULES (optional)
+# ==============================================================================
+
+validation:
+  # Minimum success rate (0.0 - 1.0)
+  min_success_rate: 0.95
+  
+  # Maximum variance in execution time across runs (0.0 - 1.0)
+  max_execution_time_variance: 0.3
+
+
+# ==============================================================================
+# METADATA (optional - for organizing and filtering experiments)
+# ==============================================================================
+
+metadata:
+  # Benchmark suite name
+  benchmark: "TPC-H"
+  
+  # Dataset scale factor
+  scale_factor: 1
+  
+  # Dataset identifier
+  dataset: "tpch-sf1-iceberg"
+  
+  # Dataset location (catalog.schema)
+  dataset_location: "iceberg.tpch_sf1"
+  
+  # Data format
+  format: "iceberg"
+  
+  # Tags for filtering and organization
+  tags: ["tpch", "iceberg", "benchmark"]
+  
+  # Any additional custom metadata
+  custom_field: "custom_value"

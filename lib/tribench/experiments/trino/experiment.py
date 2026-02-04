@@ -294,6 +294,10 @@ class TrinoExperiment(
             # Complete run record
             if self.current_run_id:
                 self._complete_run_record(self.current_run_id)
+                
+                # Save monitoring metrics for this run
+                if self.enable_monitoring:
+                    self._save_run_monitoring_metrics(self.current_run_id)
     
     def _execute_single_query(self, query: Dict[str, Any], run_num: int) -> Dict[str, Any]:
         """

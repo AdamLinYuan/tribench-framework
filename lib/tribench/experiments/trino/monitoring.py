@@ -125,12 +125,61 @@ class ExperimentMonitoringMixin:
                 logger.error(f"Failed to start monitoring: {e}")
                 self.enable_monitoring = False
     
-    def _stop_monitoring_and_collect(self, current_run_id: Optional[int] = None) -> Optional[str]:
+    def _save_run_monitoring_metrics(self, run_id: int) -> int:
         """
-        Stop monitoring and collect/save metrics.
+        Save monitoring metrics collected so far for a specific run.
         
         Args:
-            current_run_id: Current run ID for database storage
+            run_id: The run ID to save metrics for
+            
+        Returns:
+            Number of metrics saved
+        """
+        if not self.enable_monitoring or not self.monitoring_session:
+            return 0
+        
+        if not self.enable_database or not self.result_storage:
+            return 0
+        
+        try:
+            # Get all collected metrics from the monitoring session
+            with self.monitoring_session._metrics_lock:
+                all_metrics = self.monitoring_session._collected_metrics.copy()
+                # Clear the collected metrics to avoid duplicates in next run
+                self.monitoring_session._collected_metrics.clear()
+            
+            # Also collect any remaining metrics from collector buffers
+            for collector in self.monitoring_session.collectors:
+                if hasattr(collector, '_metrics_buffer') and collector._metrics_buffer:
+                    all_metrics.extend(collector._metrics_buffer)
+                    collector._metrics_buffer.clear()
+            
+            if all_metrics:
+                saved_count = self.result_storage.save_monitoring_metrics(
+                    run_id=run_id,
+                    metrics=all_metrics
+                )
+                logger.info(f"Saved {saved_count} monitoring metrics for run {run_id}")
+                return saved_count
+            else:
+                logger.debug(f"No monitoring metrics to save for run {run_id}")
+                return 0
+                
+        except Exception as e:
+            logger.error(f"Failed to save monitoring metrics for run {run_id}: {e}")
+            return 0
+    
+    def _stop_monitoring_and_collect(self, current_run_id: Optional[int] = None) -> Optional[str]:
+        """
+        Stop monitoring and collect/save any remaining metrics.
+        
+        Note: This is called at the end of the experiment. Individual run metrics
+        should already be saved via _save_run_monitoring_metrics() after each run.
+        This method only saves any remaining metrics that weren't captured per-run
+        (e.g., from warmup runs or final cleanup).
+        
+        Args:
+            current_run_id: Current run ID for database storage (last run)
             
         Returns:
             Path to monitoring file if JSON export enabled, None otherwise
@@ -143,7 +192,8 @@ class ExperimentMonitoringMixin:
         try:
             self.monitoring_session.stop()
             
-            # Get all collected metrics from the monitoring session
+            # Get any remaining collected metrics from the monitoring session
+            # (These would be from warmup runs or final cleanup period)
             with self.monitoring_session._metrics_lock:
                 all_metrics = self.monitoring_session._collected_metrics.copy()
             
@@ -152,19 +202,17 @@ class ExperimentMonitoringMixin:
                 if hasattr(collector, '_metrics_buffer') and collector._metrics_buffer:
                     all_metrics.extend(collector._metrics_buffer)
             
-            # Save to database if enabled (primary storage)
-            if self.enable_database and self.result_storage and current_run_id:
+            # Save remaining metrics to last run if any exist
+            # Most metrics should already be saved per-run at this point
+            if self.enable_database and self.result_storage and current_run_id and all_metrics:
                 try:
-                    if all_metrics:
-                        saved_count = self.result_storage.save_monitoring_metrics(
-                            run_id=current_run_id,
-                            metrics=all_metrics
-                        )
-                        logger.info(f"Database: Saved {saved_count} monitoring metrics to run {current_run_id}")
-                    else:
-                        logger.warning("No monitoring metrics collected to save to database")
+                    saved_count = self.result_storage.save_monitoring_metrics(
+                        run_id=current_run_id,
+                        metrics=all_metrics
+                    )
+                    logger.info(f"Saved {saved_count} remaining monitoring metrics to run {current_run_id}")
                 except Exception as e:
-                    logger.error(f"Failed to save monitoring metrics to database: {e}")
+                    logger.error(f"Failed to save remaining monitoring metrics to database: {e}")
             
             # Save to JSON file only if enabled
             if getattr(self, 'enable_json', False):

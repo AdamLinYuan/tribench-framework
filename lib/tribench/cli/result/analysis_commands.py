@@ -62,7 +62,7 @@ def analyze_statistics(ctx, experiment_id, query, output_format, output, verbose
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
     if not STORAGE_AVAILABLE or not ANALYSIS_AVAILABLE:
-        click.secho("✗ Analysis requires storage and analysis modules", fg='red')
+        click.secho("Error: Analysis requires storage and analysis modules", fg='red')
         return
     
     storage = get_storage()
@@ -73,13 +73,13 @@ def analyze_statistics(ctx, experiment_id, query, output_format, output, verbose
         # Get experiment
         experiment = storage.get_experiment_by_id(experiment_id)
         if not experiment:
-            click.secho(f"✗ Experiment {experiment_id} not found", fg='red')
+            click.secho(f"Error: Experiment {experiment_id} not found", fg='red')
             return
         
         # Get runs
         runs = storage.get_experiment_runs(experiment_id)
         if not runs:
-            click.secho(f"✗ No runs found for experiment {experiment_id}", fg='red')
+            click.secho(f"Error: No runs found for experiment {experiment_id}", fg='red')
             return
         
         # Collect query executions
@@ -95,14 +95,14 @@ def analyze_statistics(ctx, experiment_id, query, output_format, output, verbose
             } for e in executions])
         
         if not all_executions:
-            click.secho(f"✗ No query executions found", fg='red')
+            click.secho(f"Error: No query executions found", fg='red')
             return
         
         # Filter by query if specified
         if query:
             all_executions = [e for e in all_executions if e['query_name'] == query]
             if not all_executions:
-                click.secho(f"✗ No executions found for query {query}", fg='red')
+                click.secho(f"Error: No executions found for query {query}", fg='red')
                 return
         
         # Analyze statistics
@@ -143,7 +143,7 @@ def analyze_statistics(ctx, experiment_id, query, output_format, output, verbose
             
             if output:
                 Path(output).write_text(json_str)
-                click.secho(f"✓ Statistics saved to {output}", fg='green')
+                click.secho(f"Statistics saved to {output}", fg='green')
             else:
                 click.echo(json_str)
         
@@ -164,13 +164,13 @@ def analyze_statistics(ctx, experiment_id, query, output_format, output, verbose
             
             if output:
                 Path(output).write_text(csv_str)
-                click.secho(f"✓ Statistics saved to {output}", fg='green')
+                click.secho(f"Statistics saved to {output}", fg='green')
             else:
                 click.echo(csv_str)
         
         else:  # text format
             lines = []
-            lines.append(f"\n📊 Statistical Analysis for Experiment {experiment_id}: {experiment['name']}")
+            lines.append(f"\nStatistical Analysis for Experiment {experiment_id}: {experiment['name']}")
             lines.append(f"Total Runs: {len(runs)}")
             if query:
                 lines.append(f"Query Filter: {query}")
@@ -202,12 +202,12 @@ def analyze_statistics(ctx, experiment_id, query, output_format, output, verbose
             
             if output:
                 Path(output).write_text(text_output)
-                click.secho(f"✓ Statistics saved to {output}", fg='green')
+                click.secho(f"Statistics saved to {output}", fg='green')
             else:
                 click.echo(text_output)
     
     except Exception as e:
-        click.secho(f"✗ Analysis failed: {e}", fg='red')
+        click.secho(f"Error: Analysis failed: {e}", fg='red')
         if ctx.obj.verbose:
             import traceback
             click.echo(traceback.format_exc())
@@ -239,7 +239,7 @@ def analyze_performance(ctx, experiment_id, query, breakdown, output_format, out
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
     if not STORAGE_AVAILABLE or not ANALYSIS_AVAILABLE:
-        click.secho("✗ Analysis requires storage and analysis modules", fg='red')
+        click.secho("Error: Analysis requires storage and analysis modules", fg='red')
         return
     
     storage = get_storage()
@@ -257,12 +257,12 @@ def analyze_performance(ctx, experiment_id, query, breakdown, output_format, out
                 json_str = json.dumps(result, indent=2)
                 if output:
                     Path(output).write_text(json_str)
-                    click.secho(f"✓ Performance analysis saved to {output}", fg='green')
+                    click.secho(f"Performance analysis saved to {output}", fg='green')
                 else:
                     click.echo(json_str)
             else:
                 lines = []
-                lines.append(f"\n🚀 Performance Analysis for Query: {query}")
+                lines.append(f"\nPerformance Analysis for Query: {query}")
                 lines.append(f"Experiment ID: {experiment_id}")
                 lines.append(f"Runs Analyzed: {result['runs']}")
                 lines.append("")
@@ -283,7 +283,7 @@ def analyze_performance(ctx, experiment_id, query, breakdown, output_format, out
                 
                 if output:
                     Path(output).write_text(text_output)
-                    click.secho(f"✓ Performance analysis saved to {output}", fg='green')
+                    click.secho(f"Performance analysis saved to {output}", fg='green')
                 else:
                     click.echo(text_output)
         
@@ -298,12 +298,12 @@ def analyze_performance(ctx, experiment_id, query, breakdown, output_format, out
                 json_str = json.dumps(result, indent=2)
                 if output:
                     Path(output).write_text(json_str)
-                    click.secho(f"✓ Performance analysis saved to {output}", fg='green')
+                    click.secho(f"Performance analysis saved to {output}", fg='green')
                 else:
                     click.echo(json_str)
             else:
                 lines = []
-                lines.append(f"\n🚀 Performance Analysis for Experiment {experiment_id}")
+                lines.append(f"\nPerformance Analysis for Experiment {experiment_id}")
                 lines.append(f"Total Runs: {result['total_runs']}")
                 if 'total_queries_executed' in result:
                     lines.append(f"Total Queries Executed: {result['total_queries_executed']}")
@@ -335,12 +335,12 @@ def analyze_performance(ctx, experiment_id, query, breakdown, output_format, out
                 
                 if output:
                     Path(output).write_text(text_output)
-                    click.secho(f"✓ Performance analysis saved to {output}", fg='green')
+                    click.secho(f"Performance analysis saved to {output}", fg='green')
                 else:
                     click.echo(text_output)
     
     except Exception as e:
-        click.secho(f"✗ Performance analysis failed: {e}", fg='red')
+        click.secho(f"Error: Performance analysis failed: {e}", fg='red')
         if ctx.obj.verbose:
             import traceback
             click.echo(traceback.format_exc())
@@ -363,7 +363,8 @@ def analyze_compare(ctx, baseline_id, current_id, query, significance, output_fo
     """Compare two experiments (baseline vs current).
     
     Performs statistical comparison using t-tests to determine if
-    performance differences are statistically significant.
+    performance differences are statistically significant. Shows comprehensive
+    performance statistics, per-query breakdowns, and monitoring metrics.
     
     \b
     Examples:
@@ -374,7 +375,7 @@ def analyze_compare(ctx, baseline_id, current_id, query, significance, output_fo
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
     if not STORAGE_AVAILABLE or not ANALYSIS_AVAILABLE:
-        click.secho("✗ Analysis requires storage and analysis modules", fg='red')
+        click.secho("Error: Analysis requires storage and analysis modules", fg='red')
         return
     
     storage = get_storage()
@@ -382,71 +383,105 @@ def analyze_compare(ctx, baseline_id, current_id, query, significance, output_fo
         return
     
     try:
-        analyzer = ComparisonAnalyzer(result_storage=storage)
+        # Get performance analysis for both experiments
+        perf_analyzer = PerformanceAnalyzer(storage=storage)
+        baseline_perf = perf_analyzer.analyze_experiment_performance(baseline_id, group_by_query=True)
+        current_perf = perf_analyzer.analyze_experiment_performance(current_id, group_by_query=True)
         
-        result = analyzer.compare_experiments(
+        # Get comparison analysis
+        comp_analyzer = ComparisonAnalyzer(result_storage=storage)
+        result = comp_analyzer.compare_experiments(
             baseline_id,
             current_id,
             significance_level=significance
         )
         
+        # Get monitoring metrics for both experiments
+        baseline_runs = storage.get_experiment_runs(baseline_id)
+        current_runs = storage.get_experiment_runs(current_id)
+        baseline_monitoring = _aggregate_experiment_monitoring(storage, baseline_runs)
+        current_monitoring = _aggregate_experiment_monitoring(storage, current_runs)
+        
         if output_format == 'json':
+            # Include all data in JSON output
+            result['baseline_performance'] = baseline_perf
+            result['current_performance'] = current_perf
+            result['baseline_monitoring'] = baseline_monitoring
+            result['current_monitoring'] = current_monitoring
+            
             json_str = json.dumps(result, indent=2)
             if output:
                 Path(output).write_text(json_str)
-                click.secho(f"✓ Comparison saved to {output}", fg='green')
+                click.secho(f"Comparison saved to {output}", fg='green')
             else:
                 click.echo(json_str)
         else:
             lines = []
-            lines.append(f"\n📊 Experiment Comparison")
+            lines.append(f"\n{'='*90}")
+            lines.append(f"COMPREHENSIVE EXPERIMENT COMPARISON")
+            lines.append(f"{'='*90}")
             lines.append(f"Baseline: {result['baseline']['name']} (ID: {baseline_id})")
             lines.append(f"Current:  {result['current']['name']} (ID: {current_id})")
             lines.append(f"Significance Level: {significance}")
             lines.append("")
-            lines.append("Summary:")
-            lines.append(f"  Improvements:  {result['summary']['improvements']}")
-            lines.append(f"  Regressions:   {result['summary']['regressions']}")
-            lines.append(f"  No Change:     {result['summary']['no_significant_change']}")
+            
+            # Overall Performance Statistics Table
+            lines.append("OVERALL PERFORMANCE STATISTICS")
+            lines.append("="*90)
+            lines.extend(_format_performance_comparison_table(baseline_perf, current_perf, baseline_runs, current_runs))
+            lines.append("")
+            
+            # Per-Query Comparison Table
+            if not query and 'per_query_statistics' in baseline_perf and 'per_query_statistics' in current_perf:
+                lines.append("PER-QUERY PERFORMANCE COMPARISON")
+                lines.append("="*90)
+                lines.extend(_format_query_comparison_table(
+                    baseline_perf['per_query_statistics'],
+                    current_perf['per_query_statistics'],
+                    result['comparisons']
+                ))
+                lines.append("")
+            elif query and query in result.get('comparisons', {}):
+                comp = result['comparisons'][query]
+                lines.append(f"QUERY PERFORMANCE: {query}")
+                lines.append("="*90)
+                lines.extend(_format_single_query_comparison(comp))
+                lines.append("")
+            
+            # Monitoring Metrics Comparison
+            if baseline_monitoring and current_monitoring:
+                lines.append("MONITORING METRICS COMPARISON")
+                lines.append("="*90)
+                lines.extend(_format_monitoring_comparison_table(baseline_monitoring, current_monitoring))
+                lines.append("")
+            
+            # Summary
+            lines.append("SUMMARY")
+            lines.append("="*90)
+            lines.append(f"Queries Compared:      {result['summary']['total_queries_compared']}")
+            lines.append(f"Improvements:          {result['summary']['improvements']} queries")
+            lines.append(f"Regressions:           {result['summary']['regressions']} queries")
+            lines.append(f"No Significant Change: {result['summary']['no_significant_change']} queries")
+            
             overall_change = result['summary'].get('overall_performance_change', {})
             if 'percent_change' in overall_change:
-                lines.append(f"  Overall:       {overall_change['percent_change']:.2f}% change")
-            
-            if query:
-                # Show details for specific query
-                if query in result['comparisons']:
-                    comp = result['comparisons'][query]
-                    lines.append(f"\nQuery: {query}")
-                    lines.append(f"  Baseline Mean:  {comp['baseline']['mean']:.3f}s")
-                    lines.append(f"  Current Mean:   {comp['current']['mean']:.3f}s")
-                    lines.append(f"  Change:         {comp['difference']['percent_change']:.2f}%")
-                    lines.append(f"  Verdict:        {comp['verdict']['status'].upper()}")
-                    lines.append(f"  Significant:    {'Yes' if comp['statistical_test']['is_significant'] else 'No'}")
-                    if comp['statistical_test']['is_significant']:
-                        lines.append(f"  p-value:        {comp['statistical_test']['p_value']:.4f}")
-            else:
-                # Show all query comparisons
-                lines.append("\nQuery-Level Results:")
-                for qname, comp in sorted(result['comparisons'].items()):
-                    status = comp['verdict']['status']
-                    verdict_icon = "🟢" if status == 'improvement' else "🔴" if status == 'regression' else "⚪"
-                    sig_mark = "*" if comp['statistical_test']['is_significant'] else ""
-                    lines.append(f"  {verdict_icon} {qname}: {comp['difference']['percent_change']:+.2f}% {status}{sig_mark}")
+                direction = "(faster)" if overall_change['is_faster'] else "(slower)"
+                lines.append(f"Overall Change:        {overall_change['percent_change']:+.2f}% {direction}")
             
             lines.append("")
-            lines.append("Legend: * = statistically significant")
+            lines.append("="*90)
             lines.append("")
             
             text_output = '\n'.join(lines)
             
             if output:
                 Path(output).write_text(text_output)
-                click.secho(f"✓ Comparison saved to {output}", fg='green')
+                click.secho(f"Comparison saved to {output}", fg='green')
             else:
                 click.echo(text_output)
     
     except Exception as e:
-        click.secho(f"✗ Comparison failed: {e}", fg='red')
+        click.secho(f"Error: Comparison failed: {e}", fg='red')
         if ctx.obj.verbose:
             import traceback
             click.echo(traceback.format_exc())
@@ -482,7 +517,7 @@ def analyze_scalability(ctx, baseline_id, scaled_id, baseline_workers, scaled_wo
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
     if not STORAGE_AVAILABLE or not ANALYSIS_AVAILABLE:
-        click.secho("✗ Analysis requires storage and analysis modules", fg='red')
+        click.secho("Error: Analysis requires storage and analysis modules", fg='red')
         return
     
     storage = get_storage()
@@ -503,12 +538,12 @@ def analyze_scalability(ctx, baseline_id, scaled_id, baseline_workers, scaled_wo
             json_str = json.dumps(result, indent=2)
             if output:
                 Path(output).write_text(json_str)
-                click.secho(f"✓ Scalability analysis saved to {output}", fg='green')
+                click.secho(f"Scalability analysis saved to {output}", fg='green')
             else:
                 click.echo(json_str)
         else:
             lines = []
-            lines.append(f"\n📈 Scalability Analysis")
+            lines.append(f"\nScalability Analysis")
             lines.append(f"Baseline: Experiment {baseline_id} - {baseline_workers} worker(s)")
             lines.append(f"Scaled:   Experiment {scaled_id} - {scaled_workers} worker(s)")
             lines.append("")
@@ -542,8 +577,8 @@ def analyze_scalability(ctx, baseline_id, scaled_id, baseline_workers, scaled_wo
                 lines.append("Per-Query Speed-up:")
                 for qname in sorted(result['query_speedups'].keys()):
                     qdata = result['query_speedups'][qname]
-                    speedup_icon = "🚀" if qdata['speedup'] > 1.0 else "🐌"
-                    lines.append(f"  {speedup_icon} {qname}:")
+                    speedup_text = "speedup" if qdata['speedup'] > 1.0 else "slowdown"
+                    lines.append(f"  [{speedup_text}] {qname}:")
                     lines.append(f"      Baseline: {qdata['baseline_mean_time']:.3f}s")
                     lines.append(f"      Scaled:   {qdata['scaled_mean_time']:.3f}s")
                     lines.append(f"      Speed-up: {qdata['speedup']:.2f}x")
@@ -556,12 +591,12 @@ def analyze_scalability(ctx, baseline_id, scaled_id, baseline_workers, scaled_wo
             
             if output:
                 Path(output).write_text(text_output)
-                click.secho(f"✓ Scalability analysis saved to {output}", fg='green')
+                click.secho(f"Scalability analysis saved to {output}", fg='green')
             else:
                 click.echo(text_output)
     
     except Exception as e:
-        click.secho(f"✗ Scalability analysis failed: {e}", fg='red')
+        click.secho(f"Error: Scalability analysis failed: {e}", fg='red')
         if ctx.obj.verbose:
             import traceback
             click.echo(traceback.format_exc())
@@ -597,7 +632,7 @@ def analyze_regression(ctx, baseline_id, current_id, threshold, significance,
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
     if not STORAGE_AVAILABLE or not ANALYSIS_AVAILABLE:
-        click.secho("✗ Analysis requires storage and analysis modules", fg='red')
+        click.secho("Error: Analysis requires storage and analysis modules", fg='red')
         return
     
     storage = get_storage()
@@ -618,12 +653,12 @@ def analyze_regression(ctx, baseline_id, current_id, threshold, significance,
             json_str = json.dumps(result, indent=2)
             if output:
                 Path(output).write_text(json_str)
-                click.secho(f"✓ Regression report saved to {output}", fg='green')
+                click.secho(f"Regression report saved to {output}", fg='green')
             else:
                 click.echo(json_str)
         else:
             lines = []
-            lines.append(f"\n🔍 Performance Regression Detection")
+            lines.append(f"\nPerformance Regression Detection")
             lines.append(f"Baseline: Experiment {baseline_id}")
             lines.append(f"Current:  Experiment {current_id}")
             lines.append(f"Threshold: ≥{threshold}% slowdown")
@@ -635,22 +670,14 @@ def analyze_regression(ctx, baseline_id, current_id, threshold, significance,
             regressions_count = summary.get('regressions_count', 0)
             
             if regressions_detected:
-                lines.append(f"⚠️  {regressions_count} Regression(s) Detected:")
+                lines.append(f"WARNING: {regressions_count} Regression(s) Detected:")
                 lines.append("")
                 
                 for reg in result.get('regressions', []):
                     # Severity indicators
                     severity = reg.get('severity', 'minor')
-                    if severity == 'critical':
-                        severity_icon = "🔴"
-                    elif severity == 'major':
-                        severity_icon = "🟠"
-                    elif severity == 'moderate':
-                        severity_icon = "🟡"
-                    else:
-                        severity_icon = "🟢"
                     
-                    lines.append(f"{severity_icon} {reg['query_name']} [{severity.upper()}]")
+                    lines.append(f"[{severity.upper()}] {reg['query_name']}")
                     lines.append(f"    Baseline:  {reg['baseline_mean']:.3f}s")
                     lines.append(f"    Current:   {reg['current_mean']:.3f}s")
                     lines.append(f"    Slowdown:  {reg['percent_change']:.2f}%")
@@ -658,15 +685,15 @@ def analyze_regression(ctx, baseline_id, current_id, threshold, significance,
                         lines.append(f"    Significant: Yes")
                     lines.append("")
             else:
-                lines.append(f"✓ No regressions detected (threshold: {threshold}%)")
+                lines.append(f"No regressions detected (threshold: {threshold}%)")
             
             # Show improvements if any
             improvements = result.get('improvements', [])
             if improvements:
-                lines.append(f"\n✨ {len(improvements)} Performance Improvement(s):")
+                lines.append(f"\n{len(improvements)} Performance Improvement(s):")
                 lines.append("")
                 for imp in improvements[:5]:  # Show top 5
-                    lines.append(f"  ✓ {imp['query_name']}")
+                    lines.append(f"  + {imp['query_name']}")
                     lines.append(f"      Faster by: {abs(imp['percent_change']):.2f}%")
                 if len(improvements) > 5:
                     lines.append(f"  ... and {len(improvements) - 5} more")
@@ -685,7 +712,7 @@ def analyze_regression(ctx, baseline_id, current_id, threshold, significance,
             
             if output:
                 Path(output).write_text(text_output)
-                click.secho(f"✓ Regression report saved to {output}", fg='green')
+                click.secho(f"Regression report saved to {output}", fg='green')
             else:
                 click.echo(text_output)
                 
@@ -695,7 +722,293 @@ def analyze_regression(ctx, baseline_id, current_id, threshold, significance,
                     ctx.exit(1)
     
     except Exception as e:
-        click.secho(f"✗ Regression detection failed: {e}", fg='red')
+        click.secho(f"Error: Regression detection failed: {e}", fg='red')
         if ctx.obj.verbose:
             import traceback
             click.echo(traceback.format_exc())
+
+
+# Helper functions for comprehensive comparison formatting
+
+def _aggregate_experiment_monitoring(storage, runs):
+    """Aggregate monitoring metrics across all runs in an experiment."""
+    if not runs:
+        return {}
+    
+    all_metrics = {}
+    for run in runs:
+        if run['status'] != 'completed':
+            continue
+        
+        run_metrics = storage.get_monitoring_metrics_summary(run['id'])
+        
+        for metric_name, stats in run_metrics.items():
+            if metric_name not in all_metrics:
+                all_metrics[metric_name] = {
+                    'counts': [],
+                    'mins': [],
+                    'maxs': [],
+                    'means': []
+                }
+            
+            all_metrics[metric_name]['counts'].append(stats['count'])
+            if stats['min'] is not None:
+                all_metrics[metric_name]['mins'].append(stats['min'])
+            if stats['max'] is not None:
+                all_metrics[metric_name]['maxs'].append(stats['max'])
+            if stats['mean'] is not None:
+                all_metrics[metric_name]['means'].append(stats['mean'])
+    
+    # Calculate aggregated statistics
+    aggregated = {}
+    for metric_name, data in all_metrics.items():
+        aggregated[metric_name] = {
+            'count': sum(data['counts']),
+            'min': min(data['mins']) if data['mins'] else None,
+            'max': max(data['maxs']) if data['maxs'] else None,
+            'mean': sum(data['means']) / len(data['means']) if data['means'] else None,
+        }
+    
+    return aggregated
+
+
+def _format_performance_comparison_table(baseline_perf, current_perf, baseline_runs=None, current_runs=None):
+    """Format overall performance statistics as a comparison table."""
+    lines = []
+    
+    # Extract statistics
+    baseline_stats = baseline_perf.get('overall_execution_time', {})
+    current_stats = current_perf.get('overall_execution_time', {})
+    
+    # Calculate total runtime and query stats from runs if provided
+    total_metrics = {}
+    if baseline_runs and current_runs:
+        baseline_duration = sum(r.get('duration_seconds', 0) for r in baseline_runs)
+        current_duration = sum(r.get('duration_seconds', 0) for r in current_runs)
+        baseline_queries = sum(r.get('queries_total', 0) for r in baseline_runs)
+        current_queries = sum(r.get('queries_total', 0) for r in current_runs)
+        baseline_success = sum(r.get('queries_succeeded', 0) for r in baseline_runs)
+        current_success = sum(r.get('queries_succeeded', 0) for r in current_runs)
+        
+        total_metrics = {
+            'total_runtime': (baseline_duration, current_duration),
+            'total_queries': (baseline_queries, current_queries),
+            'success_rate': (baseline_success / baseline_queries * 100 if baseline_queries > 0 else 0,
+                           current_success / current_queries * 100 if current_queries > 0 else 0)
+        }
+    
+    # Define metrics to compare
+    metrics = ['count', 'mean', 'median', 'stdev', 'min', 'max', 'p50', 'p90', 'p95', 'p99']
+    
+    # Table header
+    lines.append(f"{'Metric':<16} {'Baseline':<16} {'Current':<16} {'Difference':<16} {'% Change':<12}")
+    lines.append("-" * 80)
+    
+    # Add total metrics first if available
+    if total_metrics:
+        # Total runtime
+        if 'total_runtime' in total_metrics:
+            baseline_val, current_val = total_metrics['total_runtime']
+            diff = current_val - baseline_val
+            pct_change = (diff / baseline_val * 100) if baseline_val != 0 else 0
+            baseline_str = f"{baseline_val:.2f}s"
+            current_str = f"{current_val:.2f}s"
+            diff_str = f"{diff:+.2f}s"
+            pct_str = f"{pct_change:+.2f}%"
+            if pct_change < -5:
+                pct_str = f"{pct_str} (better)"
+            elif pct_change > 5:
+                pct_str = f"{pct_str} (worse)"
+            lines.append(f"{'total_runtime':<16} {baseline_str:<16} {current_str:<16} {diff_str:<16} {pct_str:<12}")
+        
+        # Total queries
+        if 'total_queries' in total_metrics:
+            baseline_val, current_val = total_metrics['total_queries']
+            diff = current_val - baseline_val
+            lines.append(f"{'total_queries':<16} {int(baseline_val):<16} {int(current_val):<16} {int(diff):+d}{'':<12} {'':12}")
+        
+        # Success rate
+        if 'success_rate' in total_metrics:
+            baseline_val, current_val = total_metrics['success_rate']
+            diff = current_val - baseline_val
+            baseline_str = f"{baseline_val:.1f}%"
+            current_str = f"{current_val:.1f}%"
+            diff_str = f"{diff:+.1f}pp"
+            lines.append(f"{'success_rate':<16} {baseline_str:<16} {current_str:<16} {diff_str:<16} {'':12}")
+        
+        lines.append("-" * 80)
+    
+    for metric in metrics:
+        baseline_val = baseline_stats.get(metric)
+        current_val = current_stats.get(metric)
+        
+        if baseline_val is not None and current_val is not None:
+            diff = current_val - baseline_val
+            pct_change = (diff / baseline_val * 100) if baseline_val != 0 else 0
+            
+            # Format values
+            if metric == 'count':
+                baseline_str = f"{baseline_val}"
+                current_str = f"{current_val}"
+                diff_str = f"{diff:+.0f}"
+            else:
+                baseline_str = f"{baseline_val:.3f}s"
+                current_str = f"{current_val:.3f}s"
+                diff_str = f"{diff:+.3f}s"
+            
+            pct_str = f"{pct_change:+.2f}%"
+            
+            # Add text indicator for significant changes
+            if metric != 'count' and pct_change < -5:  # Improvement (faster)
+                pct_str = f"{pct_str} (better)"
+            elif metric != 'count' and pct_change > 5:  # Regression (slower)
+                pct_str = f"{pct_str} (worse)"
+            
+            lines.append(f"{metric:<16} {baseline_str:<16} {current_str:<16} {diff_str:<16} {pct_str:<12}")
+    
+    return lines
+
+
+def _format_query_comparison_table(baseline_queries, current_queries, comparisons):
+    """Format per-query performance comparison as a table."""
+    lines = []
+    
+    # Get common queries
+    common_queries = set(baseline_queries.keys()) & set(current_queries.keys())
+    
+    if not common_queries:
+        return ["No common queries found"]
+    
+    # Table header
+    lines.append(f"{'Query':<15} {'Baseline':<12} {'Current':<12} {'Diff':<12} {'% Change':<12} {'Verdict':<15}")
+    lines.append("-" * 80)
+    
+    # Sort queries by name
+    for query_name in sorted(common_queries):
+        baseline_stats = baseline_queries[query_name]
+        current_stats = current_queries[query_name]
+        
+        baseline_mean = baseline_stats['mean']
+        current_mean = current_stats['mean']
+        
+        diff = current_mean - baseline_mean
+        pct_change = (diff / baseline_mean * 100) if baseline_mean != 0 else 0
+        
+        # Get verdict from comparison
+        comp = comparisons.get(query_name, {})
+        verdict = comp.get('verdict', {})
+        status = verdict.get('status', 'no_change')
+        is_sig = comp.get('statistical_test', {}).get('is_significant', False)
+        
+        # Format verdict
+        if status == 'improvement':
+            verdict_text = "Faster"
+        elif status == 'regression':
+            verdict_text = "Slower"
+        else:
+            verdict_text = "No Change"
+        
+        sig_mark = "*" if is_sig else ""
+        verdict_str = f"{verdict_text}{sig_mark}"
+        
+        lines.append(
+            f"{query_name:<15} "
+            f"{baseline_mean:>10.3f}s "
+            f"{current_mean:>10.3f}s "
+            f"{diff:>+10.3f}s "
+            f"{pct_change:>+10.2f}% "
+            f"{verdict_str:<15}"
+        )
+    
+    return lines
+
+
+def _format_single_query_comparison(comp):
+    """Format detailed comparison for a single query."""
+    lines = []
+    
+    baseline = comp['baseline']
+    current = comp['current']
+    diff = comp['difference']
+    test = comp['statistical_test']
+    verdict = comp['verdict']
+    
+    lines.append(f"{'Metric':<20} {'Baseline':<15} {'Current':<15} {'Difference':<15}")
+    lines.append("-" * 65)
+    lines.append(f"{'Mean':<20} {baseline['mean']:<14.3f}s {current['mean']:<14.3f}s {diff['mean_diff_seconds']:>+14.3f}s")
+    lines.append(f"{'Median':<20} {baseline['median']:<14.3f}s {current['median']:<14.3f}s {diff['median_diff_seconds']:>+14.3f}s")
+    lines.append(f"{'Std Dev':<20} {baseline['stdev']:<14.3f}s {current['stdev']:<14.3f}s {'':>15}")
+    lines.append(f"{'Min':<20} {baseline['min']:<14.3f}s {current['min']:<14.3f}s {'':>15}")
+    lines.append(f"{'Max':<20} {baseline['max']:<14.3f}s {current['max']:<14.3f}s {'':>15}")
+    lines.append(f"{'Count':<20} {baseline['count']:<15} {current['count']:<15} {'':>15}")
+    lines.append("")
+    lines.append(f"Percent Change: {diff['percent_change']:+.2f}%")
+    lines.append(f"Statistical Significance: {'Yes' if test['is_significant'] else 'No'} (p={test['p_value']:.4f})")
+    lines.append(f"Verdict: {verdict['status'].upper()}")
+    
+    return lines
+
+
+def _format_monitoring_comparison_table(baseline_monitoring, current_monitoring):
+    """Format monitoring metrics comparison as a table."""
+    lines = []
+    
+    # Get common metrics
+    common_metrics = set(baseline_monitoring.keys()) & set(current_monitoring.keys())
+    
+    if not common_metrics:
+        return ["No common monitoring metrics found"]
+    
+    # Filter to most important metrics
+    priority_metrics = [
+        'cpu_percent', 'cpu_percent_total', 'memory_percent', 'memory_used',
+        'network_recv', 'network_sent', 'pod_cpu_cores', 'pod_memory_gb',
+        'trino.query.data.input.rows', 'trino.query.data.output.rows'
+    ]
+    
+    # Show priority metrics first, then others
+    display_metrics = [m for m in priority_metrics if m in common_metrics]
+    other_metrics = sorted([m for m in common_metrics if m not in priority_metrics])
+    display_metrics.extend(other_metrics[:10])  # Limit total metrics
+    
+    # Table header
+    lines.append(f"{'Metric':<35} {'Baseline':<15} {'Current':<15} {'% Change':<12}")
+    lines.append("-" * 80)
+    
+    for metric_name in display_metrics:
+        baseline_stats = baseline_monitoring[metric_name]
+        current_stats = current_monitoring[metric_name]
+        
+        baseline_mean = baseline_stats.get('mean')
+        current_mean = current_stats.get('mean')
+        
+        if baseline_mean is not None and current_mean is not None and baseline_mean != 0:
+            pct_change = ((current_mean - baseline_mean) / baseline_mean * 100)
+            
+            # Format based on metric type
+            if 'bytes' in metric_name.lower():
+                baseline_str = f"{baseline_mean/1e9:.2f} GB"
+                current_str = f"{current_mean/1e9:.2f} GB"
+            elif 'gb' in metric_name.lower():
+                baseline_str = f"{baseline_mean:.2f} GB"
+                current_str = f"{current_mean:.2f} GB"
+            elif 'mb' in metric_name.lower():
+                baseline_str = f"{baseline_mean:.2f} MB"
+                current_str = f"{current_mean:.2f} MB"
+            elif 'percent' in metric_name.lower():
+                baseline_str = f"{baseline_mean:.2f}%"
+                current_str = f"{current_mean:.2f}%"
+            else:
+                baseline_str = f"{baseline_mean:.2f}"
+                current_str = f"{current_mean:.2f}"
+            
+            pct_str = f"{pct_change:+.2f}%"
+            
+            # Truncate metric name if too long
+            display_name = metric_name[:33] + '..' if len(metric_name) > 35 else metric_name
+            lines.append(f"{display_name:<35} {baseline_str:<15} {current_str:<15} {pct_str:<12}")
+    
+    if len(common_metrics) > len(display_metrics):
+        lines.append(f"... and {len(common_metrics) - len(display_metrics)} more metrics")
+    
+    return lines

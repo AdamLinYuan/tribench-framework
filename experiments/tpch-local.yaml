@@ -28,7 +28,7 @@ monitoring:
   # Kubernetes pod monitoring
   kubernetes:
     enabled: true                  # Enable K8s monitoring
-    context: kind-tribench"  # GKE context
+    context: "kind-tribench"  # Kind context
     namespace: "tribench"           # Namespace where Trino pods run
     label_selector: "app=trino"     # Filter pods by label (optional)
     pod_name_pattern: "trino-.*"    # Filter pods by regex (optional)
@@ -62,14 +62,6 @@ query_files:
 validation:
   min_success_rate: 0.95
   max_execution_time_variance: 0.3
-
-# Metrics to collect
-metrics:
-  - execution_time
-  - rows_returned
-  - cpu_time
-  - memory_usage
-  - data_scanned
 
 # Metadata
 metadata:
