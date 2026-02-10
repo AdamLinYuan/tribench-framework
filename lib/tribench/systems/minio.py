@@ -328,6 +328,31 @@ class MinIOSystem(System):
         """Create configured buckets in MinIO."""
         logger.info(f"Creating buckets: {self.buckets}")
         
+        # First, configure the mc alias (required after fresh container start)
+        try:
+            alias_result = subprocess.run(
+                [
+                    "docker", "exec", Defaults.ServiceNames.MINIO,
+                    "mc", "alias", "set", "local",
+                    f"http://localhost:{self.port}",
+                    self.access_key,
+                    self.secret_key
+                ],
+                capture_output=True,
+                text=True
+            )
+            
+            if alias_result.returncode != 0:
+                logger.warning(f"Failed to configure mc alias: {alias_result.stderr}")
+                return
+            else:
+                logger.debug("MinIO client alias 'local' configured successfully")
+                
+        except Exception as e:
+            logger.warning(f"Error configuring mc alias: {e}")
+            return
+        
+        # Now create buckets
         for bucket in self.buckets:
             try:
                 # Use mc (MinIO Client) via docker exec
@@ -356,6 +381,20 @@ class MinIOSystem(System):
             List of bucket names
         """
         try:
+            # Ensure alias is configured
+            subprocess.run(
+                [
+                    "docker", "exec", Defaults.ServiceNames.MINIO,
+                    "mc", "alias", "set", "local",
+                    f"http://localhost:{self.port}",
+                    self.access_key,
+                    self.secret_key
+                ],
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            
             result = subprocess.run(
                 [
                     "docker", "exec", Defaults.ServiceNames.MINIO,

@@ -4,6 +4,7 @@ services:
   trino:
     image: trinodb/trino:{{ config.tribench.systems.trino.version }}
     container_name: tribench-trino-{{ config.tribench.systems.trino.version }}
+    user: "0:0"
     ports:
       - "{{ config.tribench.systems.trino.coordinator.port }}:{{ config.tribench.systems.trino.coordinator.port }}"
     volumes:

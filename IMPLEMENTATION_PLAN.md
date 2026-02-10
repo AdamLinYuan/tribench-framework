@@ -345,19 +345,19 @@ This document outlines the development plan for restructuring your Trino benchma
   - [x] Verify query completion and result retrieval
 
 ### 4.4 Basic Monitoring & Validation (Week 31)
-- [ ] **MVP Monitoring**:
-  - [ ] Capture basic pod resource usage (CPU/Memory) via `kubectl top`
-  - [ ] Integrate into `ResourceMonitor` (simple extension)
-- [ ] **Validation**:
-  - [ ] Compare execution of TPC-H SF1 on Docker Compose vs Kind
-  - [ ] Ensure results are identical (correctness check)
+- [x] **MVP Monitoring**:
+  - [x] Capture basic pod resource usage (CPU/Memory) via `kubectl top`
+  - [x] Integrate into `ResourceMonitor` (simple extension)
+- [x] **Validation**:
+  - [x] Compare execution of TPC-H SF1 on Docker Compose vs Kind
+  - [x] Ensure results are identical (correctness check)
 
 ### 4.5 Documentation (Week 32)
-- [ ] **User Guide**:
-  - [ ] "Running on Kubernetes" guide
-  - [ ] Prerequisites (Docker, Kind, Kubectl)
-- [ ] **Developer Guide**:
-  - [ ] How to debug K8s deployments
+- [x] **User Guide**:
+  - [x] "Running on Kubernetes" guide
+  - [x] Prerequisites (Docker, Kind, Kubectl)
+- [x] **Developer Guide**:
+  - [x] How to debug K8s deployments
 
 **Time Estimate**: 5 weeks (Reduced from 10-11 weeks)
 
