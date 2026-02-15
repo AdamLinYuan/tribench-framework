@@ -88,36 +88,78 @@ def load(ctx, dataset, system, catalog, schema, storage, partition, validate, co
         return
     
     try:
-        # Get dataset metadata
+        # Check if dataset exists as directory (custom dataset) or in registry
+        dataset_path = datasets_root / dataset
+        is_custom_dataset = dataset_path.exists() and dataset_path.is_dir()
+        
+        # Try to get metadata from registry
         registry_path = datasets_root / "registry.yaml"
-        if not registry_path.exists():
-            click.secho(f"✗ Dataset registry not found", fg='red')
+        metadata = None
+        if registry_path.exists():
+            registry = DatasetRegistry(registry_path)
+            metadata = registry.get(dataset)
+        
+        # Handle case where dataset is not found
+        if not metadata and not is_custom_dataset:
+            click.secho(f"✗ Dataset '{dataset}' not found", fg='red')
+            click.echo(f"\nSearched:")
+            if registry_path.exists():
+                click.echo(f"  - Registry: {registry_path}")
+            click.echo(f"  - Directory: {dataset_path}")
+            click.echo(f"\nTo add a custom dataset:")
+            click.echo(f"  1. Create directory: {dataset_path}/")
+            click.echo(f"  2. Add Parquet files: {dataset_path}/*.parquet")
+            click.echo(f"  3. Run: tribench data load {dataset}")
             return
         
-        registry = DatasetRegistry(registry_path)
-        metadata = registry.get(dataset)
+        # Handle custom dataset (auto-discovery)
+        if is_custom_dataset and not metadata:
+            click.echo(f"Auto-discovering custom dataset: {dataset}")
+            click.echo(f"Location: {dataset_path}")
+            
+            # Import CustomDatasetSchema
+            from tribench.data.dataset import CustomDatasetSchema
+            
+            # Auto-discover tables and schemas from Parquet files
+            try:
+                dataset_schema = CustomDatasetSchema(dataset_path)
+                
+                # Show discovered tables
+                info = dataset_schema.get_dataset_info()
+                click.echo(f"\nDiscovered {info['num_tables']} tables:")
+                for table_name, table_info in info['tables'].items():
+                    click.echo(f"  • {table_name:<20} {table_info['rows']:>10,} rows, "
+                             f"{table_info['columns']:>2} columns, "
+                             f"{table_info['file_size_mb']:>6.2f} MB")
+                
+                click.echo(f"\nLoading into {catalog}.{schema}...")
+                
+            except Exception as e:
+                click.secho(f"✗ Failed to auto-discover dataset: {e}", fg='red')
+                if ctx.obj.verbose:
+                    import traceback
+                    traceback.print_exc()
+                return
         
-        if not metadata:
-            click.secho(f"✗ Dataset '{dataset}' not found in registry", fg='red')
-            return
-        
-        dataset_path = Path(metadata.location)
-        if not dataset_path.exists():
-            click.secho(f"✗ Dataset location not found: {dataset_path}", fg='red')
-            return
-        
-        if metadata.format != 'parquet':
-            click.secho(f"✗ Only Parquet format is currently supported for loading", fg='red')
-            return
-        
-        click.echo(f"Loading {dataset} into {catalog}.{schema}...")
+        # Handle registered dataset
+        else:
+            dataset_path = Path(metadata.location)
+            if not dataset_path.exists():
+                click.secho(f"✗ Dataset location not found: {dataset_path}", fg='red')
+                return
+            
+            if metadata.format != 'parquet':
+                click.secho(f"✗ Only Parquet format is currently supported for loading", fg='red')
+                return
+            
+            click.echo(f"Loading {dataset} into {catalog}.{schema}...")
+            
+            # Get dataset schema
+            benchmark_type = BenchmarkType(metadata.benchmark_type)
+            dataset_schema = SchemaFactory.create(benchmark_type)
         
         # Get Trino connection parameters
         connection_params = get_trino_connection_params(config)
-        
-        # Get dataset schema
-        benchmark_type = BenchmarkType(metadata.benchmark_type)
-        dataset_schema = SchemaFactory.create(benchmark_type)
         
         # Route to appropriate loader based on catalog
         if catalog == 'iceberg':
@@ -126,7 +168,8 @@ def load(ctx, dataset, system, catalog, schema, storage, partition, validate, co
             
             # Determine partitioning strategy
             partition_specs = {}
-            if partition:
+            if partition and metadata:  # Only apply pre-defined partitions for registered datasets
+                benchmark_type = BenchmarkType(metadata.benchmark_type)
                 if benchmark_type == BenchmarkType.TPCH:
                     partition_specs = {
                         'lineitem': ['l_shipdate'],
@@ -161,38 +204,44 @@ def load(ctx, dataset, system, catalog, schema, storage, partition, validate, co
                 tables=list(row_counts.keys())
             )
             
-            # Register Iceberg dataset
-            iceberg_dataset_name = f"{dataset}-iceberg"
-            
-            iceberg_dataset_metadata = DatasetMetadata(
-                name=iceberg_dataset_name,
-                benchmark_type=metadata.benchmark_type,
-                type='static',
-                format='iceberg',
-                scale_factor=metadata.scale_factor,
-                size_bytes=None,
-                location=f"{catalog}.{schema}",
-                tables=list(row_counts.keys()),
-                row_counts=row_counts,
-                checksums={},
-                properties={
-                    'source_dataset': dataset,
-                    'partitioned': partition,
-                    'storage_location': storage if storage else 'default'
-                },
-                created_at=datetime.now().isoformat(),
-                generator='iceberg_loader',
-                iceberg_catalog=catalog,
-                iceberg_schema=schema,
-                snapshot_ids=iceberg_metadata.get('snapshot_ids'),
-                snapshot_timestamps=iceberg_metadata.get('snapshot_timestamps'),
-                manifest_counts=iceberg_metadata.get('manifest_counts'),
-                format_version=iceberg_metadata.get('format_version'),
-                storage_location=iceberg_metadata.get('storage_location')
-            )
-            
-            registry.register(iceberg_dataset_metadata)
-            click.secho(f"✓ Registered Iceberg dataset: {iceberg_dataset_name}", fg='green')
+            # Register Iceberg dataset (only for registered datasets, not custom)
+            if metadata:
+                iceberg_dataset_name = f"{dataset}-iceberg"
+                
+                iceberg_dataset_metadata = DatasetMetadata(
+                    name=iceberg_dataset_name,
+                    benchmark_type=metadata.benchmark_type,
+                    type='static',
+                    format='iceberg',
+                    scale_factor=metadata.scale_factor,
+                    size_bytes=None,
+                    location=f"{catalog}.{schema}",
+                    tables=list(row_counts.keys()),
+                    row_counts=row_counts,
+                    checksums={},
+                    properties={
+                        'source_dataset': dataset,
+                        'partitioned': partition,
+                        'storage_location': storage if storage else 'default'
+                    },
+                    created_at=datetime.now().isoformat(),
+                    generator='iceberg_loader',
+                    iceberg_catalog=catalog,
+                    iceberg_schema=schema,
+                    snapshot_ids=iceberg_metadata.get('snapshot_ids'),
+                    snapshot_timestamps=iceberg_metadata.get('snapshot_timestamps'),
+                    manifest_counts=iceberg_metadata.get('manifest_counts'),
+                    format_version=iceberg_metadata.get('format_version'),
+                    storage_location=iceberg_metadata.get('storage_location')
+                )
+                
+                registry = DatasetRegistry(registry_path)
+                registry.register(iceberg_dataset_metadata)
+                click.secho(f"✓ Registered Iceberg dataset: {iceberg_dataset_name}", fg='green')
+            else:
+                # Custom dataset - show success message
+                click.secho(f"\n✓ Custom dataset loaded successfully!", fg='green')
+                click.echo(f"   Access via: {catalog}.{schema}.<table_name>")
             
         else:
             # Use standard Trino loader for other catalogs (memory, hive, etc.)
