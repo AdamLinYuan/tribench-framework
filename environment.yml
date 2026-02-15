@@ -12,6 +12,7 @@ dependencies:
   - jinja2=3.1.2
   - pyyaml=6.0.1
   - requests=2.31.0
+  - python-dotenv=1.0.0
 
   # Data processing and analysis
   - pandas=2.1.0
@@ -53,9 +54,44 @@ dependencies:
     - prometheus-client==0.17.1
     - kubernetes==27.2.0
 
-# Development setup instructions:
+# =============================================================================
+# SYSTEM PREREQUISITES (install before creating conda environment)
+# =============================================================================
+# 
+# Required (All platforms):
+#   - Homebrew package manager: https://brew.sh
+#   - Xcode Command Line Tools: xcode-select --install
+#   - Git: brew install git
+# 
+# Required (Docker backend):
+#   brew install --cask docker          # Docker Desktop (includes Docker Compose)
+# 
+# Required (Kubernetes backend):
+#   brew install kubectl                # Kubernetes CLI
+#   brew install helm                   # Helm package manager
+# 
+# Optional (Local Kubernetes):
+#   brew install kind                   # Kind (Kubernetes in Docker)
+# 
+# Optional (GCP/GKE deployments):
+#   brew install --cask google-cloud-sdk  # gcloud CLI
+# 
+# Optional (MinIO operations):
+#   brew install minio/stable/mc        # MinIO Client
+# 
+# System Libraries (handled by conda, but listed for reference):
+#   - PostgreSQL client libraries (libpq) - included via psycopg2 conda package
+#   - OpenSSL - included via conda
+#   - Python development headers - included via conda python package
+# 
+# =============================================================================
+# CONDA ENVIRONMENT SETUP
+# =============================================================================
+# 
 # 1. Create environment: conda env create -f environment.yml
 # 2. Activate environment: conda activate tribench
-# 3. Verify installation: python -c "import trino; print('Success!')"
-# 4. Update environment: conda env update -f environment.yml --prune
-# 5. Remove environment: conda env remove -n tribench
+# 3. Install tribench: pip install -e .
+# 4. Verify installation: tribench --version
+# 
+# Update environment: conda env update -f environment.yml --prune
+# Remove environment: conda env remove -n tribench

@@ -18,18 +18,19 @@ from .utils import get_k8s_system
 @click.argument("system", 
                 type=click.Choice(['trino', 'postgresql', 'minio', 'hive-metastore', 'all']),
                 required=False)
-@click.option('--kind', is_flag=True, help='Use Kubernetes backend (Kind/Helm).')
 @config_option
 @verbose_option
 @click.pass_context
-def status(ctx, system, kind, config, verbose):
+def status(ctx, system, config, verbose):
     """Check system status.
+    
+    Backend selection is configured in host config files.
+    Use 'tribench config profile <name>' to set your preferred backend.
     
     \b
     Examples:
         tribench sys status
         tribench sys status trino
-        tribench sys status --kind
     """
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
@@ -38,7 +39,7 @@ def status(ctx, system, kind, config, verbose):
     cfg = loader.load(experiment_config=config) if config else loader.load()
     
     # Determine backend
-    use_k8s = should_use_kubernetes(kind, cfg)
+    use_k8s = should_use_kubernetes(cfg)
     
     if system:
         if ctx.obj.verbose:

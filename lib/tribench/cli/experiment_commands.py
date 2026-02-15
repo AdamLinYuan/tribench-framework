@@ -4,7 +4,7 @@ import click
 import sys
 import logging
 from pathlib import Path
-from tribench.cli.base import cli, dry_run_option, verbose_option, config_option, kind_option, should_use_kubernetes, ensure_k8s_port_forwarding, auto_ensure_trino_connection
+from tribench.cli.base import cli, dry_run_option, verbose_option, config_option, should_use_kubernetes, ensure_k8s_port_forwarding, auto_ensure_trino_connection
 from tribench.core.experiment import ExperimentConfig
 from tribench.experiments import TrinoExperiment
 
@@ -36,19 +36,19 @@ def experiment_group():
               help='Also save results as JSON files (in addition to database).')
 @click.option('--no-storage', is_flag=True, default=False,
               help='Disable all result storage (database and JSON). Useful for testing.')
-@kind_option
 @config_option
 @dry_run_option
 @verbose_option
 @click.pass_context
-def run(ctx, experiment, name, runs, warmup, timeout, host, port, parallel, no_monitoring, save_json, no_storage, kind, config, dry_run, verbose):
+def run(ctx, experiment, name, runs, warmup, timeout, host, port, parallel, no_monitoring, save_json, no_storage, config, dry_run, verbose):
     """Execute an experiment.
     
-    For Kubernetes deployments, use --kind to ensure port forwarding is active.
+    Backend selection (Docker/Kubernetes) is configured in host config files.
+    Use 'tribench config profile <name>' to set your preferred backend.
     
     \b
     Examples:
-        tribench exp run experiments/tpch-sf1.yaml
+        tribench exp run experiments/tpch-sf1.yaml       # Uses backend from active profile
         tribench exp run experiments/tpch-sf1.yaml --name trial_1
         tribench exp run experiments/tpch-sf1.yaml --runs 3 --warmup 1
         tribench exp run experiments/test-simple.yaml --timeout 60 --dry-run
@@ -56,8 +56,7 @@ def run(ctx, experiment, name, runs, warmup, timeout, host, port, parallel, no_m
         tribench exp run experiments/tpch-iceberg-tiny.yaml --save-json
         tribench exp run experiments/tpch-sf1.yaml --no-storage
         tribench exp run experiments/tpch-sf1.yaml --host localhost --port 8080
-        tribench exp run experiments/tpch-sf1.yaml --kind  # For Kubernetes deployments
-        tribench exp run experiments/tpch-sf1.yaml --parallel 4  # Run 4 queries concurrently
+        tribench exp run experiments/tpch-sf1.yaml --parallel 4
     """
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
@@ -73,7 +72,7 @@ def run(ctx, experiment, name, runs, warmup, timeout, host, port, parallel, no_m
     full_config = config_loader.load(experiment_config=config) if config else config_loader.load()
     
     # Determine backend
-    use_k8s = should_use_kubernetes(kind, full_config)
+    use_k8s = should_use_kubernetes(full_config)
     
     # Handle Kubernetes port forwarding
     if use_k8s:

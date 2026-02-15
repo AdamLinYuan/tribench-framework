@@ -4,7 +4,7 @@ import click
 from pathlib import Path
 import logging
 
-from tribench.cli.base import verbose_option, config_option, kind_option, ensure_k8s_port_forwarding, auto_ensure_trino_connection
+from tribench.cli.base import verbose_option, config_option, should_use_kubernetes, ensure_k8s_port_forwarding, auto_ensure_trino_connection
 from tribench.data.dataset import DatasetRegistry, DatasetValidator
 from tribench.data.iceberg_validator import IcebergValidator
 from .utils import get_datasets_root, get_trino_connection_params
@@ -127,11 +127,10 @@ def validate(ctx, dataset, checksums, row_counts, config, verbose):
               help='Scale factor for row count validation.')
 @click.option('--tables', help='Comma-separated list of tables to validate (default: all TPC-H tables).')
 @click.option('--detailed', is_flag=True, help='Show detailed validation results.')
-@kind_option
 @config_option
 @verbose_option
 @click.pass_context
-def validate_iceberg(ctx, catalog, schema, scale_factor, tables, detailed, kind, config, verbose):
+def validate_iceberg(ctx, catalog, schema, scale_factor, tables, detailed, config, verbose):
     """Validate Iceberg tables in Trino.
     
     Performs comprehensive validation including:
@@ -140,15 +139,15 @@ def validate_iceberg(ctx, catalog, schema, scale_factor, tables, detailed, kind,
     - Schema inspection
     - Iceberg metadata validation (snapshots, manifests)
     
-    For Kubernetes deployments, use --kind to ensure port forwarding is active.
+    Backend selection (Docker/Kubernetes) is configured in host config files.
+    Use 'tribench config profile <name>' to set your preferred backend.
     
     \b
     Examples:
-        tribench data validate-iceberg
+        tribench data validate-iceberg                              # Uses backend from active profile
         tribench data validate-iceberg --catalog iceberg --schema tpch
         tribench data validate-iceberg --scale-factor 1 --detailed
         tribench data validate-iceberg --tables nation,region,customer
-        tribench data validate-iceberg --kind  # For Kubernetes deployments
     """
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
@@ -157,8 +156,9 @@ def validate_iceberg(ctx, catalog, schema, scale_factor, tables, detailed, kind,
     config_loader = ConfigurationLoader()
     full_config = config_loader.load(experiment_config=config)
     
-    # Handle Kubernetes port forwarding
-    if kind:
+    # Determine backend and handle port forwarding
+    use_k8s = should_use_kubernetes(full_config)
+    if use_k8s:
         if not ensure_k8s_port_forwarding(full_config):
             return
     else:

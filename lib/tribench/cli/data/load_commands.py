@@ -5,7 +5,7 @@ from pathlib import Path
 from datetime import datetime
 import logging
 
-from tribench.cli.base import dry_run_option, verbose_option, config_option, kind_option, should_use_kubernetes, ensure_k8s_port_forwarding, auto_ensure_trino_connection
+from tribench.cli.base import dry_run_option, verbose_option, config_option, should_use_kubernetes, ensure_k8s_port_forwarding, auto_ensure_trino_connection
 from tribench.data.dataset import DatasetRegistry, DatasetMetadata, BenchmarkType, SchemaFactory
 from tribench.data.iceberg.universal_loader import UniversalIcebergLoader
 from .utils import get_datasets_root, get_trino_connection_params
@@ -25,25 +25,28 @@ logger = logging.getLogger(__name__)
 @click.option('--partition/--no-partition', default=True, 
               help='Partition large tables by date (Iceberg only).')
 @click.option('--validate', is_flag=True, help='Validate data after loading.')
-@kind_option
 @config_option
 @dry_run_option
 @verbose_option
 @click.pass_context
-def load(ctx, dataset, system, catalog, schema, storage, partition, validate, kind, config, dry_run, verbose):
+def load(ctx, dataset, system, catalog, schema, storage, partition, validate, config, dry_run, verbose):
     """Load a dataset into a system.
     
-    Uses fast CTAS loading for Iceberg catalog (recommended).
-    Falls back to batch INSERT for other catalogs.
+    Uses universal Hive CTAS loading for Iceberg catalog. Works for any benchmark
+    (TPC-H, TPC-DS, custom datasets) with fast streaming performance via:
+      1. Upload Parquet to MinIO
+      2. Create Hive external table (staging)
+      3. CTAS from Hive → Iceberg (fast streaming copy)
     
-    For Kubernetes deployments, use --kind to ensure port forwarding is active.
+    Backend selection (Docker/Kubernetes) is configured in host config files.
+    Use 'tribench config profile <name>' to set your preferred backend.
     
     \b
     Examples:
-        tribench data load tpch-tiny --kind
-        tribench data load tpch-sf1 --catalog iceberg --kind
-        tribench data load tpch-sf1 --catalog memory --schema default
-        tribench data load tpch-sf1 --no-partition --kind
+        tribench data load tpch-tiny                     # Uses backend from active profile
+        tribench data load tpch-sf1 --catalog iceberg
+        tribench data load tpcds-tiny --schema tpcds    # TPC-DS fully supported
+        tribench data load tpch-sf1 --no-partition
         tribench data load tpch-sf1 --storage s3://warehouse/tpch/ --validate
     """
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
@@ -56,7 +59,7 @@ def load(ctx, dataset, system, catalog, schema, storage, partition, validate, ki
     datasets_root = get_datasets_root(config)
     
     # Determine backend
-    use_k8s = should_use_kubernetes(kind, full_config)
+    use_k8s = should_use_kubernetes(full_config)
     
     # Handle Kubernetes port forwarding
     if use_k8s:
@@ -233,19 +236,18 @@ def load(ctx, dataset, system, catalog, schema, storage, partition, validate, ki
 @click.option('--partition/--no-partition', default=True, 
               help='Partition large tables (lineitem, orders) by date.')
 @click.option('--validate', is_flag=True, help='Validate data after loading.')
-@click.option('--kind', is_flag=True, help='Use Kubernetes backend (ensures port forwarding is active).')
 @config_option
 @dry_run_option
 @verbose_option
 @click.pass_context
-def load_iceberg(ctx, dataset, catalog, schema, storage, partition, validate, kind, config, dry_run, verbose):
+def load_iceberg(ctx, dataset, catalog, schema, storage, partition, validate, config, dry_run, verbose):
     """[DEPRECATED] Use 'tribench data load' instead.
     
     This command is deprecated. Please use:
         tribench data load DATASET --catalog iceberg [OPTIONS]
     """
     click.secho("⚠ DEPRECATED: 'load-iceberg' is deprecated. Use 'tribench data load' instead.", fg='yellow')
-    click.echo("  Example: tribench data load tpch-tiny --catalog iceberg --kind\n")
+    click.echo("  Example: tribench data load tpch-tiny --catalog iceberg\n")
     
     # Forward to the new load command
     ctx.invoke(load, 
@@ -256,7 +258,6 @@ def load_iceberg(ctx, dataset, catalog, schema, storage, partition, validate, ki
                storage=storage,
                partition=partition,
                validate=validate, 
-               kind=kind, 
                config=config, 
                dry_run=dry_run, 
                verbose=verbose)

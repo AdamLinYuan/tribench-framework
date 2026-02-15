@@ -35,50 +35,34 @@ def config_option(f):
     )(f)
 
 
-def kind_option(f):
-    """Decorator for adding --kind option for Kubernetes deployments."""
-    return click.option(
-        '--kind',
-        is_flag=True,
-        help='Use Kubernetes backend (ensures port forwarding is active).'
-    )(f)
-
-
-def should_use_kubernetes(kind: bool, config) -> bool:
+def should_use_kubernetes(config) -> bool:
     """
-    Determine whether to use Kubernetes backend based on flags and configuration.
+    Determine whether to use Kubernetes backend based on configuration.
     
     Args:
-        kind: Value of --kind flag (True if explicitly set)
         config: Configuration tree (ConfigTree or dict)
     
     Returns:
         True if Kubernetes backend should be used, False for Docker Compose
     
-    Priority:
-        1. Explicit --kind flag (highest priority)
-        2. Configuration default (tribench.defaults.backend)
-        3. Docker Compose (fallback default)
+    The backend is determined by the 'tribench.defaults.backend' configuration value.
+    Set via 'tribench config profile <name>' or in host config files.
     
     Example:
-        >>> # User explicitly requests Kubernetes
-        >>> should_use_kubernetes(kind=True, config={})
-        True
-        
         >>> # Config sets Kubernetes as default
         >>> config = {'tribench': {'defaults': {'backend': 'kubernetes'}}}
-        >>> should_use_kubernetes(kind=False, config=config)
+        >>> should_use_kubernetes(config=config)
         True
         
-        >>> # No explicit flag, Docker default in config
+        >>> # Docker default in config
         >>> config = {'tribench': {'defaults': {'backend': 'docker'}}}
-        >>> should_use_kubernetes(kind=False, config=config)
+        >>> should_use_kubernetes(config=config)
+        False
+        
+        >>> # No config defaults to Docker
+        >>> should_use_kubernetes(config={})
         False
     """
-    # Explicit flag takes precedence
-    if kind:
-        return True
-    
     # Check configuration default
     try:
         if hasattr(config, 'get'):
@@ -158,7 +142,7 @@ def ensure_k8s_port_forwarding(config=None, echo=click.echo, silent_if_active=Fa
     
     if not k8s.ensure_port_forwarding():
         click.secho("✗ Failed to establish port forwarding. Is Trino running in Kubernetes?", fg='red')
-        click.echo("  Try: tribench sys start trino --kind")
+        click.echo("  Try: tribench sys start trino")
         return False
     
     click.secho("✓ Port forwarding active", fg='green')

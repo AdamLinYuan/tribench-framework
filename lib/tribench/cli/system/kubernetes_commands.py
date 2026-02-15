@@ -49,7 +49,7 @@ def port_forward(ctx, action, port, config, verbose):
             status = k8s.status()
             if not status.get("running"):
                 click.secho("✗ Trino is not running in Kubernetes.", fg='red')
-                click.echo("  Start it first with: tribench sys start trino --kind")
+                click.echo("  Start it first with: tribench sys start trino")
                 return
             
             # Start both Trino and MinIO port forwards
@@ -218,8 +218,8 @@ def cluster(ctx, action, kind_config, force, dry_run, verbose):
                 click.secho(f"  ✓ {node['name']} ({node['role']})", fg='green')
             
             click.echo("\nNext steps:")
-            click.echo("  1. Setup and start systems: tribench sys setup all --kind")
-            click.echo("  2. Or start existing: tribench sys start all --kind")
+            click.echo("  1. Setup and start systems: tribench sys setup all")
+            click.echo("  2. Or start existing: tribench sys start all")
         
         elif action == 'delete':
             if ctx.obj.dry_run:

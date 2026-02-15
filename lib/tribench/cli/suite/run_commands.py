@@ -5,7 +5,7 @@ import sys
 import logging
 from pathlib import Path
 
-from tribench.cli.base import dry_run_option, verbose_option, config_option, kind_option, should_use_kubernetes, ensure_k8s_port_forwarding, auto_ensure_trino_connection
+from tribench.cli.base import dry_run_option, verbose_option, config_option, should_use_kubernetes, ensure_k8s_port_forwarding, auto_ensure_trino_connection
 from tribench.core.experiment_suite import ExperimentSuite
 from tribench.core.experiment_registry import ExperimentRegistry
 from tribench.systems.kubernetes_system import KubernetesSystem
@@ -21,22 +21,21 @@ logger = logging.getLogger(__name__)
               help='Run only experiments matching this name pattern.')
 @click.option('--runs', type=int, help='Override number of runs for all experiments.')
 @click.option('--timeout', type=int, help='Override timeout for all experiments.')
-@kind_option
 @config_option
 @dry_run_option
 @verbose_option
 @click.pass_context
-def run_suite(ctx, suite, experiment_filter, runs, timeout, kind, config, dry_run, verbose):
+def run_suite(ctx, suite, experiment_filter, runs, timeout, config, dry_run, verbose):
     """Execute all experiments in a suite.
     
-    For Kubernetes deployments, use --kind to ensure port forwarding is active.
+    Backend selection (Docker/Kubernetes) is configured in host config files.
+    Use 'tribench config profile <name>' to set your preferred backend.
     
     \b
     Examples:
-        tribench suite run experiments/suites/tpch-suite.yaml
+        tribench suite run experiments/suites/tpch-suite.yaml            # Uses backend from active profile
         tribench suite run experiments/suites/tpch-suite.yaml --exp tpch-q1
         tribench suite run experiments/suites/tpch-suite.yaml --runs 5 --dry-run
-        tribench suite run experiments/suites/tpch-suite.yaml --kind  # For Kubernetes
     """
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
@@ -46,7 +45,7 @@ def run_suite(ctx, suite, experiment_filter, runs, timeout, kind, config, dry_ru
     full_config = config_loader.load(experiment_config=config) if config else config_loader.load()
     
     # Determine backend
-    use_k8s = should_use_kubernetes(kind, full_config)
+    use_k8s = should_use_kubernetes(full_config)
     
     # Handle Kubernetes port forwarding
     if use_k8s:
@@ -116,7 +115,7 @@ def run_suite(ctx, suite, experiment_filter, runs, timeout, kind, config, dry_ru
         # =====================================================================
         # AUTOMATIC SYSTEM LIFECYCLE MANAGEMENT (PEEL-inspired)
         # =====================================================================
-        # Handle Kubernetes mode (--kind) with K8s-aware lifecycle management
+        # Handle backend-specific lifecycle management (Kubernetes vs Docker)
         systems_to_manage = []
         started_systems = []
         already_running_systems = []
@@ -223,7 +222,7 @@ def run_suite(ctx, suite, experiment_filter, runs, timeout, kind, config, dry_ru
             # =====================================================================
             # GUARANTEED CLEANUP - Runs even if experiments fail
             # =====================================================================
-            cleanup_systems(systems_to_manage, started_systems, already_running_systems, kind, ctx)
+            cleanup_systems(systems_to_manage, started_systems, already_running_systems, full_config, ctx)
         
         # Print summary
         print_suite_summary(exp_suite, results_summary)

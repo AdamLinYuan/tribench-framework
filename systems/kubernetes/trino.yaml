@@ -43,7 +43,7 @@ data:
   node.properties: |
     # Node Properties
     node.environment=production
-    node.id=d6e694eb-9e1f-448a-9b6d-e44166a0f58d
+    node.id=d3cdaac1-8839-4eb1-8539-b5c63e236247
     node.data-dir=/data
 
 ---

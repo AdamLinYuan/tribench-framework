@@ -17,20 +17,21 @@ from .utils import get_k8s_system
 @click.command(name="setup")
 @click.argument("system", type=click.Choice(['trino', 'postgresql', 'minio', 'hive-metastore', 'all']))
 @click.option('--version', help='System version to install.')
-@click.option('--kind', is_flag=True, help='Use Kubernetes backend (Kind/Helm).')
 @config_option
 @dry_run_option
 @verbose_option
 @click.pass_context
-def setup(ctx, system, version, kind, config, dry_run, verbose):
+def setup(ctx, system, version, config, dry_run, verbose):
     """Set up a system (trino, postgresql, minio, hive-metastore, all).
+    
+    Backend selection (Docker/Kubernetes) is configured in host config files.
+    Use 'tribench config profile <name>' to set your preferred backend.
     
     \b
     Examples:
-        tribench sys setup trino
+        tribench sys setup trino                    # Uses backend from active profile
         tribench sys setup trino --version 434
         tribench sys setup all --dry-run
-        tribench sys setup all --kind
     """
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
@@ -40,15 +41,14 @@ def setup(ctx, system, version, kind, config, dry_run, verbose):
     cfg = loader.load(experiment_config=config) if config else loader.load()
     
     # Determine backend
-    use_k8s = should_use_kubernetes(kind, cfg)
+    use_k8s = should_use_kubernetes(cfg)
     
     if ctx.obj.verbose:
         click.echo(f"Setting up system: {system}")
         if version:
             click.echo(f"Version: {version}")
         backend_name = "Kubernetes" if use_k8s else "Docker Compose"
-        backend_source = "flag" if kind else "config default"
-        click.echo(f"Backend: {backend_name} (from {backend_source})")
+        click.echo(f"Backend: {backend_name} (from config)")
         if config:
             click.echo(f"Config: {config}")
     
@@ -57,17 +57,30 @@ def setup(ctx, system, version, kind, config, dry_run, verbose):
         return
     
     if use_k8s:
-        try:
-            click.echo(f"Setting up {system} on Kubernetes...")
-            
-            k8s = get_k8s_system(config_tree=cfg)
-            k8s.setup(component=system)
-            click.secho(f"✓ Kubernetes {system} setup complete", fg='green')
-        except Exception as e:
-            click.secho(f"✗ Failed to setup Kubernetes {system}: {e}", fg='red')
-            if ctx.obj.verbose:
-                import traceback
-                traceback.print_exc()
+        k8s = get_k8s_system(config_tree=cfg)
+        
+        # Show incremental progress for 'all'
+        systems_to_setup = ['postgresql', 'hive-metastore', 'minio', 'trino'] if system == 'all' else [system]
+        
+        for sys_name in systems_to_setup:
+            try:
+                component_name = {
+                    'postgresql': 'PostgreSQL',
+                    'hive-metastore': 'Hive Metastore',
+                    'minio': 'MinIO',
+                    'trino': 'Trino'
+                }.get(sys_name, sys_name)
+                
+                click.echo(f"Setting up {component_name} on Kubernetes...")
+                k8s.setup(component=sys_name)
+                click.secho(f"✓ {component_name} setup complete", fg='green')
+            except Exception as e:
+                click.secho(f"✗ Failed to setup {component_name}: {e}", fg='red')
+                if ctx.obj.verbose:
+                    import traceback
+                    traceback.print_exc()
+                if system != 'all':
+                    return
         return
 
     # Implement system setup
@@ -157,19 +170,23 @@ def setup(ctx, system, version, kind, config, dry_run, verbose):
 
 @click.command(name="start")
 @click.argument("system", type=click.Choice(['trino', 'postgresql', 'minio', 'hive-metastore', 'all']))
-@click.option('--kind', is_flag=True, help='Use Kubernetes backend (Kind/Helm).')
 @config_option
 @dry_run_option
 @verbose_option
 @click.pass_context
-def start(ctx, system, kind, config, dry_run, verbose):
+def start(ctx, system, config, dry_run, verbose):
     """Start a system.
+    
+    Backend selection (Docker/Kubernetes) is configured in host config files.
+    Use 'tribench config profile <name>' to set your preferred backend.
+    
+    For Kubernetes: When starting all systems, port forwarding is automatically
+    configured for Trino and MinIO to enable local access.
     
     \b
     Examples:
-        tribench sys start trino
-        tribench sys start all
-        tribench sys start all --kind
+        tribench sys start trino          # Uses backend from active profile
+        tribench sys start all            # K8s: Starts all + port forwarding
     """
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
@@ -179,30 +196,72 @@ def start(ctx, system, kind, config, dry_run, verbose):
     cfg = loader.load(experiment_config=config) if config else loader.load()
     
     # Determine backend
-    use_k8s = should_use_kubernetes(kind, cfg)
+    use_k8s = should_use_kubernetes(cfg)
     
     if ctx.obj.verbose:
         click.echo(f"Starting system: {system}")
         backend_name = "Kubernetes" if use_k8s else "Docker Compose"
-        backend_source = "flag" if kind else "config default"
-        click.echo(f"Backend: {backend_name} (from {backend_source})")
+        click.echo(f"Backend: {backend_name} (from config)")
     
     if ctx.obj.dry_run:
         click.echo(f"[DRY RUN] Would start {system}")
         return
     
     if use_k8s:
-        try:
-            click.echo(f"Starting {system} on Kubernetes...")
-            
-            k8s = get_k8s_system(config_tree=cfg)
-            k8s.start(component=system)
-            click.secho(f"✓ Kubernetes {system} started successfully", fg='green')
-        except Exception as e:
-            click.secho(f"✗ Failed to start Kubernetes {system}: {e}", fg='red')
-            if ctx.obj.verbose:
-                import traceback
-                traceback.print_exc()
+        k8s = get_k8s_system(config_tree=cfg)
+        
+        # Show incremental progress for 'all'
+        systems_to_start = ['postgresql', 'hive-metastore', 'minio', 'trino'] if system == 'all' else [system]
+        
+        for sys_name in systems_to_start:
+            try:
+                component_name = {
+                    'postgresql': 'PostgreSQL',
+                    'hive-metastore': 'Hive Metastore',
+                    'minio': 'MinIO',
+                    'trino': 'Trino'
+                }.get(sys_name, sys_name)
+                
+                click.echo(f"Starting {component_name} on Kubernetes...")
+                k8s.start(component=sys_name)
+                click.secho(f"✓ {component_name} started successfully", fg='green')
+            except Exception as e:
+                click.secho(f"✗ Failed to start {component_name}: {e}", fg='red')
+                if ctx.obj.verbose:
+                    import traceback
+                    traceback.print_exc()
+                if system != 'all':
+                    return
+        
+        # Automatically start port forwarding when starting all systems
+        if system == 'all':
+            click.echo("")
+            click.echo("Starting port forwarding...")
+            try:
+                # Start both Trino and MinIO port forwards
+                k8s.start_port_forwarding(include_minio=True)
+                
+                # Check status
+                trino_active = k8s.is_port_forwarding_active()
+                minio_active = k8s.is_minio_port_forwarding_active()
+                
+                if trino_active and minio_active:
+                    from tribench.defaults import Defaults
+                    click.secho("✓ Port forwarding active", fg='green')
+                    click.echo(f"  Trino:  http://{Defaults.Hosts.LOCALHOST}:{Defaults.Trino.PORT}")
+                    click.echo(f"  MinIO:  http://{Defaults.Hosts.LOCALHOST}:{Defaults.MinIO.PORT} (API)")
+                    click.echo(f"          http://{Defaults.Hosts.LOCALHOST}:{Defaults.MinIO.CONSOLE_PORT} (Console)")
+                elif trino_active:
+                    click.secho("⚠ Trino port forwarding active, but MinIO failed", fg='yellow')
+                else:
+                    click.secho("⚠ Port forwarding failed - start manually with: tribench sys port-forward start", fg='yellow')
+            except Exception as e:
+                click.secho(f"⚠ Port forwarding failed: {e}", fg='yellow')
+                click.echo("  Start manually with: tribench sys port-forward start")
+                if ctx.obj.verbose:
+                    import traceback
+                    traceback.print_exc()
+        
         return
 
     # Implement system start
@@ -278,19 +337,20 @@ def start(ctx, system, kind, config, dry_run, verbose):
 @click.command(name="stop")
 @click.argument("system", type=click.Choice(['trino', 'postgresql', 'minio', 'hive-metastore', 'all']))
 @click.option('--force', is_flag=True, help='Force stop without graceful shutdown.')
-@click.option('--kind', is_flag=True, help='Use Kubernetes backend (Kind/Helm).')
 @config_option
 @dry_run_option
 @verbose_option
 @click.pass_context
-def stop(ctx, system, force, kind, config, dry_run, verbose):
+def stop(ctx, system, force, config, dry_run, verbose):
     """Stop a system.
+    
+    Backend selection (Docker/Kubernetes) is configured in host config files.
+    Use 'tribench config profile <name>' to set your preferred backend.
     
     \b
     Examples:
-        tribench sys stop trino
+        tribench sys stop trino           # Uses backend from active profile
         tribench sys stop all --force
-        tribench sys stop all --kind
     """
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
@@ -300,7 +360,7 @@ def stop(ctx, system, force, kind, config, dry_run, verbose):
     cfg = loader.load(experiment_config=config) if config else loader.load()
     
     # Determine backend
-    use_k8s = should_use_kubernetes(kind, cfg)
+    use_k8s = should_use_kubernetes(cfg)
     
     if ctx.obj.verbose:
         click.echo(f"Stopping system: {system}")
@@ -315,16 +375,30 @@ def stop(ctx, system, force, kind, config, dry_run, verbose):
         return
     
     if use_k8s:
-        try:
-            click.echo(f"Stopping {system} on Kubernetes...")
-            k8s = get_k8s_system(config_tree=cfg)
-            k8s.stop(component=system)
-            click.secho(f"✓ Kubernetes {system} stopped successfully", fg='green')
-        except Exception as e:
-            click.secho(f"✗ Failed to stop Kubernetes {system}: {e}", fg='red')
-            if ctx.obj.verbose:
-                import traceback
-                traceback.print_exc()
+        k8s = get_k8s_system(config_tree=cfg)
+        
+        # Show incremental progress for 'all'
+        systems_to_stop = ['trino', 'minio', 'hive-metastore', 'postgresql'] if system == 'all' else [system]
+        
+        for sys_name in systems_to_stop:
+            try:
+                component_name = {
+                    'postgresql': 'PostgreSQL',
+                    'hive-metastore': 'Hive Metastore',
+                    'minio': 'MinIO',
+                    'trino': 'Trino'
+                }.get(sys_name, sys_name)
+                
+                click.echo(f"Stopping {component_name} on Kubernetes...")
+                k8s.stop(component=sys_name)
+                click.secho(f"✓ {component_name} stopped successfully", fg='green')
+            except Exception as e:
+                click.secho(f"✗ Failed to stop {component_name}: {e}", fg='red')
+                if ctx.obj.verbose:
+                    import traceback
+                    traceback.print_exc()
+                if system != 'all':
+                    return
         return
 
     # Implement system stop
@@ -380,20 +454,21 @@ def stop(ctx, system, force, kind, config, dry_run, verbose):
 @click.command(name="teardown")
 @click.argument("system", type=click.Choice(['trino', 'postgresql', 'minio', 'hive-metastore', 'all']))
 @click.option('--keep-data', is_flag=True, help='Keep data after teardown.')
-@click.option('--kind', is_flag=True, help='Use Kubernetes backend (Kind/Helm).')
 @config_option
 @click.confirmation_option(prompt='Are you sure you want to tear down the system?')
 @dry_run_option
 @verbose_option
 @click.pass_context
-def teardown(ctx, system, keep_data, kind, config, dry_run, verbose):
+def teardown(ctx, system, keep_data, config, dry_run, verbose):
     """Tear down a system (destructive operation).
+    
+    Backend selection (Docker/Kubernetes) is configured in host config files.
+    Use 'tribench config profile <name>' to set your preferred backend.
     
     \b
     Examples:
-        tribench sys teardown trino
+        tribench sys teardown trino       # Uses backend from active profile
         tribench sys teardown all --keep-data
-        tribench sys teardown all --kind
     """
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
@@ -403,7 +478,7 @@ def teardown(ctx, system, keep_data, kind, config, dry_run, verbose):
     cfg = loader.load(experiment_config=config) if config else loader.load()
     
     # Determine backend
-    use_k8s = should_use_kubernetes(kind, cfg)
+    use_k8s = should_use_kubernetes(cfg)
     
     if ctx.obj.verbose:
         click.echo(f"Tearing down system: {system}")
@@ -418,16 +493,30 @@ def teardown(ctx, system, keep_data, kind, config, dry_run, verbose):
         return
     
     if use_k8s:
-        try:
-            click.echo(f"Tearing down {system} on Kubernetes...")
-            k8s = get_k8s_system(config_tree=cfg)
-            k8s.teardown(component=system)
-            click.secho(f"✓ Kubernetes {system} teardown complete", fg='green')
-        except Exception as e:
-            click.secho(f"✗ Failed to teardown Kubernetes {system}: {e}", fg='red')
-            if ctx.obj.verbose:
-                import traceback
-                traceback.print_exc()
+        k8s = get_k8s_system(config_tree=cfg)
+        
+        # Show incremental progress for 'all'
+        systems_to_teardown = ['trino', 'minio', 'hive-metastore', 'postgresql'] if system == 'all' else [system]
+        
+        for sys_name in systems_to_teardown:
+            try:
+                component_name = {
+                    'postgresql': 'PostgreSQL',
+                    'hive-metastore': 'Hive Metastore',
+                    'minio': 'MinIO',
+                    'trino': 'Trino'
+                }.get(sys_name, sys_name)
+                
+                click.echo(f"Tearing down {component_name} on Kubernetes...")
+                k8s.teardown(component=sys_name)
+                click.secho(f"✓ {component_name} teardown complete", fg='green')
+            except Exception as e:
+                click.secho(f"✗ Failed to teardown {component_name}: {e}", fg='red')
+                if ctx.obj.verbose:
+                    import traceback
+                    traceback.print_exc()
+                if system != 'all':
+                    return
         return
 
     # Implement system teardown

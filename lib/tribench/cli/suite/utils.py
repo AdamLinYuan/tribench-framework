@@ -217,16 +217,21 @@ def setup_docker_systems(experiments_to_run, config, ctx):
     return systems_to_manage, started_systems, already_running_systems
 
 
-def cleanup_systems(systems_to_manage, started_systems, already_running_systems, kind, ctx):
+def cleanup_systems(systems_to_manage, started_systems, already_running_systems, config, ctx):
     """Clean up systems after suite execution.
     
     Args:
         systems_to_manage: All systems that were managed
         started_systems: Systems that were started by this suite
         already_running_systems: Systems that were already running
-        kind: Whether Kubernetes mode is enabled
+        config: Configuration tree to determine backend
         ctx: Click context
     """
+    from tribench.cli.base import should_use_kubernetes
+    
+    # Determine if we're in Kubernetes mode
+    use_k8s = should_use_kubernetes(config)
+    
     if systems_to_manage:
         click.echo(f"\n{'='*60}")
         click.echo("Phase 3: Cleaning up systems...")
@@ -234,13 +239,13 @@ def cleanup_systems(systems_to_manage, started_systems, already_running_systems,
         
         # Only stop systems we started (not ones that were already running)
         if started_systems:
-            if kind:
+            if use_k8s:
                 # For K8s, we keep systems running (they take long to restart)
                 # But offer user choice
                 click.echo("Kubernetes systems were started for this suite.")
                 if click.confirm("Keep systems running? (Recommended for faster subsequent runs)", default=True):
                     click.secho("✓ Kubernetes systems left running", fg='green')
-                    click.echo("  Use 'tribench sys stop --kind' to stop them manually")
+                    click.echo("  Use 'tribench sys stop' to stop them manually")
                 else:
                     click.echo("Stopping Kubernetes systems...")
                     for system in reversed(started_systems):

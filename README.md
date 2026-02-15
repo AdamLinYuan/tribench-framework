@@ -30,6 +30,64 @@ tribench-framework/
 └── utils/                 # Utility scripts and tools
 ```
 
+## Prerequisites
+
+### Foundation Tools (Required for All Users)
+
+**macOS Users:**
+```bash
+# Install Homebrew (if not already installed)
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install Xcode Command Line Tools (provides git, compilers, etc.)
+xcode-select --install
+
+# Install Git (if not included in Xcode tools)
+brew install git
+```
+
+**Verify Foundation Setup:**
+```bash
+brew --version                      # Should show Homebrew version
+git --version                       # Should show Git version
+```
+
+### Backend-Specific Dependencies
+
+Before setting up TriBench, install the required backend tools:
+
+**Required (Docker Backend):**
+```bash
+brew install --cask docker          # Docker Desktop (includes Docker Compose)
+```
+
+**Required (Kubernetes Backend):**
+```bash
+brew install kubectl                # Kubernetes CLI
+brew install helm                   # Helm package manager for Kubernetes
+```
+
+**Optional (Local Kubernetes Development):**
+```bash
+brew install kind                   # Kind (Kubernetes in Docker)
+```
+
+**Optional (GCP/GKE Deployments):**
+```bash
+brew install --cask google-cloud-sdk  # gcloud CLI for GCP
+```
+
+**Optional (MinIO S3 Operations):**
+```bash
+brew install minio/stable/mc        # MinIO Client for S3 operations
+```
+
+### Verify Docker Installation
+```bash
+docker --version                    # Should show Docker version
+docker compose version              # Should show Docker Compose version
+```
+
 ## Quick Start
 
 1. **Setup Environment:**
@@ -45,7 +103,32 @@ tribench-framework/
    tribench --version
    ```
 
-2. **Configure Systems:**
+2. **Configure Backend (Docker or Kubernetes):**
+   
+   TriBench supports both Docker Compose and Kubernetes backends. Configure your preferred backend once:
+   
+   ```bash
+   # For local development (Docker Compose - default)
+   tribench config profile local
+   
+   # For local Kubernetes (kind cluster)
+   tribench config profile kind
+   
+   # For GCP/GKE deployments
+   tribench config profile gcp-gke
+   
+   # Check active configuration
+   tribench config show
+   ```
+   
+   The backend configuration is stored in `config/hosts/<profile>.conf` and controls:
+   - System deployment method (Docker Compose vs Kubernetes)
+   - Connection endpoints and ports
+   - Resource allocation settings
+   
+   **Note:** All commands (`sys`, `data`, `exp`, `suite`) automatically use the configured backend.
+
+3. **Configure Systems:**
    ```bash
    # Setup infrastructure for Iceberg support
    tribench sys setup postgresql
@@ -61,7 +144,7 @@ tribench-framework/
    tribench sys status hive-metastore
    ```
 
-3. **Run Benchmark:**
+4. **Run Benchmark:**
    ```bash
    # Execute an experiment
    tribench exp run experiments/tpch-sf1.yaml
@@ -73,7 +156,7 @@ tribench-framework/
    tribench exp run experiments/tpch-sf1.yaml --runs 3 --warmup 1
    ```
 
-4. **Analyze Results:**
+5. **Analyze Results:**
    ```bash
    # Show experiment results
    tribench res show exp-001
@@ -255,21 +338,28 @@ export TRIBENCH_K8S_NAMESPACE="production"
 
 **Quick Examples:**
 ```bash
-# Local development (default)
-unset TRIBENCH_K8S_CONTEXT
-tribench sys setup all --kind
+# Local development (Docker Compose - default)
+tribench config profile local
+tribench sys setup all
+
+# Local Kubernetes (kind cluster)
+tribench config profile kind
+tribench sys setup all
 
 # Google Cloud (GKE)
 export TRIBENCH_K8S_CONTEXT="gke_tribench_us-central1-a_tribench-cluster"
-tribench sys setup all --kind
+tribench config profile gcp-gke
+tribench sys setup all
 
 # Azure (AKS)
 export TRIBENCH_K8S_CONTEXT="aks-tribench-cluster"
-tribench sys setup all --kind
+tribench config profile azure-aks
+tribench sys setup all
 
 # AWS (EKS)
 export TRIBENCH_K8S_CONTEXT="arn:aws:eks:us-east-1:123456789012:cluster/tribench"
-tribench sys setup all --kind
+tribench config profile aws-eks
+tribench sys setup all
 ```
 
 For complete configuration documentation, see [CONFIGURATION.md](docs/CONFIGURATION.md).
