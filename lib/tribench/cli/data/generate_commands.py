@@ -8,6 +8,7 @@ import logging
 from tribench.cli.base import dry_run_option, verbose_option, config_option
 from tribench.data.dataset import (
     TPCHGenerator,
+    TPCDSGenerator,
     DatasetRegistry,
     DatasetValidator,
     DatasetMetadata
@@ -18,7 +19,10 @@ logger = logging.getLogger(__name__)
 
 
 @click.command(name="generate")
-@click.argument("dataset", type=click.Choice(['tpch-tiny', 'tpch-sf1', 'tpch-sf10', 'tpch-sf100']))
+@click.argument("dataset", type=click.Choice([
+    'tpch-tiny', 'tpch-sf1', 'tpch-sf10', 'tpch-sf100',
+    'tpcds-tiny', 'tpcds-sf1', 'tpcds-sf10', 'tpcds-sf100'
+]))
 @click.option('--format', 
               type=click.Choice(['parquet', 'csv']),
               default='parquet',
@@ -35,18 +39,25 @@ def generate(ctx, dataset, format, output, overwrite, config, dry_run, verbose):
     \b
     Examples:
         tribench data generate tpch-sf1
-        tribench data generate tpch-sf1 --format parquet
+        tribench data generate tpcds-tiny --format parquet
         tribench data generate tpch-sf10 --output /data/tpch --dry-run
     """
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
+    
+    # Determine benchmark type
+    benchmark_type = 'tpch' if dataset.startswith('tpch') else 'tpcds'
     
     # Parse scale factor from dataset name
     scale_factor_map = {
         'tpch-tiny': 0.01,
         'tpch-sf1': 1.0,
         'tpch-sf10': 10.0,
-        'tpch-sf100': 100.0
+        'tpch-sf100': 100.0,
+        'tpcds-tiny': 0.01,
+        'tpcds-sf1': 1.0,
+        'tpcds-sf10': 10.0,
+        'tpcds-sf100': 100.0
     }
     scale_factor = scale_factor_map[dataset]
     
@@ -71,7 +82,8 @@ def generate(ctx, dataset, format, output, overwrite, config, dry_run, verbose):
     
     try:
         # Check if dataset exists
-        dataset_path = output_dir / f"tpch-sf{str(scale_factor).replace('.', '_')}" / format
+        sf_str = str(scale_factor).replace('.', '_')
+        dataset_path = output_dir / f"{benchmark_type}-sf{sf_str}" / format
         if dataset_path.exists() and not overwrite:
             click.secho(f"✗ Dataset already exists at {dataset_path}", fg='red')
             click.echo("Use --overwrite to regenerate")
@@ -79,9 +91,13 @@ def generate(ctx, dataset, format, output, overwrite, config, dry_run, verbose):
         
         click.echo(f"Generating {dataset}...")
         
-        # Generate dataset
-        generator = TPCHGenerator(output_dir)
-        result_path = generator.generate(scale_factor=scale_factor, format=format)
+        # Generate dataset based on benchmark type
+        if benchmark_type == 'tpch':
+            generator = TPCHGenerator(output_dir)
+            result_path = generator.generate(scale_factor=scale_factor, format=format)
+        else:  # tpcds
+            generator = TPCDSGenerator(output_dir)
+            result_path = generator.generate(scale_factor=scale_factor, format=format)
         
         click.secho(f"✓ Dataset generated: {result_path}", fg='green')
         
@@ -89,7 +105,31 @@ def generate(ctx, dataset, format, output, overwrite, config, dry_run, verbose):
         click.echo("Validating dataset...")
         validator = DatasetValidator()
         sf_str = str(scale_factor) if scale_factor >= 1 else 'tiny'
-        validation_result = validator.validate_tpch_dataset(result_path, sf_str)
+        
+        if benchmark_type == 'tpch':
+            validation_result = validator.validate_tpch_dataset(result_path, sf_str)
+        else:  # tpcds - generic validation
+            validation_result = {
+                'valid': True,
+                'tables': {},
+                'errors': []
+            }
+            # Get expected tables for TPC-DS
+            from tribench.data.dataset import TPCDSSchema
+            schema = TPCDSSchema()
+            for table_name in schema.get_tables():
+                parquet_file = result_path / f"{table_name}.parquet"
+                if parquet_file.exists():
+                    table_validation = validator.validate_parquet_file(parquet_file)
+                    validation_result['tables'][table_name] = table_validation
+                    if not table_validation.get('valid'):
+                        validation_result['valid'] = False
+                        validation_result['errors'].append(
+                            f"Invalid table {table_name}: {table_validation.get('error')}"
+                        )
+                else:
+                    validation_result['errors'].append(f"Missing table: {table_name}")
+                    validation_result['valid'] = False
         
         if validation_result['valid']:
             click.secho("✓ Validation passed", fg='green')
@@ -120,9 +160,17 @@ def generate(ctx, dataset, format, output, overwrite, config, dry_run, verbose):
             for table in validation_result['tables']
         )
         
+        # Determine properties and generator based on benchmark type
+        if benchmark_type == 'tpch':
+            properties = {'tpch_version': '3.0'}
+            generator_name = 'tpch-dbgen'
+        else:  # tpcds
+            properties = {'tpcds_version': '2.0'}
+            generator_name = 'tpcds-dsdgen'
+        
         metadata = DatasetMetadata(
             name=dataset,
-            benchmark_type='tpch',  # TPC-H benchmark type
+            benchmark_type=benchmark_type,
             type='generated',
             format=format,
             scale_factor=scale_factor,
@@ -131,9 +179,9 @@ def generate(ctx, dataset, format, output, overwrite, config, dry_run, verbose):
             tables=list(row_counts.keys()),
             row_counts=row_counts,
             checksums=checksums,
-            properties={'tpch_version': '3.0'},
+            properties=properties,
             created_at=datetime.now().isoformat(),
-            generator='tpch-dbgen'
+            generator=generator_name
         )
         
         registry.register(metadata)

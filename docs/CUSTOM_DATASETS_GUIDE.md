@@ -62,7 +62,7 @@ datasets/
 
 ```python
 from pathlib import Path
-from tribench.data.iceberg_loader import IcebergDataLoader
+from tribench.data.iceberg import UniversalIcebergLoader
 from tribench.config import ConnectionConfig
 import pyarrow as pa
 
@@ -76,7 +76,7 @@ config = ConnectionConfig(
 )
 
 # Create loader
-loader = IcebergDataLoader(config)
+loader = UniversalIcebergLoader(config)
 
 # Define your custom schema
 class CustomDatasetSchema:
@@ -366,11 +366,11 @@ if __name__ == '__main__':
 
 ```python
 from pathlib import Path
-from tribench.data.iceberg_loader import IcebergDataLoader
+from tribench.data.iceberg import UniversalIcebergLoader
 from custom_benchmark import MyBenchmarkSchema
 
 # Initialize
-loader = IcebergDataLoader()
+loader = UniversalIcebergLoader()
 schema = MyBenchmarkSchema()
 dataset_path = Path('datasets/my_benchmark_sf1')
 

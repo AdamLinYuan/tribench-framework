@@ -75,30 +75,14 @@ tpch-tiny-iceberg:
     source_dataset: tpch-tiny
     partitioned: false
     storage_location: default
-  created_at: '2026-02-10T15:15:16.932101'
+  created_at: '2026-02-15T16:54:15.984360'
   generator: iceberg_loader
   iceberg_catalog: iceberg
   iceberg_schema: tpch
-  snapshot_ids:
-    nation: 2996109429574938883
-    region: 8369342935958414897
-    customer: 408449946944956422
-    supplier: 1007877436375992262
-    part: 6684005773145288897
-    partsupp: 6514638897697365125
-    orders: 5497172214437475428
-    lineitem: 7171739494988436434
-  snapshot_timestamps:
-    nation: '2026-02-10 15:15:13.664000+00:00'
-    region: '2026-02-10 15:15:14.254000+00:00'
-    customer: '2026-02-10 15:15:14.602000+00:00'
-    supplier: '2026-02-10 15:15:14.868000+00:00'
-    part: '2026-02-10 15:15:15.197000+00:00'
-    partsupp: '2026-02-10 15:15:15.479000+00:00'
-    orders: '2026-02-10 15:15:15.831000+00:00'
-    lineitem: '2026-02-10 15:15:16.352000+00:00'
-  manifest_counts: {}
-  format_version: 2
+  snapshot_ids: null
+  snapshot_timestamps: null
+  manifest_counts: null
+  format_version: null
   storage_location: null
 tpch-sf1:
   name: tpch-sf1
@@ -201,4 +185,170 @@ tpch-sf1-iceberg:
     lineitem: '2025-12-19 12:33:20.492000+00:00'
   manifest_counts: {}
   format_version: 2
+  storage_location: null
+tpcds-tiny:
+  name: tpcds-tiny
+  benchmark_type: tpcds
+  type: generated
+  format: parquet
+  scale_factor: 0.01
+  size_bytes: 7263874
+  location: /Users/adamyuan/Documents/UofG/Yr 4/Dissertation/Code/tribench-framework/datasets/tpcds-sf0_01/parquet
+  tables:
+  - store_sales
+  - store_returns
+  - catalog_sales
+  - catalog_returns
+  - web_sales
+  - web_returns
+  - inventory
+  - store
+  - call_center
+  - catalog_page
+  - web_site
+  - web_page
+  - warehouse
+  - customer
+  - customer_address
+  - customer_demographics
+  - date_dim
+  - household_demographics
+  - item
+  - income_band
+  - promotion
+  - reason
+  - ship_mode
+  - time_dim
+  row_counts:
+    store_sales: 28810
+    store_returns: 2810
+    catalog_sales: 14313
+    catalog_returns: 1358
+    web_sales: 7212
+    web_returns: 679
+    inventory: 23490
+    store: 1
+    call_center: 1
+    catalog_page: 11718
+    web_site: 1
+    web_page: 1
+    warehouse: 1
+    customer: 1000
+    customer_address: 500
+    customer_demographics: 19208
+    date_dim: 73049
+    household_demographics: 7200
+    item: 180
+    income_band: 20
+    promotion: 3
+    reason: 1
+    ship_mode: 20
+    time_dim: 86400
+  checksums:
+    store_sales: dc5ea1aee5ca3532f64e2f07021a1c89c679068bdcff31f1815ffc141c595914
+    store_returns: fa40a08467e7b6cea571730ca48f58347456470c21a79f7db1b86b8bdfc5d84c
+    catalog_sales: 39fd017e370da0fb7cab780fb0b77bf5f4ee414189e25f3b83b0a77a8865bc92
+    catalog_returns: 7a8a9851e0f4330bc5a44b5b16148db54a874c11e0ef1fdf33fdd6a9a73005b3
+    web_sales: 07f71b502981b093cc1aae0cd0825a26fcadf3be0c77a0e71f9124b208e82604
+    web_returns: 73638e08eb15900bd61e0463d24b426b0995032ba91641de12ca5b156860f262
+    inventory: d0d5692190a6ace21fcab64d79b4ea2fcc1fe5024bc44d28b82bdb3266f5376c
+    store: 5ef6e8f1472877ce08ff5c2331ee2714a5f00619bf8702e9f433f5c0ddace6e7
+    call_center: f3b2d063e16402cfb98916c20ee95404f2aa9527236a5c0b93deb999d02bb2ff
+    catalog_page: 838376d60928c249e1474b3a2b22a9d77baaa95d6eabe6702b4e15c51842cc76
+    web_site: c14dfd7e4714652cb328b0603522b6e82d68ba1de39a3d9a3d1836c5a96c90f1
+    web_page: a853080841df72ab93dd3f91c35b8dc6b3cb07bc15669e749b1059b513f36b61
+    warehouse: 36bcd6c196c77cb8f91425c54e8034ec95823912b38486d6156571abdae5d142
+    customer: fc24b5252ed36a148241c9be57f4a81506ca6c1080c2c50cd73b4c831848be23
+    customer_address: 9c23229e15ac669f281969383b4e6f53e4bcfcda64297ac84e11de51d2461ebf
+    customer_demographics: 3944974a65c09c8c4231b3908d9fd239e8c4d96b2378ba63020da6032806d4de
+    date_dim: 6fcc78c7adf0a4be65230c13178c8382d5981084790678ccc7d1069464c4845d
+    household_demographics: 994766f8418a48428da61c3ced5cd83b514caeae766d9534132d8dd2b3f023e9
+    item: ba00db6c4bb4ea6f0a23bce3b8193ce3fd1f00bb875d4ecfe27532771e546bbe
+    income_band: fff984d3f8c3f560f3e87b8abd649f33957b7acd005c328040e2dbec53b906cd
+    promotion: 9771b723f0df05e883f8f8c77bccc8334cbc00ec938ce9d9e01d436fd9b408e2
+    reason: 00ae3a19d48857d0fa38773f045b1ab9fdedde146b30c91128c5a7f7d62bab11
+    ship_mode: 334c26ed285d6b63a54b9537c0137d3b696d4e574a0d01ee0083601b25d09455
+    time_dim: 5da9531898b5266c7d535ca5567bd56c8fd03cdd71bbc6cadea6e2f380124c46
+  properties:
+    tpcds_version: '2.0'
+  created_at: '2026-02-15T14:24:46.906891'
+  generator: tpcds-dsdgen
+  iceberg_catalog: null
+  iceberg_schema: null
+  snapshot_ids: null
+  snapshot_timestamps: null
+  manifest_counts: null
+  format_version: null
+  storage_location: null
+tpcds-tiny-iceberg:
+  name: tpcds-tiny-iceberg
+  benchmark_type: tpcds
+  type: static
+  format: iceberg
+  scale_factor: 0.01
+  size_bytes: null
+  location: iceberg.tpcds
+  tables:
+  - store_sales
+  - store_returns
+  - catalog_sales
+  - catalog_returns
+  - web_sales
+  - web_returns
+  - inventory
+  - store
+  - call_center
+  - catalog_page
+  - web_site
+  - web_page
+  - warehouse
+  - customer
+  - customer_address
+  - customer_demographics
+  - date_dim
+  - household_demographics
+  - item
+  - income_band
+  - promotion
+  - reason
+  - ship_mode
+  - time_dim
+  row_counts:
+    store_sales: 28810
+    store_returns: 2810
+    catalog_sales: 14313
+    catalog_returns: 1358
+    web_sales: 7212
+    web_returns: 679
+    inventory: 23490
+    store: 1
+    call_center: 1
+    catalog_page: 11718
+    web_site: 1
+    web_page: 1
+    warehouse: 1
+    customer: 1000
+    customer_address: 500
+    customer_demographics: 19208
+    date_dim: 73049
+    household_demographics: 7200
+    item: 180
+    income_band: 20
+    promotion: 3
+    reason: 1
+    ship_mode: 20
+    time_dim: 86400
+  checksums: {}
+  properties:
+    source_dataset: tpcds-tiny
+    partitioned: false
+    storage_location: default
+  created_at: '2026-02-15T16:36:11.689644'
+  generator: iceberg_loader
+  iceberg_catalog: iceberg
+  iceberg_schema: tpcds
+  snapshot_ids: null
+  snapshot_timestamps: null
+  manifest_counts: null
+  format_version: null
   storage_location: null

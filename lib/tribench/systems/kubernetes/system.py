@@ -70,6 +70,17 @@ class KubernetesSystem(System):
         self.kubectl = KubectlOperator(self.context, self.namespace)
         self.manifests = ManifestGenerator(self.config_tree, self.context, self.namespace)
         self.port_forwarder = PortForwarder(self.context, self.namespace, self.local_port, self.container_port)
+        
+        # MinIO port forwarder (separate process for multiple ports)
+        self.minio_port_forwarder = PortForwarder(
+            self.context, 
+            self.namespace, 
+            Defaults.MinIO.PORT, 
+            Defaults.MinIO.PORT
+        )
+        # Update PID/log file names to avoid conflicts
+        self.minio_port_forwarder.pid_file = Path("log/port-forward-minio.pid")
+        self.minio_port_forwarder.log_file = Path("log/port-forward-minio.log")
     
     # ========== Kind Cluster Management ==========
     
@@ -400,6 +411,10 @@ class KubernetesSystem(System):
         """Check if port forwarding is currently active."""
         return self.port_forwarder.is_active()
     
+    def is_minio_port_forwarding_active(self) -> bool:
+        """Check if MinIO port forwarding is currently active."""
+        return self.minio_port_forwarder.is_active()
+    
     def ensure_port_forwarding(self) -> bool:
         """Ensure port forwarding is active."""
         if self.port_forwarder.is_active():
@@ -416,10 +431,46 @@ class KubernetesSystem(System):
         self.start_port_forwarding()
         return self.port_forwarder.is_active()
     
-    def start_port_forwarding(self) -> None:
-        """Start kubectl port-forward."""
+    def start_port_forwarding(self, include_minio: bool = False) -> None:
+        """Start kubectl port-forward for Trino and optionally MinIO."""
         self.port_forwarder.start()
+        
+        if include_minio:
+            logger.info("Starting MinIO port forwarding...")
+            self.minio_port_forwarder.start(service_name=Defaults.ServiceNames.MINIO)
+            # Also forward console port (9001)
+            import subprocess
+            import time
+            console_cmd = [
+                "kubectl", "--context", self.context, "--namespace", self.namespace,
+                "port-forward", f"svc/{Defaults.ServiceNames.MINIO}", 
+                f"{Defaults.MinIO.CONSOLE_PORT}:{Defaults.MinIO.CONSOLE_PORT}"
+            ]
+            console_log = open(Path("log/port-forward-minio-console.log"), "w")
+            subprocess.Popen(
+                console_cmd,
+                stdout=console_log,
+                stderr=subprocess.STDOUT,
+                text=True,
+                start_new_session=True
+            )
+            time.sleep(1)  # Give it time to start
     
-    def stop_port_forwarding(self) -> None:
-        """Stop the port forwarding process."""
+    def stop_port_forwarding(self, include_minio: bool = True) -> None:
+        """Stop the port forwarding process(es)."""
         self.port_forwarder.stop()
+        
+        if include_minio:
+            self.minio_port_forwarder.stop()
+            # Also stop console port forward
+            import subprocess
+            try:
+                cmd = ["lsof", "-t", "-i", f":{Defaults.MinIO.CONSOLE_PORT}"]
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                if result.returncode == 0 and result.stdout.strip():
+                    pids = result.stdout.strip().split('\n')
+                    for pid in pids:
+                        if pid:
+                            subprocess.run(["kill", pid], check=False)
+            except Exception as e:
+                logger.debug(f"Failed to stop console port forward: {e}")

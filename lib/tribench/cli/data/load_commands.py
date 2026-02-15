@@ -6,8 +6,8 @@ from datetime import datetime
 import logging
 
 from tribench.cli.base import dry_run_option, verbose_option, config_option, kind_option, should_use_kubernetes, ensure_k8s_port_forwarding, auto_ensure_trino_connection
-from tribench.data.dataset import DatasetRegistry, DatasetMetadata
-from tribench.data.iceberg_loader import IcebergDataLoader
+from tribench.data.dataset import DatasetRegistry, DatasetMetadata, BenchmarkType, SchemaFactory
+from tribench.data.iceberg.universal_loader import UniversalIcebergLoader
 from .utils import get_datasets_root, get_trino_connection_params
 
 logger = logging.getLogger(__name__)
@@ -112,26 +112,46 @@ def load(ctx, dataset, system, catalog, schema, storage, partition, validate, ki
         # Get Trino connection parameters
         connection_params = get_trino_connection_params(config)
         
+        # Get dataset schema
+        benchmark_type = BenchmarkType(metadata.benchmark_type)
+        dataset_schema = SchemaFactory.create(benchmark_type)
+        
         # Route to appropriate loader based on catalog
         if catalog == 'iceberg':
-            # Use fast Iceberg loader with CTAS
-            loader = IcebergDataLoader(connection_params)
+            # Use universal CTAS loader (works for ANY dataset)
+            loader = UniversalIcebergLoader(connection_params)
             
-            if metadata.benchmark_type == 'tpch':
-                row_counts = loader.load_tpch_dataset(
-                    dataset_path=dataset_path,
-                    catalog=catalog,
-                    schema=schema,
-                    storage_location=storage,
-                    use_partitioning=partition,
-                    dataset_name=dataset
-                )
-            else:
-                click.secho(f"✗ Benchmark type '{metadata.benchmark_type}' not supported for Iceberg yet", fg='red')
-                return
+            # Determine partitioning strategy
+            partition_specs = {}
+            if partition:
+                if benchmark_type == BenchmarkType.TPCH:
+                    partition_specs = {
+                        'lineitem': ['l_shipdate'],
+                        'orders': ['o_orderdate']
+                    }
+                elif benchmark_type == BenchmarkType.TPCDS:
+                    partition_specs = {
+                        'store_sales': ['ss_sold_date_sk'],
+                        'catalog_sales': ['cs_sold_date_sk'],
+                        'web_sales': ['ws_sold_date_sk'],
+                        'store_returns': ['sr_returned_date_sk'],
+                        'catalog_returns': ['cr_returned_date_sk'],
+                        'web_returns': ['wr_returned_date_sk']
+                    }
+            
+            # Load using universal CTAS (fast for any benchmark)
+            row_counts = loader.load_dataset(
+                dataset_path=dataset_path,
+                dataset_schema=dataset_schema,
+                catalog=catalog,
+                schema=schema,
+                minio_bucket='warehouse',
+                partition_specs=partition_specs,
+                storage_location=storage
+            )
             
             # Collect and register Iceberg metadata
-            click.echo("\nCollecting Iceberg metadata...")
+            click.echo("\\nCollecting Iceberg metadata...")
             iceberg_metadata = loader.collect_iceberg_metadata(
                 catalog=catalog,
                 schema=schema,
@@ -173,7 +193,7 @@ def load(ctx, dataset, system, catalog, schema, storage, partition, validate, ki
             
         else:
             # Use standard Trino loader for other catalogs (memory, hive, etc.)
-            from tribench.data.dataset import BenchmarkType, SchemaFactory, TrinoDataLoader
+            from tribench.data.dataset import TrinoDataLoader
             
             try:
                 benchmark_type = BenchmarkType(metadata.benchmark_type)

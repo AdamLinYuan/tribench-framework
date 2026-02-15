@@ -16,3 +16,11 @@ server:
     query:
       maxMemory: "4GB"
 
+commonLabels: {}
+
+tolerations:
+  - key: "kubernetes.io/arch"
+    operator: "Equal"
+    value: "arm64"
+    effect: "NoSchedule"
+

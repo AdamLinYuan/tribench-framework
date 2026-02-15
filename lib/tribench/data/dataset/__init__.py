@@ -6,7 +6,7 @@ Provides modular dataset management components.
 
 from .schema import BenchmarkType, DatasetSchema, TPCHSchema, TPCDSSchema, SchemaFactory
 from .metadata import DatasetMetadata, DatasetValidator
-from .generator import TPCHGenerator
+from .generator import TPCHGenerator, TPCDSGenerator
 from .loader import TrinoDataLoader
 from .registry import DatasetRegistry
 
@@ -19,6 +19,7 @@ __all__ = [
     'DatasetMetadata',
     'DatasetValidator',
     'TPCHGenerator',
+    'TPCDSGenerator',
     'TrinoDataLoader',
     'DatasetRegistry',
 ]

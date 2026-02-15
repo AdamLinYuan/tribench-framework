@@ -12,6 +12,11 @@ spec:
       labels:
         app: minio
     spec:
+      tolerations:
+      - key: "kubernetes.io/arch"
+        operator: "Equal"
+        value: "arm64"
+        effect: "NoSchedule"
       containers:
       - name: minio
         image: minio/minio:latest

@@ -26,3 +26,4 @@ This directory contains the project journal split by phases.
 - [Code Refactoring - December 2025 ✅](06_code_refactoring_december_2025.md)
 - [Advanced Query Metrics - January 2026 ✅](07_advanced_query_metrics_january_2026.md)
 - [Configuration-Based Backend Selection - January 2026 ✅](08_backend_config_selection_january_2026.md)
+- [Universal Iceberg Loader - February 2026 ✅](09_universal_iceberg_loader_february_2026.md)

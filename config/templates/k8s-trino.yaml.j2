@@ -26,6 +26,14 @@ spec:
         app: trino
         component: coordinator
     spec:
+      tolerations:
+      - key: "kubernetes.io/arch"
+        operator: "Equal"
+        value: "arm64"
+        effect: "NoSchedule"
+      securityContext:
+        runAsUser: 0
+        fsGroup: 0
       containers:
       - name: trino
         image: trinodb/trino:{{ config.tribench.systems.trino.version }}
@@ -82,6 +90,14 @@ spec:
         app: trino
         component: worker
     spec:
+      tolerations:
+      - key: "kubernetes.io/arch"
+        operator: "Equal"
+        value: "arm64"
+        effect: "NoSchedule"
+      securityContext:
+        runAsUser: 0
+        fsGroup: 0
       containers:
       - name: trino-worker
         image: trinodb/trino:{{ config.tribench.systems.trino.version }}

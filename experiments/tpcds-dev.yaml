@@ -1,0 +1,26 @@
+name: "tpcds-dev"
+description: "TPC-DS Development - Quick validation with simple queries"
+system: "trino"
+connection:
+  host: "localhost"
+  port: 8080
+  user: "tribench"
+  catalog: "iceberg"
+  schema: "tpcds"
+runs: 1
+warmup_runs: 0
+timeout_seconds: 300
+max_retries: 1
+query_files:
+  - "apps/tpcds/queries/q03.sql"
+  - "apps/tpcds/queries/q07.sql"
+  - "apps/tpcds/queries/q52.sql"
+  - "apps/tpcds/queries/q55.sql"
+monitoring:
+  enabled: false
+metadata:
+  benchmark: "TPC-DS"
+  scale_factor: 1
+  dataset: "tpcds-sf1"
+  format: "iceberg"
+  tags: ["tpcds", "development", "quick-test"]

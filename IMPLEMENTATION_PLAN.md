@@ -996,3 +996,8 @@ These features can be discussed as logical extensions in the "Future Work" secti
 
 This plan provides a **realistic and achievable** approach to building a comprehensive benchmarking framework that follows proven patterns from PEEL while being specifically tailored for Trino and data lakehouse workloads. The scoped implementation delivers on dissertation requirements while acknowledging practical constraints of timeline and resources.
 
+kubectl config get-contexts
+tribench sys status
+tribench sys start all
+tribench exp run experiments/tpch-gcp.yaml --parallel 8
+tribench res list

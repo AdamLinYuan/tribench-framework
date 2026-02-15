@@ -1,0 +1,20 @@
+# Hive Catalog Configuration
+# Used for creating external tables to stage Parquet data before loading into Iceberg
+connector.name=hive
+
+# Hive Metastore connection
+hive.metastore.uri=thrift://{{ config.tribench.systems.hive_metastore.docker.service_name }}:{{ config.tribench.systems.hive_metastore.port }}
+
+# S3-compatible storage (MinIO)
+hive.s3.endpoint=http://{{ config.tribench.systems.minio.docker.service_name }}:{{ config.tribench.systems.minio.port }}
+hive.s3.aws-access-key={{ config.tribench.systems.minio.access_key }}
+hive.s3.aws-secret-key={{ config.tribench.systems.minio.secret_key }}
+hive.s3.path-style-access=true
+hive.s3.region={{ config.tribench.systems.minio.region }}
+
+# Allow creating external tables
+hive.non-managed-table-writes-enabled=true
+hive.non-managed-table-creates-enabled=true
+
+# Parquet format support
+hive.parquet.use-column-names=true

@@ -95,6 +95,15 @@ class TrinoConfigGenerator:
         )
         logger.debug(f"Generated: {iceberg_file}")
         
+        # Generate Hive catalog (for external table staging)
+        hive_file = catalog_dir / "hive.properties"
+        self.template.generate(
+            template_name="trino-catalog-hive.properties.j2",
+            config=self.config,
+            output_path=hive_file
+        )
+        logger.debug(f"Generated: {hive_file}")
+        
         # Generate TPCH catalog
         tpch_file = catalog_dir / "tpch.properties"
         with open(tpch_file, "w") as f:

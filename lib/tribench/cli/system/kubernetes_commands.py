@@ -6,37 +6,44 @@ Commands for managing Kubernetes clusters and port forwarding.
 
 import click
 from pathlib import Path
-from tribench.cli.base import dry_run_option, verbose_option
+from tribench.cli.base import dry_run_option, verbose_option, config_option
 from tribench.defaults import Defaults
+from tribench.utils.config import ConfigurationLoader
 from .utils import get_k8s_system
 
 
 @click.command(name="port-forward")
 @click.argument("action", type=click.Choice(['start', 'stop', 'status']))
 @click.option('--port', type=int, default=Defaults.Trino.PORT, help=f'Local port to forward (default: {Defaults.Trino.PORT}).')
+@config_option
 @verbose_option
 @click.pass_context
-def port_forward(ctx, action, port, verbose):
-    """Manage Kubernetes port forwarding for Trino access.
+def port_forward(ctx, action, port, config, verbose):
+    """Manage Kubernetes port forwarding for Trino and MinIO access.
     
-    Port forwarding allows local access to Trino running in Kubernetes.
+    Port forwarding allows local access to services running in Kubernetes.
+    This command forwards both Trino (8080) and MinIO (9000/9001) ports.
     Once started, it persists until explicitly stopped or the process is killed.
     
     \b
     Examples:
-        tribench sys port-forward start     # Start port forwarding
+        tribench sys port-forward start     # Start port forwarding (Trino + MinIO)
         tribench sys port-forward status    # Check if port forwarding is active
         tribench sys port-forward stop      # Stop port forwarding
     """
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
+    # Load configuration (respects active profile)
+    config_loader = ConfigurationLoader()
+    full_config = config_loader.load(experiment_config=config) if config else config_loader.load()
+    
     try:
-        k8s = get_k8s_system()
+        k8s = get_k8s_system(config_tree=full_config)
         k8s.local_port = port
         k8s.container_port = port
         
         if action == 'start':
-            click.echo(f"Starting port forwarding on port {port}...")
+            click.echo("Starting port forwarding...")
             
             # Check if Trino is running first
             status = k8s.status()
@@ -45,12 +52,24 @@ def port_forward(ctx, action, port, verbose):
                 click.echo("  Start it first with: tribench sys start trino --kind")
                 return
             
-            k8s.start_port_forwarding()
+            # Start both Trino and MinIO port forwards
+            k8s.start_port_forwarding(include_minio=True)
             
-            if k8s.is_port_forwarding_active():
-                click.secho(f"✓ Port forwarding active on localhost:{port}", fg='green')
-                click.echo(f"  Trino is now accessible at http://{Defaults.Hosts.LOCALHOST}:{Defaults.Trino.PORT}")
+            # Check status
+            trino_active = k8s.is_port_forwarding_active()
+            minio_active = k8s.is_minio_port_forwarding_active()
+            
+            if trino_active and minio_active:
+                click.secho("✓ Port forwarding active", fg='green')
+                click.echo(f"  Trino:  http://{Defaults.Hosts.LOCALHOST}:{Defaults.Trino.PORT}")
+                click.echo(f"  MinIO:  http://{Defaults.Hosts.LOCALHOST}:{Defaults.MinIO.PORT} (API)")
+                click.echo(f"          http://{Defaults.Hosts.LOCALHOST}:{Defaults.MinIO.CONSOLE_PORT} (Console)")
+                click.echo("")
                 click.echo("  Stop with: tribench sys port-forward stop")
+            elif trino_active:
+                click.secho("⚠ Trino port forwarding active, but MinIO failed", fg='yellow')
+                click.echo(f"  Trino: http://{Defaults.Hosts.LOCALHOST}:{Defaults.Trino.PORT}")
+                click.echo("  Check log/port-forward-minio.log for details")
             else:
                 click.secho("✗ Failed to start port forwarding", fg='red')
                 click.echo("  Check log/port-forward.log for details")
@@ -61,19 +80,22 @@ def port_forward(ctx, action, port, verbose):
             click.secho("✓ Port forwarding stopped", fg='green')
             
         elif action == 'status':
-            if k8s.is_port_forwarding_active():
-                # Try to get PID from file
-                pid_file = Path("log/port-forward.pid")
-                pid_info = ""
-                if pid_file.exists():
-                    try:
-                        pid = pid_file.read_text().strip()
-                        pid_info = f" (pid {pid})"
-                    except:
-                        pass
-                click.secho(f"✓ Port forwarding is active on localhost:{port}{pid_info}", fg='green')
+            trino_active = k8s.is_port_forwarding_active()
+            minio_active = k8s.is_minio_port_forwarding_active()
+            
+            if trino_active and minio_active:
+                click.secho("✓ Port forwarding is active", fg='green')
+                click.echo(f"  Trino:  localhost:{Defaults.Trino.PORT}")
+                click.echo(f"  MinIO:  localhost:{Defaults.MinIO.PORT} (API)")
+                click.echo(f"          localhost:{Defaults.MinIO.CONSOLE_PORT} (Console)")
+            elif trino_active:
+                click.secho("⚠ Trino active, MinIO not active", fg='yellow')
+                click.echo(f"  Trino:  localhost:{Defaults.Trino.PORT}")
+            elif minio_active:
+                click.secho("⚠ MinIO active, Trino not active", fg='yellow')
+                click.echo(f"  MinIO:  localhost:{Defaults.MinIO.PORT}")
             else:
-                click.secho(f"✗ Port forwarding is not active", fg='yellow')
+                click.secho("✗ Port forwarding is not active", fg='yellow')
                 click.echo("  Start with: tribench sys port-forward start")
                 
     except Exception as e:

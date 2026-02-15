@@ -1,7 +1,8 @@
 """
-TPC-H dataset generator.
+TPC-H and TPC-DS dataset generators.
 
-Handles generation of TPC-H datasets using Docker-based dbgen.
+Handles generation of TPC-H datasets using Docker-based dbgen
+and TPC-DS datasets using DuckDB's built-in extension.
 """
 
 import logging
@@ -13,7 +14,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pyarrow.csv as csv
 
-from .schema import TPCHSchema
+from .schema import TPCHSchema, TPCDSSchema
 
 logger = logging.getLogger(__name__)
 
@@ -152,3 +153,120 @@ class TPCHGenerator:
             except Exception as e:
                 logger.error(f"Failed to convert {table_name}: {e}")
                 raise
+
+
+class TPCDSGenerator:
+    """Generates TPC-DS datasets using DuckDB's built-in TPC-DS extension."""
+    
+    def __init__(self, output_dir: Path, config: Optional[Dict] = None):
+        """
+        Initialize TPC-DS generator.
+        
+        Args:
+            output_dir: Directory to store generated datasets
+            config: Optional configuration dictionary
+        """
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.config = config or {}
+        self.schema = TPCDSSchema()
+    
+    def generate(self, scale_factor: float = 1.0, format: str = 'parquet') -> Path:
+        """
+        Generate TPC-DS dataset at specified scale factor using DuckDB.
+        
+        Args:
+            scale_factor: TPC-DS scale factor (1 = 1GB)
+            format: Output format ('csv' or 'parquet')
+            
+        Returns:
+            Path to generated dataset directory
+        """
+        sf_str = str(scale_factor).replace('.', '_')
+        dataset_name = f"tpcds-sf{sf_str}"
+        dataset_path = self.output_dir / dataset_name
+        dataset_path.mkdir(parents=True, exist_ok=True)
+        
+        logger.info(f"Generating TPC-DS dataset: {dataset_name}")
+        
+        # Use DuckDB for TPC-DS generation (simpler and more reliable than dsdgen)
+        parquet_path = dataset_path / "parquet"
+        parquet_path.mkdir(exist_ok=True)
+        
+        self._run_duckdb_generation(scale_factor, parquet_path)
+        
+        # Return parquet path directly if requested
+        if format == 'parquet':
+            return parquet_path
+        
+        # Convert to CSV if requested
+        csv_path = dataset_path / "csv"
+        csv_path.mkdir(exist_ok=True)
+        self._convert_parquet_to_csv(parquet_path, csv_path)
+        return csv_path
+    
+    def _run_duckdb_generation(self, scale_factor: float, output_dir: Path) -> None:
+        """
+        Generate TPC-DS data using DuckDB's built-in TPC-DS extension.
+        This is more reliable and portable than building dsdgen from source.
+        """
+        try:
+            import duckdb
+            
+            logger.info(f"Generating TPC-DS SF{scale_factor} using DuckDB...")
+            
+            # Connect to DuckDB (in-memory)
+            conn = duckdb.connect()
+            
+            # Install and load TPC-DS extension
+            conn.execute("INSTALL tpcds")
+            conn.execute("LOAD tpcds")
+            
+            # Call the TPC-DS generation function
+            conn.execute(f"CALL dsdgen(sf={scale_factor})")
+            
+            # Export each table to Parquet
+            tables = self.schema.get_tables()
+            for table_name in tables:
+                parquet_file = output_dir / f"{table_name}.parquet"
+                logger.info(f"Exporting {table_name}...")
+                
+                # Query the table and export
+                conn.execute(
+                    f"COPY {table_name} TO '{parquet_file}' " 
+                    "(FORMAT PARQUET, COMPRESSION SNAPPY)"
+                )
+                
+                # Get row count for logging
+                result = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
+                row_count = result[0] if result else 0
+                logger.info(f"Created {parquet_file.name} ({row_count:,} rows)")
+            
+            conn.close()
+            logger.info(f"Successfully generated TPC-DS SF{scale_factor} data")
+            
+        except ImportError:
+            raise RuntimeError(
+                "DuckDB is not installed. "
+                "Install it with: pip install duckdb"
+            )
+        except Exception as e:
+            logger.error(f"Failed to generate TPC-DS data with DuckDB: {e}")
+            raise RuntimeError(f"Failed to generate TPC-DS data: {e}")
+    
+    def _convert_parquet_to_csv(self, parquet_dir: Path, csv_dir: Path) -> None:
+        """Convert Parquet files to CSV format."""
+        import pyarrow.csv as csv_writer
+        
+        for parquet_file in parquet_dir.glob("*.parquet"):
+            table_name = parquet_file.stem
+            csv_file = csv_dir / f"{table_name}.csv"
+            
+            logger.info(f"Converting {table_name} to CSV...")
+            
+            # Read Parquet and write CSV
+            table = pq.read_table(parquet_file)
+            csv_writer.write_csv(table, csv_file)
+            
+            logger.info(f"Created {csv_file.name}")
+

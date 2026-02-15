@@ -1,0 +1,44 @@
+name: "experiment-name"
+description: "Description of what this experiment does"
+system: "trino"
+queries:
+  - "SELECT COUNT(*) FROM table1"
+  - "SELECT * FROM table2 LIMIT 10"
+query_files:
+  - "apps/tpch/queries/q01.sql"
+  - "apps/tpch/queries/q02.sql"
+dataset: "tpch-sf1"
+runs: 3
+warmup_runs: 1
+timeout_seconds: 300
+max_retries: 2
+parallel_queries: 1
+connection:
+  host: "localhost"
+  port: 8080
+  user: "admin"
+  password: "secret"
+  catalog: "iceberg"
+  schema: "tpch"
+  verify: false
+monitoring:
+  enabled: true
+  interval_seconds: 5.0
+  kubernetes:
+    enabled: true
+    context: "kind-tribench"
+    namespace: "tribench"
+    label_selector: "app=trino"
+    pod_name_pattern: "trino-.*"
+validation:
+  min_success_rate: 0.95
+metadata:
+  benchmark: "TPC-H"
+  scale_factor: 1
+  dataset: "tpch-tiny-iceberg"
+  dataset_location: "iceberg.tpch_sf1"
+  format: "iceberg"
+  tags: ["tpch", "iceberg", "benchmark"]
+  custom_field: "custom_value"
+
+

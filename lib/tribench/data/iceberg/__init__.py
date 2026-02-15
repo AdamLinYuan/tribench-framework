@@ -1,9 +1,9 @@
 """
 Iceberg table management package.
 
-Provides modular Iceberg table creation and loading components.
+Provides universal data loading via Hive CTAS for any benchmark.
 """
 
-from .loader import IcebergDataLoader, create_iceberg_loader
+from .universal_loader import UniversalIcebergLoader
 
-__all__ = ['IcebergDataLoader', 'create_iceberg_loader']
+__all__ = ['UniversalIcebergLoader']

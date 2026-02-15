@@ -8,6 +8,7 @@ from tribench.data.dataset import (
     DatasetMetadata,
     DatasetValidator,
     TPCHGenerator,
+    TPCDSGenerator,
     TrinoDataLoader,
     DatasetRegistry
 )
@@ -16,6 +17,7 @@ __all__ = [
     'DatasetMetadata',
     'DatasetValidator', 
     'TPCHGenerator',
+    'TPCDSGenerator',
     'TrinoDataLoader',
     'DatasetRegistry'
 ]
