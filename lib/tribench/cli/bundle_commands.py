@@ -13,7 +13,10 @@ from pathlib import Path
 import click
 
 from tribench.cli.base import cli
-from tribench.bundle.manifest import Bundle, BundleError, find_bundle_root
+from tribench.bundle.manifest import (
+    Bundle, BundleError, find_bundle_root,
+    get_active_bundle, set_active_bundle, clear_active_bundle,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -89,6 +92,75 @@ def _get_bundle_dir(ctx: click.Context) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# tribench bundle show / set / clear
+# ---------------------------------------------------------------------------
+
+@bundle_group.command(name="show")
+def bundle_show():
+    """Show the currently active bundle.
+
+    \b
+    Examples:
+        tribench bundle show
+    """
+    active = get_active_bundle()
+    if active:
+        exists_marker = "" if active.exists() else " (directory not found)"
+        click.secho(f"Active bundle: {active}{exists_marker}", fg='green' if active.exists() else 'yellow')
+    else:
+        click.echo("No active bundle set.")
+        click.echo("Use 'tribench bundle set <path>' to set one.")
+
+
+@bundle_group.command(name="set")
+@click.argument('bundle_path')
+def bundle_set(bundle_path: str):
+    """Set a bundle as active (persists across sessions).
+
+    Once set, TriBench uses this bundle automatically without needing
+    the --bundle flag on every command.
+
+    \b
+    Examples:
+        tribench bundle set bundles/tpch
+        tribench bundle set /data/bundles/tpcds
+    """
+    root = Path(bundle_path).resolve()
+    if not root.exists():
+        click.secho(f"✗ Directory not found: {root}", fg='red', err=True)
+        raise SystemExit(1)
+    if not (root / Bundle.MANIFEST_FILENAME).exists():
+        click.secho(
+            f"✗ No bundle.yaml found in {root}. "
+            "Is this a valid bundle directory?",
+            fg='red', err=True,
+        )
+        raise SystemExit(1)
+
+    set_active_bundle(root)
+    bundle = Bundle.load(root)
+    click.secho(f"✓ Active bundle set to '{bundle.name}' ({root})", fg='green')
+    click.echo("  Run 'tribench bundle clear' to unset.")
+
+
+@bundle_group.command(name="clear")
+def bundle_clear():
+    """Clear the active bundle (revert to --bundle flag / auto-detect).
+
+    \b
+    Examples:
+        tribench bundle clear
+    """
+    active = get_active_bundle()
+    if active:
+        clear_active_bundle()
+        click.secho("✓ Active bundle cleared", fg='green')
+        click.echo("  TriBench will now require --bundle or auto-detect from CWD.")
+    else:
+        click.echo("No active bundle was set.")
+
+
+# ---------------------------------------------------------------------------
 # tribench bundle create
 # ---------------------------------------------------------------------------
 
@@ -133,11 +205,17 @@ def bundle_create(name: str, bundle_path: str | None, version: str, description:
             else:
                 click.echo(f"  {subdir.name}")
         click.echo()
+        click.echo("Templates included as starting points:")
+        click.echo(f"  config/hosts/example.conf              ← host profile template")
+        click.echo(f"  experiments/experiment-template.yaml   ← single experiment template")
+        click.echo(f"  experiments/suites/suite-template.yaml ← suite template")
+        click.echo()
         click.echo("Next steps:")
         click.echo(f"  cd {bundle.root}")
-        click.echo("  # Add experiment YAMLs to experiments/")
-        click.echo("  # Add query files to apps/")
-        click.echo("  # Edit config/application.conf for bundle-level settings")
+        click.echo("  # 1. Copy & edit config/hosts/example.conf → config/hosts/<profile>.conf")
+        click.echo("  #    then: tribench config profile set <profile>")
+        click.echo("  # 2. Add experiment YAMLs to experiments/  (use experiment-template.yaml)")
+        click.echo("  # 3. Add query files to queries/")
         click.echo("  tribench bundle validate")
     except BundleError as exc:
         click.secho(f"✗ {exc}", fg='red')

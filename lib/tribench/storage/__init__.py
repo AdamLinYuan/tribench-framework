@@ -13,7 +13,7 @@ from .models import (
     MonitoringMetric,
 )
 from .result.result_storage import ResultStorage
-from .connection import get_db_session, init_database, close_database
+from .connection import get_db_session, init_database, close_database, set_db_url, clear_db_url
 
 __all__ = [
     "Experiment",
@@ -25,4 +25,6 @@ __all__ = [
     "get_db_session",
     "init_database",
     "close_database",
+    "set_db_url",
+    "clear_db_url",
 ]

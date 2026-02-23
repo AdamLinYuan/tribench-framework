@@ -14,6 +14,13 @@ from tribench.utils.config import ConfigurationLoader
 from .utils import get_k8s_system
 
 
+def _load_cfg(ctx, config_path=None):
+    """Load config with bundle_root taken from Click context if available."""
+    bundle_root = getattr(ctx.obj, 'bundle_root', None)
+    loader = ConfigurationLoader(bundle_root=bundle_root)
+    return loader.load(experiment_config=config_path) if config_path else loader.load()
+
+
 @click.command(name="status")
 @click.argument("system", 
                 type=click.Choice(['trino', 'postgresql', 'minio', 'hive-metastore', 'all']),
@@ -35,8 +42,7 @@ def status(ctx, system, config, verbose):
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
     # Load configuration first to check backend default
-    loader = ConfigurationLoader()
-    cfg = loader.load(experiment_config=config) if config else loader.load()
+    cfg = _load_cfg(ctx, config)
     
     # Determine backend
     use_k8s = should_use_kubernetes(cfg)

@@ -8,7 +8,7 @@ import logging
 from tribench.cli.base import dry_run_option, verbose_option, config_option, should_use_kubernetes, ensure_k8s_port_forwarding, auto_ensure_trino_connection
 from tribench.data.dataset import DatasetRegistry, DatasetMetadata, BenchmarkType, SchemaFactory
 from tribench.data.iceberg.universal_loader import UniversalIcebergLoader
-from .utils import get_datasets_root, get_trino_connection_params
+from .utils import get_datasets_root, get_all_datasets_roots, get_trino_connection_params
 
 logger = logging.getLogger(__name__)
 
@@ -54,9 +54,11 @@ def load(ctx, dataset, system, catalog, schema, storage, partition, validate, co
     
     # Load configuration
     from tribench.utils.config import ConfigurationLoader
-    config_loader = ConfigurationLoader()
+    bundle_root = getattr(ctx.obj, 'bundle_root', None)
+    config_loader = ConfigurationLoader(bundle_root=bundle_root)
     full_config = config_loader.load(experiment_config=config)
-    datasets_root = get_datasets_root(config)
+    datasets_root = get_datasets_root(config, bundle_root=bundle_root)
+    all_datasets_roots = get_all_datasets_roots(config, bundle_root=bundle_root)
     
     # Determine backend
     use_k8s = should_use_kubernetes(full_config)
@@ -88,29 +90,45 @@ def load(ctx, dataset, system, catalog, schema, storage, partition, validate, co
         return
     
     try:
-        # Check if dataset exists as directory (custom dataset) or in registry
-        dataset_path = datasets_root / dataset
-        is_custom_dataset = dataset_path.exists() and dataset_path.is_dir()
-        
-        # Try to get metadata from registry
-        registry_path = datasets_root / "registry.yaml"
+        # Search all dataset roots in priority order (bundle first, then framework)
+        dataset_path = None
         metadata = None
-        if registry_path.exists():
-            registry = DatasetRegistry(registry_path)
-            metadata = registry.get(dataset)
-        
+        for root in all_datasets_roots:
+            candidate = root / dataset
+            if candidate.exists() and candidate.is_dir():
+                dataset_path = candidate
+                datasets_root = root
+                break
+            reg = root / "registry.yaml"
+            if reg.exists():
+                m = DatasetRegistry(reg).get(dataset)
+                if m:
+                    metadata = m
+                    datasets_root = root
+                    dataset_path = candidate
+                    break
+
+        if dataset_path is None:
+            dataset_path = all_datasets_roots[0] / dataset
+
+        is_custom_dataset = dataset_path.exists() and dataset_path.is_dir()
+
         # Handle case where dataset is not found
         if not metadata and not is_custom_dataset:
             click.secho(f"✗ Dataset '{dataset}' not found", fg='red')
             click.echo(f"\nSearched:")
-            if registry_path.exists():
-                click.echo(f"  - Registry: {registry_path}")
-            click.echo(f"  - Directory: {dataset_path}")
+            for root in all_datasets_roots:
+                reg = root / "registry.yaml"
+                if reg.exists():
+                    click.echo(f"  - Registry: {reg}")
+                click.echo(f"  - Directory: {root / dataset}")
             click.echo(f"\nTo add a custom dataset:")
-            click.echo(f"  1. Create directory: {dataset_path}/")
-            click.echo(f"  2. Add Parquet files: {dataset_path}/*.parquet")
+            click.echo(f"  1. Create directory: {all_datasets_roots[0] / dataset}/")
+            click.echo(f"  2. Add Parquet files: {all_datasets_roots[0] / dataset}/*.parquet")
             click.echo(f"  3. Run: tribench data load {dataset}")
             return
+
+        registry_path = datasets_root / "registry.yaml"
         
         # Handle custom dataset (auto-discovery)
         if is_custom_dataset and not metadata:

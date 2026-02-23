@@ -23,6 +23,14 @@ Usage:
     print(bundle.experiments_path)  # Path("…/my-bundle/experiments")
 """
 
-from tribench.bundle.manifest import Bundle, BundleManifest, BundleError, find_bundle_root
+from tribench.bundle.manifest import (
+    Bundle,
+    BundleManifest,
+    BundleError,
+    find_bundle_root,
+    get_active_bundle,
+    set_active_bundle,
+    clear_active_bundle,
+)
 
 __all__ = ["Bundle", "BundleManifest", "BundleError", "find_bundle_root"]

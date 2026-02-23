@@ -29,7 +29,8 @@ def validate(ctx, dataset, checksums, row_counts, config, verbose):
     """
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
-    datasets_root = get_datasets_root(config)
+    bundle_root = getattr(ctx.obj, 'bundle_root', None)
+    datasets_root = get_datasets_root(config, bundle_root=bundle_root)
     
     if ctx.obj.verbose:
         click.echo(f"Validating dataset: {dataset}")

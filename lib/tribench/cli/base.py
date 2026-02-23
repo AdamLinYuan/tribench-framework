@@ -89,7 +89,7 @@ def is_k8s_deployment_active() -> bool:
     Returns:
         True if K8s deployment appears to be active
     """
-    pid_file = Path("log/port-forward.pid")
+    pid_file = get_log_dir() / "port-forward.pid"
     if pid_file.exists():
         return True
     
@@ -173,7 +173,7 @@ def auto_ensure_trino_connection(config=None) -> bool:
         pass
     
     # Check if this looks like a K8s deployment (PID file exists)
-    pid_file = Path("log/port-forward.pid")
+    pid_file = get_log_dir() / "port-forward.pid"
     if pid_file.exists():
         # K8s deployment but port forwarding died - try to restart
         click.echo("Port forwarding appears to have stopped. Restarting...")
@@ -192,6 +192,28 @@ class TriBenchContext:
         self.config_path = None
         self.root_dir = Path(__file__).parent.parent.parent.parent
         self.bundle_root: Path | None = None   # set by --bundle option
+
+    @property
+    def log_dir(self) -> Path:
+        """Return the log directory: bundle's log/ when active, else CWD/log/."""
+        if self.bundle_root is not None:
+            return self.bundle_root / "log"
+        return Path("log")
+
+
+def get_log_dir(ctx_obj=None) -> Path:
+    """Return the active log directory, falling back to CWD/log/ if no context."""
+    if ctx_obj is not None and hasattr(ctx_obj, 'log_dir'):
+        return ctx_obj.log_dir
+    # Fallback: check active bundle state file
+    try:
+        from tribench.bundle.manifest import get_active_bundle
+        active = get_active_bundle()
+        if active and active.exists():
+            return active / "log"
+    except Exception:
+        pass
+    return Path("log")
 
 
 @click.group()
@@ -225,13 +247,30 @@ def cli(ctx, verbose, bundle):
     """
     ctx.ensure_object(TriBenchContext)
     ctx.obj.verbose = verbose
+
+    # Resolve bundle: --bundle flag > active-bundle state file > auto-detect
+    resolved_bundle: Path | None = None
     if bundle:
-        ctx.obj.bundle_root = Path(bundle)
-    
+        resolved_bundle = Path(bundle)
+    else:
+        from tribench.bundle.manifest import get_active_bundle
+        active = get_active_bundle()
+        if active and active.exists():
+            resolved_bundle = active
+
+    if resolved_bundle is not None:
+        ctx.obj.bundle_root = resolved_bundle
+
+        # Point the results database at the bundle's results/ directory
+        from tribench.storage.connection import set_db_url
+        results_dir = ctx.obj.bundle_root / "results"
+        results_dir.mkdir(parents=True, exist_ok=True)
+        set_db_url(f"sqlite:///{results_dir / 'tribench.db'}")
+
     if verbose:
         click.echo(f"TriBench v{__version__}", err=True)
-        if bundle:
-            click.echo(f"Bundle: {bundle}", err=True)
+        if resolved_bundle:
+            click.echo(f"Bundle: {resolved_bundle}", err=True)
 
 
 @cli.command()

@@ -46,7 +46,8 @@ def config_group():
     help='Show which config file each value comes from'
 )
 @verbose_option
-def show_config(section: Optional[str], experiment: Optional[str], format: str, sources: bool, verbose: bool):
+@click.pass_context
+def show_config(ctx, section: Optional[str], experiment: Optional[str], format: str, sources: bool, verbose: bool):
     """
     Show the current merged configuration.
     
@@ -62,7 +63,8 @@ def show_config(section: Optional[str], experiment: Optional[str], format: str, 
         tribench config show --sources  # Show config file sources
     """
     try:
-        loader = ConfigurationLoader()
+        bundle_root = getattr(ctx.obj, 'bundle_root', None)
+        loader = ConfigurationLoader(bundle_root=bundle_root)
         
         # Load configuration
         if experiment:
@@ -135,7 +137,8 @@ def show_config(section: Optional[str], experiment: Optional[str], format: str, 
     help='Validate with experiment config included'
 )
 @verbose_option
-def validate_config(experiment: Optional[str], verbose: bool):
+@click.pass_context
+def validate_config(ctx, experiment: Optional[str], verbose: bool):
     """
     Validate configuration for errors.
     
@@ -151,7 +154,8 @@ def validate_config(experiment: Optional[str], verbose: bool):
         tribench config validate --experiment experiments/my-test.yaml
     """
     try:
-        loader = ConfigurationLoader()
+        bundle_root = getattr(ctx.obj, 'bundle_root', None)
+        loader = ConfigurationLoader(bundle_root=bundle_root)
         
         click.echo("Validating configuration...", err=True) if verbose else None
         
@@ -221,7 +225,8 @@ def validate_config(experiment: Optional[str], verbose: bool):
     help='Include experiment config in trace'
 )
 @verbose_option
-def trace_config(key: str, experiment: Optional[str], verbose: bool):
+@click.pass_context
+def trace_config(ctx, key: str, experiment: Optional[str], verbose: bool):
     """
     Trace where a configuration value comes from.
     
@@ -233,7 +238,8 @@ def trace_config(key: str, experiment: Optional[str], verbose: bool):
         tribench config trace systems.minio.host
     """
     try:
-        loader = ConfigurationLoader()
+        bundle_root = getattr(ctx.obj, 'bundle_root', None)
+        loader = ConfigurationLoader(bundle_root=bundle_root)
         
         # Load all layers separately
         from pyhocon import ConfigFactory
@@ -383,7 +389,8 @@ def show_defaults(section: str):
 @config_group.command(name="profile")
 @click.argument('action', type=click.Choice(['show', 'set', 'clear', 'list']))
 @click.argument('profile_name', required=False)
-def manage_profile(action: str, profile_name: Optional[str]):
+@click.pass_context
+def manage_profile(ctx, action: str, profile_name: Optional[str]):
     """
     Manage active configuration profile.
     
@@ -405,7 +412,8 @@ def manage_profile(action: str, profile_name: Optional[str]):
         tribench config profile clear
         tribench config profile list
     """
-    loader = ConfigurationLoader()
+    bundle_root = getattr(ctx.obj, 'bundle_root', None)
+    loader = ConfigurationLoader(bundle_root=bundle_root)
     
     if action == 'show':
         active = loader.get_active_profile()

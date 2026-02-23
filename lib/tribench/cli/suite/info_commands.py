@@ -8,10 +8,28 @@ from tribench.cli.base import verbose_option
 from tribench.core.experiment_suite import ExperimentSuite
 
 
+def _default_suites_path(ctx) -> str:
+    """Return the suites directory, preferring the active bundle's experiments/suites/."""
+    bundle_root = getattr(ctx.obj, 'bundle_root', None) if ctx.obj else None
+    if bundle_root is None:
+        try:
+            from tribench.bundle.manifest import get_active_bundle
+            active = get_active_bundle()
+            if active and active.exists():
+                bundle_root = active
+        except Exception:
+            pass
+    if bundle_root is not None:
+        candidate = Path(bundle_root) / 'experiments' / 'suites'
+        if candidate.exists():
+            return str(candidate)
+    return 'experiments/suites'
+
+
 @click.command(name="list")
-@click.option('--path', type=click.Path(exists=True), 
-              default='experiments/suites',
-              help='Directory to search for suites.')
+@click.option('--path', type=click.Path(exists=False),
+              default=None,
+              help='Directory to search for suites. Defaults to active bundle\'s experiments/suites/ or experiments/suites.')
 @verbose_option
 @click.pass_context
 def list_suites(ctx, path, verbose):
@@ -23,8 +41,9 @@ def list_suites(ctx, path, verbose):
         tribench suite list --path experiments/suites
     """
     ctx.obj.verbose = verbose or ctx.obj.verbose
-    
-    suite_dir = Path(path)
+
+    resolved_path = path if path else _default_suites_path(ctx)
+    suite_dir = Path(resolved_path)
     
     if not suite_dir.exists():
         click.secho(f"✗ Directory not found: {suite_dir}", fg='red')

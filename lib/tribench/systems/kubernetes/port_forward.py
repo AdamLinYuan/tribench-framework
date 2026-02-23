@@ -36,8 +36,15 @@ class PortForwarder:
         self.local_port = local_port
         self.container_port = container_port
         self._process: Optional[subprocess.Popen] = None
-        self.pid_file = Path("log/port-forward.pid")
-        self.log_file = Path("log/port-forward.log")
+        # Use bundle log dir if a bundle is active, otherwise CWD/log/
+        try:
+            from tribench.cli.base import get_log_dir
+            _log_dir = get_log_dir()
+        except Exception:
+            _log_dir = Path("log")
+        _log_dir.mkdir(parents=True, exist_ok=True)
+        self.pid_file = _log_dir / "port-forward.pid"
+        self.log_file = _log_dir / "port-forward.log"
     
     def is_active(self) -> bool:
         """Check if port forwarding is currently active."""

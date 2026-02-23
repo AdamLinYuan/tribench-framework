@@ -12,6 +12,13 @@ from tribench.utils.config import ConfigurationLoader
 from .utils import get_k8s_system
 
 
+def _load_cfg(ctx, config_path=None):
+    """Load config with bundle_root taken from Click context if available."""
+    bundle_root = getattr(ctx.obj, 'bundle_root', None)
+    loader = ConfigurationLoader(bundle_root=bundle_root)
+    return loader.load(experiment_config=config_path) if config_path else loader.load()
+
+
 @click.command(name="port-forward")
 @click.argument("action", type=click.Choice(['start', 'stop', 'status']))
 @click.option('--port', type=int, default=Defaults.Trino.PORT, help=f'Local port to forward (default: {Defaults.Trino.PORT}).')
@@ -33,9 +40,8 @@ def port_forward(ctx, action, port, config, verbose):
     """
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
-    # Load configuration (respects active profile)
-    config_loader = ConfigurationLoader()
-    full_config = config_loader.load(experiment_config=config) if config else config_loader.load()
+    # Load configuration (respects active profile and bundle)
+    full_config = _load_cfg(ctx, config)
     
     try:
         k8s = get_k8s_system(config_tree=full_config)

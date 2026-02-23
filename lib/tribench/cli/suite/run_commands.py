@@ -41,7 +41,8 @@ def run_suite(ctx, suite, experiment_filter, runs, timeout, config, dry_run, ver
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
     # Load configuration to determine backend
-    config_loader = ConfigurationLoader()
+    bundle_root = getattr(ctx.obj, 'bundle_root', None)
+    config_loader = ConfigurationLoader(bundle_root=bundle_root)
     full_config = config_loader.load(experiment_config=config) if config else config_loader.load()
     
     # Determine backend

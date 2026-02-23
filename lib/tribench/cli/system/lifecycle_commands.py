@@ -14,6 +14,13 @@ from tribench.utils.config import ConfigurationLoader
 from .utils import get_k8s_system
 
 
+def _load_cfg(ctx, config_path=None):
+    """Load config with bundle_root taken from Click context if available."""
+    bundle_root = getattr(ctx.obj, 'bundle_root', None)
+    loader = ConfigurationLoader(bundle_root=bundle_root)
+    return loader.load(experiment_config=config_path) if config_path else loader.load()
+
+
 @click.command(name="setup")
 @click.argument("system", type=click.Choice(['trino', 'postgresql', 'minio', 'hive-metastore', 'all']))
 @click.option('--version', help='System version to install.')
@@ -37,8 +44,7 @@ def setup(ctx, system, version, config, dry_run, verbose):
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
     # Load configuration first to check backend default
-    loader = ConfigurationLoader()
-    cfg = loader.load(experiment_config=config) if config else loader.load()
+    cfg = _load_cfg(ctx, config)
     
     # Determine backend
     use_k8s = should_use_kubernetes(cfg)
@@ -92,8 +98,7 @@ def setup(ctx, system, version, config, dry_run, verbose):
                 click.echo(f"Setting up Trino...")
                 
                 # Load configuration
-                loader = ConfigurationLoader()
-                cfg = loader.load(experiment_config=config) if config else loader.load()
+                cfg = _load_cfg(ctx, config)
                 
                 # Override version if specified
                 if version:
@@ -113,8 +118,7 @@ def setup(ctx, system, version, config, dry_run, verbose):
                 click.echo(f"Setting up PostgreSQL...")
                 
                 # Load configuration
-                loader = ConfigurationLoader()
-                cfg = loader.load(experiment_config=config) if config else loader.load()
+                cfg = _load_cfg(ctx, config)
                 
                 # Override version if specified
                 if version:
@@ -134,8 +138,7 @@ def setup(ctx, system, version, config, dry_run, verbose):
                 click.echo(f"Setting up MinIO...")
                 
                 # Load configuration
-                loader = ConfigurationLoader()
-                cfg = loader.load(experiment_config=config) if config else loader.load()
+                cfg = _load_cfg(ctx, config)
                 
                 minio = MinIOSystem(config=cfg)
                 minio.setup()
@@ -150,8 +153,7 @@ def setup(ctx, system, version, config, dry_run, verbose):
                 click.echo(f"Setting up Hive Metastore...")
                 
                 # Load configuration
-                loader = ConfigurationLoader()
-                cfg = loader.load(experiment_config=config) if config else loader.load()
+                cfg = _load_cfg(ctx, config)
                 
                 # Override version if specified
                 if version:
@@ -192,8 +194,7 @@ def start(ctx, system, config, dry_run, verbose):
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
     # Load configuration first to check backend default
-    loader = ConfigurationLoader()
-    cfg = loader.load(experiment_config=config) if config else loader.load()
+    cfg = _load_cfg(ctx, config)
     
     # Determine backend
     use_k8s = should_use_kubernetes(cfg)
@@ -273,8 +274,7 @@ def start(ctx, system, config, dry_run, verbose):
                 click.echo(f"Starting Trino...")
                 
                 # Load configuration
-                loader = ConfigurationLoader()
-                cfg = loader.load(experiment_config=config) if config else loader.load()
+                cfg = _load_cfg(ctx, config)
                 
                 trino = TrinoSystem(config=cfg)
                 trino.start()
@@ -289,8 +289,7 @@ def start(ctx, system, config, dry_run, verbose):
                 click.echo(f"Starting PostgreSQL...")
                 
                 # Load configuration
-                loader = ConfigurationLoader()
-                cfg = loader.load(experiment_config=config) if config else loader.load()
+                cfg = _load_cfg(ctx, config)
                 
                 postgresql = PostgreSQLSystem(config=cfg)
                 postgresql.start()
@@ -305,8 +304,7 @@ def start(ctx, system, config, dry_run, verbose):
                 click.echo(f"Starting MinIO...")
                 
                 # Load configuration
-                loader = ConfigurationLoader()
-                cfg = loader.load(experiment_config=config) if config else loader.load()
+                cfg = _load_cfg(ctx, config)
                 
                 minio = MinIOSystem(config=cfg)
                 minio.start()
@@ -321,8 +319,7 @@ def start(ctx, system, config, dry_run, verbose):
                 click.echo(f"Starting Hive Metastore...")
                 
                 # Load configuration
-                loader = ConfigurationLoader()
-                cfg = loader.load(experiment_config=config) if config else loader.load()
+                cfg = _load_cfg(ctx, config)
                 
                 hive_metastore = HiveMetastoreSystem(config=cfg)
                 hive_metastore.start()
@@ -356,8 +353,7 @@ def stop(ctx, system, force, config, dry_run, verbose):
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
     # Load configuration first to check backend default
-    loader = ConfigurationLoader()
-    cfg = loader.load(experiment_config=config) if config else loader.load()
+    cfg = _load_cfg(ctx, config)
     
     # Determine backend
     use_k8s = should_use_kubernetes(cfg)
@@ -474,8 +470,7 @@ def teardown(ctx, system, keep_data, config, dry_run, verbose):
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
     # Load configuration first to check backend default
-    loader = ConfigurationLoader()
-    cfg = loader.load(experiment_config=config) if config else loader.load()
+    cfg = _load_cfg(ctx, config)
     
     # Determine backend
     use_k8s = should_use_kubernetes(cfg)

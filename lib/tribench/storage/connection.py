@@ -23,22 +23,60 @@ logger = logging.getLogger(__name__)
 _engine = None
 _SessionFactory = None
 
+# Optional override — set this before init_database() to point at a specific path
+# (e.g. a bundle's results directory)
+_db_url_override: Optional[str] = None
+
+
+def set_db_url(url: str) -> None:
+    """
+    Override the database URL used by all subsequent init_database() calls.
+
+    Call this before any storage operations to redirect to a bundle-specific
+    database (e.g. ``sqlite:///bundles/my-bundle/results/tribench.db``).
+
+    If the engine is already initialised for a *different* URL, it is closed
+    and will be re-opened on the next operation.
+    """
+    global _db_url_override, _engine, _SessionFactory
+    if url == _db_url_override:
+        return  # No change needed
+    _db_url_override = url
+    # Reset so the next get_db_session() re-initialises with the new URL
+    if _engine is not None:
+        _engine.dispose()
+        _engine = None
+    _SessionFactory = None
+    logger.debug(f"Database URL override set to: {url}")
+
+
+def clear_db_url() -> None:
+    """Clear the URL override and revert to environment / default discovery."""
+    global _db_url_override, _engine, _SessionFactory
+    if _db_url_override is None:
+        return
+    _db_url_override = None
+    if _engine is not None:
+        _engine.dispose()
+        _engine = None
+    _SessionFactory = None
+    logger.debug("Database URL override cleared")
+
 
 def get_database_url(config: Optional[dict] = None) -> str:
     """
     Get database URL from configuration or environment.
     
     Priority:
-    1. Explicit config dict
-    2. Environment variables
-    3. Default SQLite database
-    
-    Args:
-        config: Optional configuration dictionary
-        
-    Returns:
-        Database URL string
+    1. URL override set via set_db_url() (e.g. from --bundle flag)
+    2. Explicit config dict
+    3. Environment variables
+    4. Default SQLite database (results/tribench.db)
     """
+    # Priority 1: explicit override (bundle-aware path set at CLI startup)
+    if _db_url_override:
+        return _db_url_override
+
     if config and "database_url" in config:
         return config["database_url"]
     

@@ -185,6 +185,11 @@ class Bundle:
         hosts_dir.mkdir(parents=True, exist_ok=True)
         (hosts_dir / ".gitkeep").touch()
 
+        # Create experiments/suites/ sub-directory
+        suites_dir = bundle_root / "experiments" / "suites"
+        suites_dir.mkdir(parents=True, exist_ok=True)
+        (suites_dir / ".gitkeep").touch()
+
         # Write bundle.yaml
         with manifest_path.open("w") as fh:
             yaml.dump(manifest.to_dict(), fh, default_flow_style=False, sort_keys=False)
@@ -196,6 +201,30 @@ class Bundle:
             "# These are applied on top of reference.conf and before host configs.\n"
             "# See tribench's config/reference.conf for all available settings.\n"
         )
+
+        # Copy scaffold templates from the framework root
+        _fw_root = Path(__file__).parent.parent.parent.parent
+        _templates = [
+            (
+                _fw_root / "config" / "templates" / "host-compact.conf",
+                hosts_dir / "example.conf",
+            ),
+            (
+                _fw_root / "experiments" / "templates" / "experiment-template-compact.yaml",
+                bundle_root / "experiments" / "experiment-template.yaml",
+            ),
+            (
+                _fw_root / "experiments" / "templates" / "suite-template.yaml",
+                suites_dir / "suite-template.yaml",
+            ),
+        ]
+        import shutil
+        for src, dst in _templates:
+            if src.exists():
+                shutil.copy2(src, dst)
+                logger.debug(f"Copied template {src.name} → {dst.relative_to(bundle_root)}")
+            else:
+                logger.warning(f"Template not found, skipping: {src}")
 
         logger.info(f"Created bundle '{name}' at {bundle_root}")
         return cls(bundle_root, manifest)
@@ -372,3 +401,49 @@ def find_bundle_root(start: Optional[Path] = None) -> Optional[Path]:
         path = parent
 
     return None
+
+
+# ---------------------------------------------------------------------------
+# Active bundle state  (persisted in .tribench-bundle at the framework root)
+# ---------------------------------------------------------------------------
+
+_ACTIVE_BUNDLE_FILENAME = ".tribench-bundle"
+
+
+def _state_file() -> Path:
+    """Return the path to the .tribench-bundle state file.
+
+    Always lives at the framework root (4 levels above this source file):
+        lib/tribench/bundle/manifest.py  →  lib/tribench/bundle  →  lib/tribench
+        →  lib  →  framework-root
+    """
+    return Path(__file__).parent.parent.parent.parent / _ACTIVE_BUNDLE_FILENAME
+
+
+def get_active_bundle() -> Optional[Path]:
+    """Return the active bundle path stored in .tribench-bundle, or None."""
+    state = _state_file()
+    if state.exists():
+        try:
+            raw = state.read_text().strip()
+            if raw:
+                return Path(raw)
+        except Exception:
+            pass
+    return None
+
+
+def set_active_bundle(bundle_path: Path) -> None:
+    """Persist *bundle_path* as the active bundle.
+
+    Args:
+        bundle_path: Resolved path to the bundle root directory.
+    """
+    _state_file().write_text(str(bundle_path.resolve()))
+
+
+def clear_active_bundle() -> None:
+    """Remove the active-bundle state file."""
+    state = _state_file()
+    if state.exists():
+        state.unlink()

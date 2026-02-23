@@ -65,7 +65,8 @@ def generate(ctx, dataset, format, output, overwrite, config, dry_run, verbose):
     if output:
         output_dir = Path(output)
     else:
-        datasets_root = get_datasets_root(config)
+        bundle_root = getattr(ctx.obj, 'bundle_root', None)
+        datasets_root = get_datasets_root(config, bundle_root=bundle_root)
         output_dir = datasets_root
     
     if ctx.obj.verbose:

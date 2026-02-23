@@ -79,8 +79,14 @@ class KubernetesSystem(System):
             Defaults.MinIO.PORT
         )
         # Update PID/log file names to avoid conflicts
-        self.minio_port_forwarder.pid_file = Path("log/port-forward-minio.pid")
-        self.minio_port_forwarder.log_file = Path("log/port-forward-minio.log")
+        try:
+            from tribench.cli.base import get_log_dir
+            _log_dir = get_log_dir()
+        except Exception:
+            _log_dir = Path("log")
+        _log_dir.mkdir(parents=True, exist_ok=True)
+        self.minio_port_forwarder.pid_file = _log_dir / "port-forward-minio.pid"
+        self.minio_port_forwarder.log_file = _log_dir / "port-forward-minio.log"
     
     # ========== Kind Cluster Management ==========
     
