@@ -9,6 +9,6 @@ from tribench.cli import suite_commands
 from tribench.cli import data_commands
 from tribench.cli import result_commands
 from tribench.cli import config_commands
+from tribench.cli import bundle_commands
 
 __all__ = ["cli"]
-

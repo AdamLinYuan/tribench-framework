@@ -191,13 +191,25 @@ class TriBenchContext:
         self.dry_run = False
         self.config_path = None
         self.root_dir = Path(__file__).parent.parent.parent.parent
+        self.bundle_root: Path | None = None   # set by --bundle option
 
 
 @click.group()
 @click.version_option(version=__version__, prog_name="TriBench")
 @verbose_option
+@click.option(
+    '--bundle',
+    default=None,
+    envvar='TRIBENCH_BUNDLE',
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    help=(
+        'Path to the bundle directory to use. '
+        'Defaults to auto-detection (walks up from CWD looking for bundle.yaml). '
+        'Can also be set via the TRIBENCH_BUNDLE environment variable.'
+    ),
+)
 @click.pass_context
-def cli(ctx, verbose):
+def cli(ctx, verbose, bundle):
     """
     TriBench - Trino Benchmarking Framework
     
@@ -209,12 +221,17 @@ def cli(ctx, verbose):
         tribench sys setup trino
         tribench exp run experiments/tpch-sf1.yaml
         tribench res show exp-001
+        tribench --bundle /data/bundles/tpch exp run experiments/tpch-sf1.yaml
     """
     ctx.ensure_object(TriBenchContext)
     ctx.obj.verbose = verbose
+    if bundle:
+        ctx.obj.bundle_root = Path(bundle)
     
     if verbose:
         click.echo(f"TriBench v{__version__}", err=True)
+        if bundle:
+            click.echo(f"Bundle: {bundle}", err=True)
 
 
 @cli.command()

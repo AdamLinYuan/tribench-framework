@@ -1,0 +1,32 @@
+# ============================================================================
+# TriBench Bundle Manifest — bundle.yaml
+# ============================================================================
+# A bundle is a self-contained, portable directory that contains everything
+# needed to run and reproduce a set of benchmark experiments.
+#
+# REQUIRED fields:
+#   name     – short identifier (no spaces; used in archive filenames)
+#
+# OPTIONAL fields:
+#   version     – semantic version string (default: "1.0.0")
+#   description – human-readable description
+#   paths       – override the default sub-directory names/locations
+#
+# All paths entries are relative to this file's directory.
+# Absolute paths are also supported.
+# ============================================================================
+
+name: my-benchmark
+version: "1.0.0"
+description: "A TriBench benchmark bundle"
+
+# Optional path overrides (uncomment and edit if needed).
+# The 'apps' key is the logical name for the workload query directory.
+# Default value is 'queries/' (TriBench convention).
+# paths:
+#   apps:        queries/
+#   config:      config/
+#   experiments: experiments/
+#   datasets:    datasets/
+#   log:         log/
+#   results:     results/

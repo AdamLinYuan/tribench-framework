@@ -1,0 +1,5 @@
+name: tribench-framework
+version: "1.0.0"
+description: "TriBench — Trino Benchmarking Framework (default bundle)"
+paths:
+  apps: queries/

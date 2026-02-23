@@ -68,7 +68,8 @@ def run(ctx, experiment, name, runs, warmup, timeout, host, port, parallel, no_m
     
     # Load configuration to determine backend
     from tribench.utils.config import ConfigurationLoader
-    config_loader = ConfigurationLoader()
+    bundle_root = getattr(ctx.obj, 'bundle_root', None)
+    config_loader = ConfigurationLoader(bundle_root=bundle_root)
     full_config = config_loader.load(experiment_config=config) if config else config_loader.load()
     
     # Determine backend

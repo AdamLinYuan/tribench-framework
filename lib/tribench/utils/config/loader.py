@@ -13,6 +13,9 @@ from pyhocon import ConfigFactory, ConfigTree
 from dotenv import load_dotenv, find_dotenv
 import logging
 
+# Avoid circular import: bundle discovery is a lightweight helper
+from tribench.bundle.manifest import find_bundle_root, Bundle
+
 logger = logging.getLogger(__name__)
 
 
@@ -33,32 +36,66 @@ class ConfigurationLoader:
     Supports HOCON format with variable substitution and includes.
     """
     
-    def __init__(self, root_path: Optional[Path] = None, load_env: bool = True):
+    def __init__(self,
+                 root_path: Optional[Path] = None,
+                 bundle_root: Optional[Path] = None,
+                 load_env: bool = True):
         """
         Initialize the configuration loader.
-        
+
         Args:
-            root_path: Root path of the TriBench framework.
-                      If None, auto-detect from this file's location.
-            load_env: Whether to automatically load .env file from root_path.
-                     Default is True. Set to False for testing.
+            root_path:   Root path of the TriBench *framework* install.
+                         If None, auto-detect from this file's location.
+            bundle_root: Root path of the active *bundle* (the portable
+                         experiment directory that contains bundle.yaml).
+                         If None, auto-detect by walking up from CWD.
+                         If still not found, defaults to the framework root.
+            load_env:    Whether to automatically load .env file from root_path.
+                         Default is True. Set to False for testing.
         """
+        # --- Framework root (lib / config / reference.conf live here) ---
         if root_path is None:
             # Auto-detect: go up from lib/tribench/utils/config/loader.py to root
             self.root_path = Path(__file__).parent.parent.parent.parent.parent
         else:
             self.root_path = Path(root_path)
-        
+
+        # --- Bundle root (experiments / apps / results / host configs live here) ---
+        if bundle_root is not None:
+            self.bundle_root = Path(bundle_root).resolve()
+        else:
+            detected = find_bundle_root()          # walks up from CWD
+            self.bundle_root = detected if detected else self.root_path
+
+        self._active_bundle: Optional[Bundle] = None
+        if (self.bundle_root / Bundle.MANIFEST_FILENAME).exists():
+            try:
+                self._active_bundle = Bundle.load(self.bundle_root)
+                logger.debug(f"Active bundle: '{self._active_bundle.name}' at {self.bundle_root}")
+            except Exception as exc:
+                logger.warning(f"Could not load bundle manifest: {exc}")
+
+        # --- Config paths ---
+        # reference.conf always comes from the *framework* root
         self.config_path = self.root_path / "config"
         self.reference_config_path = self.config_path / "reference.conf"
-        self.hosts_path = self.config_path / "hosts"
-        self.profile_file = self.root_path / ".tribench-profile"
-        
+
+        # host configs come from the *bundle* (so each bundle can have its own
+        # machine-specific overrides), falling back to framework config/hosts/
+        bundle_hosts = self.bundle_root / "config" / "hosts"
+        self.hosts_path = bundle_hosts if bundle_hosts.exists() else self.config_path / "hosts"
+
+        # .tribench-profile lives alongside the host configs
+        self.profile_file = self.bundle_root / ".tribench-profile"
+
         # Load environment variables from .env file
         if load_env:
             self._load_env_file()
-        
-        logger.debug(f"ConfigurationLoader initialized with root: {self.root_path}")
+
+        logger.debug(
+            f"ConfigurationLoader initialised — framework: {self.root_path}, "
+            f"bundle: {self.bundle_root}"
+        )
     
     def _load_env_file(self) -> None:
         """
@@ -92,6 +129,11 @@ class ConfigurationLoader:
             Environment variable value or default
         """
         return os.getenv(key, default)
+
+    @property
+    def active_bundle(self) -> Optional[Bundle]:
+        """Return the active Bundle object, or None if no bundle is loaded."""
+        return self._active_bundle
     
     def load(self, 
              experiment_config: Optional[Path] = None,
@@ -113,20 +155,26 @@ class ConfigurationLoader:
             # Layer 1: Load reference configuration (defaults)
             config = self._load_reference_config()
             logger.info("Loaded reference configuration")
-            
-            # Layer 2: Load and merge host configuration
+
+            # Layer 2: Load and merge bundle application.conf (if present)
+            if self._active_bundle:
+                bundle_conf = self._load_bundle_config()
+                if bundle_conf:
+                    config = ConfigTree.merge_configs(config, bundle_conf)
+                    logger.info(f"Merged bundle config: {self._active_bundle.application_conf_path}")
+
+            # Layer 3: Load and merge host configuration
             host_config = self._load_host_config(host_name)
             if host_config:
                 config = ConfigTree.merge_configs(config, host_config)
                 logger.info(f"Merged host configuration for: {host_name or 'auto-detected'}")
             
-            # Layer 3: Load and merge experiment configuration
+            # Layer 4: Load and merge experiment configuration
             if experiment_config:
                 exp_config = self._load_experiment_config(experiment_config)
                 config = ConfigTree.merge_configs(config, exp_config)
                 logger.info(f"Merged experiment configuration: {experiment_config}")
 
-            
             return config
             
         except Exception as e:
@@ -145,6 +193,21 @@ class ConfigurationLoader:
             raise ConfigurationError(
                 f"Failed to parse reference config: {e}"
             ) from e
+
+    def _load_bundle_config(self) -> Optional[ConfigTree]:
+        """Load the bundle-level application.conf (layer 2 in the hierarchy)."""
+        if self._active_bundle is None:
+            return None
+
+        conf_path = self._active_bundle.application_conf_path
+        if not conf_path.exists():
+            return None
+
+        try:
+            return ConfigFactory.parse_file(str(conf_path))
+        except Exception as exc:
+            logger.warning(f"Failed to parse bundle application.conf: {exc}")
+            return None
     
     def get_active_profile(self) -> Optional[str]:
         """
