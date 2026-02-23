@@ -35,9 +35,9 @@ monitoring:
 
 # Query selection: Representative queries to measure overhead
 query_files:
-  - "apps/tpch/queries/q01.sql"  # Simple scan
-  - "apps/tpch/queries/q03.sql"  # Medium join
-  - "apps/tpch/queries/q09.sql"  # Complex join
+  - "queries/tpch/queries/q01.sql"  # Simple scan
+  - "queries/tpch/queries/q03.sql"  # Medium join
+  - "queries/tpch/queries/q09.sql"  # Complex join
 
 # Validation
 validation:

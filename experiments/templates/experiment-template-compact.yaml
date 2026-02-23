@@ -5,8 +5,8 @@ queries:
   - "SELECT COUNT(*) FROM table1"
   - "SELECT * FROM table2 LIMIT 10"
 query_files:
-  - "apps/tpch/queries/q01.sql"
-  - "apps/tpch/queries/q02.sql"
+  - "queries/tpch/queries/q01.sql"
+  - "queries/tpch/queries/q02.sql"
 dataset: "tpch-sf1"
 runs: 3
 warmup_runs: 1

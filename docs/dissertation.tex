@@ -1,0 +1,1316 @@
+% ============================================================
+%  TriBench Dissertation — University of Glasgow L4 Project
+% ============================================================
+\documentclass{l4proj}
+
+\usepackage{pdfpages}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{siunitx}
+\usepackage{subcaption}
+\usepackage{algorithm2e}
+
+% Python syntax highlighting style
+\definecolor{codebg}{rgb}{0.97,0.97,0.97}
+\definecolor{codestring}{rgb}{0.13,0.54,0.13}
+\definecolor{codekw}{rgb}{0.0,0.0,0.7}
+\definecolor{codecomment}{rgb}{0.4,0.4,0.4}
+
+\lstdefinestyle{pythonstyle}{
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{codekw}\bfseries,
+  stringstyle=\color{codestring},
+  commentstyle=\color{codecomment}\itshape,
+  breaklines=true,
+  showstringspaces=false,
+  frame=single,
+  framesep=3pt,
+  xleftmargin=6pt,
+  xrightmargin=3pt,
+}
+
+\lstdefinestyle{yamlstyle}{
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{codekw},
+  stringstyle=\color{codestring},
+  commentstyle=\color{codecomment}\itshape,
+  breaklines=true,
+  showstringspaces=false,
+  frame=single,
+  framesep=3pt,
+  xleftmargin=6pt,
+}
+
+\lstdefinestyle{hoconStyle}{
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\small,
+  commentstyle=\color{codecomment}\itshape,
+  stringstyle=\color{codestring},
+  breaklines=true,
+  showstringspaces=false,
+  frame=single,
+  framesep=3pt,
+  xleftmargin=6pt,
+}
+
+\sisetup{round-mode=places, round-precision=2}
+
+% ============================================================
+%  METADATA
+% ============================================================
+\title{A Framework for Benchmarking SQL Workloads on Distributed Data Lakehouses}
+\author{Lin Yuan}
+\date{September 14, 2026}
+
+\maketitle
+
+% ============================================================
+%  ABSTRACT
+% ============================================================
+\begin{abstract}
+Modern analytical pipelines increasingly rely on the data lakehouse pattern, which pairs
+low-cost object storage with the transactional guarantees of a traditional data warehouse.
+Apache Iceberg has emerged as the leading open table format underpinning this stack,
+while Apache Trino provides the distributed SQL execution layer that queries Iceberg tables
+at interactive speeds.
+
+Despite the maturity of this technology combination, no open framework exists that can
+systematically execute benchmark workloads against Trino, capture concurrent hardware
+telemetry, and persist structured results in a reproducible, portable bundle---capabilities
+that the PEEL framework provides for Apache Spark.
+
+This dissertation presents TriBench, a Python-based benchmarking framework that addresses
+this gap. TriBench manages the full data lakehouse stack lifecycle via a command-line
+interface, executes SQL workloads from YAML-specified experiment configurations, monitors
+CPU, memory, and I/O metrics concurrently with query execution, and stores results in a
+normalised relational schema with JSON and CSV export. The same experiment specification
+runs without modification on both a local Docker Compose deployment and a distributed
+Kubernetes cluster.
+
+The framework is evaluated through three progressively complex scenarios using the TPC-H
+benchmark suite. Across all scenarios TriBench successfully executed 22 standardised
+queries, captured hardware profiles that visibly reflect query execution semantics, and
+demonstrated consistent cross-environment behaviour by running identically on a
+single-node Docker stack and a multi-node university Kubernetes cluster.
+\end{abstract}
+
+% ============================================================
+%  ACKNOWLEDGEMENTS
+% ============================================================
+\chapter*{Acknowledgements}
+I would like to thank my project supervisor for their guidance throughout this work, and
+the University of Glasgow School of Computing Science for providing access to the
+Kubernetes cluster used in the distributed evaluation.
+
+% ============================================================
+%  EDUCATION CONSENT
+% ============================================================
+\def\consentname{Lin Yuan}
+\def\consentdate{20 March 2026}
+\educationalconsent
+
+% ============================================================
+\tableofcontents
+% ============================================================
+
+% ==================================================================================================================================
+\chapter{Introduction}
+\pagenumbering{arabic}
+
+\section{Motivation}
+
+The past two decades have seen two distinct architectural philosophies compete to serve
+large-scale analytical workloads. Traditional data warehouses concentrate storage and
+compute under a tightly coupled engine; query performance is excellent, but per-terabyte
+costs are high and schema changes are expensive. Data lakes take the opposite stance:
+raw data is written to cheap object stores---HDFS, Amazon S3, or self-hosted equivalents
+such as MinIO---and schemas are inferred at query time. Storage costs fall dramatically,
+but the absence of transactional guarantees introduces data quality problems: concurrent
+writers can corrupt table state, and query engines must scan every file in a table
+regardless of relevance because no file-level metadata exists to guide them.
+
+The \emph{data lakehouse} architecture, articulated by \citet{armbrust2021lakehouse},
+resolves this tension by adding an open table format layer on top of plain object storage.
+The table format maintains a tree of metadata that records column statistics, partition
+boundaries, and snapshot history for every data file in the table. Query engines can use
+these statistics for partition pruning and predicate pushdown, recovering warehouse-class
+query efficiency without surrendering the cost profile of a data lake.
+
+Apache Iceberg \citep{apache_iceberg} is the dominant implementation of this pattern.
+Apache Trino \citep{sethi2019presto}---the distributed SQL engine that evolved from
+Facebook's Presto---sits above the Iceberg metadata layer as the interactive query
+interface. When a user submits a SQL query, Trino's coordinator node reads Iceberg's
+manifest files to identify relevant data files, plans a distributed execution, then
+dispatches split-level tasks to a configurable fleet of worker nodes.
+
+Evaluating the performance of such a stack is non-trivial. An engineer wishing to compare
+the effect of different worker counts, Iceberg partitioning strategies, or JVM heap
+settings must: provision the full storage and metadata service stack, generate or load a
+dataset at a controlled scale factor, execute a standardised query suite, and capture
+hardware metrics throughout---all in a manner reproducible enough for the results to be
+scientifically comparable. For the Apache Spark ecosystem, the PEEL framework
+\citep{peel_github} provides exactly this scaffolding. For Apache Trino, no equivalent
+open tool exists. Engineers either write ad-hoc scripts that are not reusable across
+machines, or assemble workflows in general-purpose orchestration tools such as Apache
+Airflow that lack native benchmarking abstractions.
+
+TriBench is designed to close this gap. It takes inspiration from PEEL's bundle-based
+approach---where a single configuration-controlled directory encodes environment, workload,
+and result specifications---and applies it to Trino deployments, adding integrated real-time
+hardware monitoring and transparent support for both single-node Docker and distributed
+Kubernetes backends.
+
+\section{Goals}
+
+The goals of this project are stated below as a numbered hierarchy. These identifiers are
+used consistently through the dissertation and are mapped to evaluation evidence in
+Chapter~\ref{chap:eval}.
+
+\begin{description}
+
+\item[(1) Execute benchmark workloads.]
+TriBench must accept SQL workloads from multiple sources, submit them to a running Trino
+cluster, and record the results of each query execution in a structured, reproducible form.
+
+\begin{description}
+  \item[(1.1)] The framework must supply the complete TPC-H query suite (Q1--Q22) and the
+    complete TPC-DS query suite (Q1--Q99)\footnote{TPC-DS support is designed into the
+    dataset registry and query loader; full schema generation is identified as a future
+    extension in Chapter~\ref{chap:conc}.} in Trino-compatible SQL and execute them
+    against Iceberg datasets at configurable scale factors.
+  \item[(1.2)] The framework must accept user-supplied Parquet files as custom datasets,
+    register them in the dataset catalogue, and load them into the Iceberg lakehouse so
+    that arbitrary analytical workloads can be executed using the same infrastructure as
+    the built-in benchmark suites.
+  \item[(1.3)] Individual experiments must be expressed in declarative YAML files that
+    specify the workload as a mix of paths to external SQL files and inline SQL statements,
+    together with per-experiment execution parameters (connection settings, validation
+    rules, and metric configurations), enabling precise per-experiment customisation without
+    modifying shared framework code.
+  \item[(1.4)] Experiments must support configurable warmup run counts (executed but not
+    stored), a configurable number of measured runs, per-query timeout enforcement, and
+    optional concurrent query submission.
+  \item[(1.5)] The framework must provide a \emph{suite} abstraction that groups related
+    experiments under shared lifecycle management, automatically handling system start-up,
+    sequential experiment execution, and system teardown so that multi-experiment studies
+    can be reproduced by issuing a single CLI command.
+\end{description}
+
+\item[(2) Monitor hardware resource usage.]
+During query execution, the framework must concurrently collect hardware metrics from the
+host machine and, in distributed deployments, from individual Kubernetes pods.
+
+\begin{description}
+  \item[(2.1)] The framework must collect overall and per-core CPU utilisation, RAM and
+    swap usage, disk read/write throughput, and network I/O at a configurable sampling
+    interval.
+  \item[(2.2)] In Kubernetes deployments the framework must additionally collect per-pod
+    CPU (in millicores) and memory metrics via the Kubernetes Metrics Server.
+  \item[(2.3)] For each query execution the framework must record wall-clock time, CPU
+    time, bytes scanned, and rows returned as reported by Trino's REST API.
+\end{description}
+
+\item[(3) Generate structured benchmark reports.]
+All results must be persisted in a queryable form that supports post-hoc analysis and
+cross-run comparison.
+
+\begin{description}
+  \item[(3.1)] Results must be stored in a relational database---SQLite for local runs,
+    PostgreSQL for distributed deployments---using a normalised schema that separates run
+    records, per-query results, and time-series metric samples.
+  \item[(3.2)] Results must be exportable as JSON files and as paired CSV files for use in
+    external analysis tools such as pandas or Excel.
+  \item[(3.3)] Each run must receive a unique identifier so that repeated executions of the
+    same experiment do not overwrite earlier results.
+\end{description}
+
+\item[(4) Scale across deployment environments.]
+The framework must execute the same experiment specification, without modification, on a
+local Docker Compose deployment and on a distributed Kubernetes cluster.
+
+\begin{description}
+  \item[(4.1)] For local development, TriBench must manage the data lakehouse stack---Trino,
+    Hive Metastore, MinIO, PostgreSQL---via Docker Compose, with automated setup, start,
+    and teardown.
+  \item[(4.2)] For distributed experiments, TriBench must deploy the same stack on a
+    Kubernetes cluster using generated manifests, manage port-forwarding for CLI access,
+    and collect pod-level telemetry.
+  \item[(4.3)] The framework must support named configuration profiles that encapsulate
+    distinct deployment settings---such as JVM heap allocation, Trino worker count,
+    backend type, and storage class---so that an engineer can switch the entire operational
+    context with a single command and re-run an unchanged experiment YAML under the new
+    profile without editing any workload files.
+\end{description}
+
+\end{description}
+
+\section{Dissertation Outline}
+
+\begin{itemize}
+  \item Chapter~\ref{chap:bg} introduces the foundational concepts referenced throughout
+    the dissertation: the data lakehouse architecture, Apache Iceberg's table format,
+    Apache Trino's distributed execution model, and the principles of reproducible
+    benchmarking.
+  \item Chapter~\ref{chap:rw} surveys related work, examining existing benchmarking
+    frameworks---in particular PEEL for Apache Spark---alongside standalone Trino
+    benchmarking tools and general-purpose workflow orchestrators, identifying the gap
+    that TriBench addresses.
+  \item Chapter~\ref{chap:req} analyses the problem in depth and presents a structured
+    list of functional and non-functional requirements that TriBench must satisfy.
+  \item Chapter~\ref{chap:design} discusses the design of TriBench by covering its
+    five-layer architecture, the named-profile configuration system, the monitoring
+    subsystem, and the result storage schema, without reference to implementation details.
+  \item Chapter~\ref{chap:impl} explains how these design decisions were realised in
+    Python, describing the key libraries, the experiment execution pipeline, concurrent
+    monitoring threads, and result persistence.
+  \item Chapter~\ref{chap:eval} introduces the evaluation strategy and demonstrates
+    TriBench's functionality through three progressively complex scenarios, identifying
+    how each project goal defined in Chapter~\ref{chap:intro} was met.
+  \item Chapter~\ref{chap:conc} concludes the dissertation with a summary of TriBench,
+    a critical reflection on the design and evaluation, limitations of the current
+    implementation, and directions for future work.
+\end{itemize}
+
+% ==================================================================================================================================
+\chapter{Background}
+\label{chap:bg}
+
+\section{The Data Lakehouse Architecture}
+
+Traditional data warehouses achieve excellent analytical query performance by storing data
+in proprietary columnar formats and maintaining tight coupling between the storage engine
+and the query planner. ACID transaction support, automatic statistics collection, and
+materialised views come at a cost: proprietary lock-in, high per-terabyte licensing, and
+limited support for non-relational data types \citep{armbrust2021lakehouse}.
+
+The data lake model decouples these concerns: files are written in open formats---most
+commonly Apache Parquet---to commodity object storage, and query engines are applied on
+demand. Parquet stores data in a columnar layout grouped into row groups, allowing readers
+to read only the columns referenced by a query \citep{vohra2016apache}. However,
+without a transactional coordination layer, concurrent writes risk leaving tables in
+inconsistent states, and queries must read every file in the table partition to guarantee
+completeness.
+
+Apache Iceberg addresses these limitations by defining a table format that sits between
+the query engine and the object store. An Iceberg table is represented by a metadata tree:
+a \emph{metadata file} identifies the current \emph{snapshot}, which points to a
+\emph{manifest list}; each entry in the manifest list is a \emph{manifest file} that
+records the path, size, and column-level min/max statistics of one or more Parquet data
+files \citep{apache_iceberg}. A write operation appends new data files, writes new
+manifest files referencing them, and then atomically updates the metadata file pointer to
+create a new snapshot. Readers holding a reference to the old snapshot continue to see a
+consistent view until they refresh. This snapshot-isolation model enables ACID transactions
+on top of an object store without requiring a lock service.
+
+The column statistics stored in manifest files enable two critical query optimisations.
+\emph{Partition pruning} allows the planner to skip entire manifest files whose partition
+ranges do not overlap with a query predicate. \emph{Predicate pushdown} allows the planner
+to skip individual data files within a manifest whose column statistics exclude the
+predicate range. At large scale factors, these optimisations can reduce the volume of data
+read from object storage by orders of magnitude.
+
+Iceberg tables require a \emph{metastore catalogue} that maps SQL table names to Iceberg
+metadata file locations. The Hive Metastore Service (HMS) serves this role in TriBench's
+deployment stack. HMS exposes the Thrift protocol on port 9083 and persists catalogue
+state in a relational backend---here PostgreSQL. Trino contacts HMS during query planning
+to obtain the current metadata file pointer for each referenced table.
+
+\section{Apache Trino}
+
+Apache Trino (formerly PrestoSQL) is a massively parallel processing SQL engine designed
+for federated interactive analytics \citep{sethi2019presto}. Its architecture separates a
+single \emph{coordinator} node from one or more \emph{worker} nodes, all communicating
+over HTTP/2. When a client submits a query, the coordinator: (i) parses the SQL; (ii)
+validates it against the Hive Metastore catalogue; (iii) produces a logical plan; (iv)
+optimises it into a distributed physical plan partitioned into \emph{stages}; and (v)
+schedules each stage as a set of \emph{splits}. A split is the atomic unit of work---for an
+Iceberg table it corresponds to one Parquet file or row group. Workers pull splits from a
+queue, execute the assigned operator pipeline (scan $\rightarrow$ filter $\rightarrow$
+project $\rightarrow$ partial aggregate), and exchange intermediate results with
+downstream stages via a shuffle mechanism.
+
+The performant operation of a Trino cluster depends on several system-level quantities:
+available JVM heap per worker, the number of worker cores participating in each split, I/O
+throughput from the object store, and network bandwidth available for inter-stage shuffles.
+Trino exposes these internal state variables through a JMX interface accessible via HTTP
+and through the query information endpoint at \texttt{GET /v1/query/\{queryId\}}. The
+latter returns per-query statistics including wall-clock time, cumulative CPU time, and
+total bytes read from the input connector---quantities that TriBench captures for every
+measured query execution.
+
+\section{Benchmarking for Distributed SQL Systems}
+
+Benchmarking is the practice of submitting a controlled workload to a system and recording
+quantitative performance characteristics. \citet{gray1993benchmark} identify the
+properties that make a benchmark useful: relevance (the workload resembles real
+applications), portability (it can run on different systems), scalability (difficulty can
+be parameterised), and simplicity (results can be understood). The Transaction Processing
+Performance Council (TPC) produces widely-adopted benchmark suites that satisfy these
+criteria for analytical SQL workloads.
+
+TPC-H \citep{tpch2023} models a supply-chain decision-support system with 22 queries of
+varying computational intensity over a snowflake relational schema. The scale factor $n$
+controls dataset size: SF1 generates approximately \SI{1}{GB} of raw relational data across
+eight tables. TPC-DS \citep{tpcds2021} extends this concept to a retail analytics scenario
+with a larger schema and 99 queries that exercise more complex SQL features such as window
+functions and correlated subqueries.
+
+Reproducibility is the prerequisite for scientifically valid benchmarking.
+\citet{jain1991art} defines reproducibility as the ability of an independent experimenter
+to obtain results within an acceptable tolerance given the same experimental conditions.
+Achieving this requires: (a) precise environment specification, so the hardware and
+software configuration is fully known; (b) data consistency, so the same dataset is loaded
+at the same scale factor in the same physical layout for every run; (c) execution control,
+so warmup strategy, query ordering, and concurrency model are held constant; and (d)
+measurement capture, so the same metrics are recorded at the same granularity. These four
+dimensions directly motivated the design requirements for TriBench.
+
+Performance metrics relevant to distributed SQL benchmarking include query wall-clock time
+(elapsed time from submission to last row received), CPU time (total CPU consumption
+across all workers, a proxy for computational work regardless of parallelism), peak memory
+usage per worker, data scanned in bytes (a measure of scan efficiency), and rows
+returned. System-level metrics---particularly sustained CPU utilisation and memory
+pressure---complement query-level metrics by revealing resource saturation effects that
+may not yet manifest in query latency but indicate proximity to performance cliffs.
+
+% ==================================================================================================================================
+\chapter{Related Work}
+\label{chap:rw}
+
+\section{Benchmarking Frameworks for Distributed Systems}
+
+The need for reproducible, environment-aware benchmarking of distributed data processing
+systems has been recognised since before the emergence of modern lakehouses.
+\citet{jain1991art} establishes the foundational discipline, arguing that without careful
+control of warmup, execution order, and environment specification, benchmark results are
+not comparable across machines or runs. Early systems such as YCSB \citep{jain1991art}
+addressed this for key-value stores, but did not generalise to declarative SQL workloads
+or to systems that require multi-service deployment stacks.
+
+The PEEL framework \citep{peel_github} represents the closest prior work to TriBench. It
+was developed at TU Berlin to provide reproducible bundle-based benchmarking for Apache
+Flink and Apache Spark. A PEEL bundle is a directory containing a system configuration,
+a dataset specification, and one or more experiment definitions; executing the bundle on
+any machine with the PEEL runtime produces the same deployment and the same workload
+execution. PEEL automates system lifecycle---setup, start, run, stop, teardown---through
+a cleanly separated systems layer, and records timing results in a structured form. TriBench
+directly adopts PEEL's bundle philosophy and its lifecycle separation, adapting them to the
+Trino ecosystem where the deployment unit is a Docker Compose stack or a Kubernetes
+manifest set rather than a JVM process group.
+
+PEEL does not, however, address data lakehouses: it has no concept of an object store,
+a table format catalogue, or concurrent hardware telemetry. These gaps directly motivate
+three of TriBench's distinguishing features: Iceberg dataset management, MinIO
+object storage integration, and the monitoring subsystem.
+
+\section{Trino and Presto Benchmarking Tools}
+
+The most widely used tool for Trino query measurement is the Trino CLI combined with ad-hoc
+shell scripts. This approach is adequate for single-query timing but lacks dataset
+management, warmup, multi-run averaging, and hardware metric capture. Several commercial
+observability platforms (e.g.\ Datadog, Grafana) can collect Trino JMX metrics in
+production but are not designed for controlled benchmarking: they cannot coordinate
+dataset loading, trigger workload execution, or associate metric time-series with specific
+query runs.
+
+\citet{sethi2019presto} describe Facebook's internal benchmarking approach for Presto,
+which involves large-scale production query logs rather than synthetic workloads. This
+cannot be replicated in a general-purpose open framework because it depends on proprietary
+infrastructure. The Presto Benchmark Driver (part of the Presto repository) can submit
+TPC-H queries and record wall-clock times, but does not manage the deployment stack,
+does not collect system-level metrics, and has no result persistence layer.
+
+TriBench fills the space between these two extremes: it is more structured than ad-hoc
+scripts and more portable than internal Facebook tooling, while remaining open and
+general-purpose.
+
+\section{General-Purpose Workflow Orchestration}
+
+Tools such as Apache Airflow \citep{airflow} and Prefect are sometimes used to orchestrate
+benchmarking pipelines because they offer scheduling, dependency management, and logging.
+However, they are not benchmarking-aware: they have no notion of warmup runs, no
+structured result schema for query execution records, no built-in hardware metric
+collection, and no lifecycle abstraction for deployment stacks. Wrapping a benchmark in
+an Airflow DAG requires the engineer to implement all of these concerns manually in task
+code, which is precisely the problem that a dedicated benchmarking framework should
+eliminate.
+
+\section{Summary of Gap Analysis}
+
+Table~\ref{tab:relatedwork} summarises the capabilities of the related tools discussed
+above against the requirements identified for TriBench.
+
+\begin{table}[htb]
+  \caption{Capability comparison of related tools against TriBench's requirements.
+    A tick (\checkmark) indicates native support; a dash (---) indicates the capability
+    is absent or must be implemented manually by the user.}
+  \label{tab:relatedwork}
+  \centering
+  \small
+  \rowcolors{2}{}{gray!4}
+  \begin{tabular}{@{}lcccccc@{}}
+    \toprule
+    \textbf{Capability} & \textbf{PEEL} & \textbf{Trino CLI} & \textbf{Airflow} & \textbf{TriBench} \\
+    \midrule
+    System lifecycle management  & \checkmark & ---        & ---        & \checkmark \\
+    TPC-H workload               & \checkmark & \checkmark & ---        & \checkmark \\
+    Iceberg / object store       & ---        & ---        & ---        & \checkmark \\
+    Warmup runs                  & \checkmark & ---        & ---        & \checkmark \\
+    Hardware metric collection   & ---        & ---        & ---        & \checkmark \\
+    Kubernetes deployment        & ---        & ---        & ---        & \checkmark \\
+    Named configuration profiles & \checkmark & ---        & ---        & \checkmark \\
+    Structured result persistence & \checkmark & ---        & ---        & \checkmark \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% ==================================================================================================================================
+\chapter{Analysis and Requirements}
+\label{chap:req}
+
+\section{Problem Specification}
+
+Engineers who wish to evaluate Trino performance empirically---comparing worker counts,
+Iceberg partitioning schemes, or JVM configurations---must today write custom scripts.
+Such scripts typically hard-code connection parameters, execute queries sequentially
+without warmup, and write timing results to plain text files. The scripts are not portable:
+they embed environment-specific paths and addresses, making reproduction on a different
+machine a manual process. They are also incomplete: query execution time alone does not
+explain \emph{why} a query is slow; hardware telemetry is needed.
+
+The core technical problem is therefore: the absence of a framework that unifies
+lifecycle management, workload execution, hardware monitoring, and structured result
+persistence for Trino into a portable, configuration-driven bundle.
+
+\section{Functional Requirements}
+
+The following functional requirements are derived from the goals stated in
+Chapter~\ref{chap:intro} and the problem specification above.
+
+\begin{description}
+  \item[FR1] The system must accept a YAML experiment file specifying the query workload,
+    Trino connection parameters, and execution settings, and submit the workload to Trino.
+  \item[FR2] The system must supply all 22 TPC-H queries in Trino-compatible SQL,
+    parameterised by Iceberg catalogue name and schema. The dataset registry and query
+    loader must be structured to accommodate TPC-DS (Q1--Q99) without architectural
+    changes when a schema loader is added.
+  \item[FR3] The system must accept user-supplied Parquet files as custom datasets,
+    register them in the dataset catalogue, and load them into an Iceberg schema so that
+    user-defined queries can be executed over this data using the same experiment
+    infrastructure as the built-in benchmark suites.
+  \item[FR4] Individual experiment YAML files must accept both paths to external SQL files
+    and inline SQL strings under a unified \texttt{queries} / \texttt{query\_files} key,
+    together with per-experiment connection settings, validation rules, and metric
+    configurations.
+  \item[FR5a] Experiments must support configurable warmup run counts (not stored),
+    measured run counts, per-query timeout enforcement, and optional parallel query
+    execution.
+  \item[FR5b] The framework must provide a suite abstraction that groups related
+    experiments under shared lifecycle management---automatically handling system
+    start-up, sequential experiment execution, and system teardown---so that an
+    entire multi-experiment study can be reproduced by issuing a single
+    \texttt{tribench suite run} command.
+  \item[FR6] During execution the system must concurrently collect total CPU utilisation,
+    per-core CPU utilisation, RAM and swap usage, disk read/write throughput, and network
+    I/O throughput, at a configurable sampling interval.
+  \item[FR7] In Kubernetes mode the system must additionally collect per-pod CPU (millicores)
+    and memory metrics for all Trino pods using the Kubernetes Metrics Server.
+  \item[FR8] Per query execution the system must record wall-clock time, CPU time, bytes
+    scanned, and row count from Trino's REST query information endpoint.
+  \item[FR9] All results must be written to a relational database in a normalised schema
+    separating runs, per-query results, and time-series metric samples.
+  \item[FR10] Results must be exportable as JSON and as paired CSV files (one for query data,
+    one for metric time-series).
+  \item[FR11] Each run must receive a unique identifier to prevent overwriting of historical
+    results on repeated execution.
+  \item[FR12] The system must manage the local Docker Compose stack (Trino, Hive Metastore,
+    MinIO, PostgreSQL) through setup, start, stop, and teardown CLI commands.
+  \item[FR13] The system must deploy the same stack on Kubernetes via generated manifests,
+    manage port-forwarding, and collect pod metrics.
+  \item[FR14] The same experiment YAML must execute on Docker and Kubernetes deployments
+    without modification.
+  \item[FR15] The framework must support multiple named configuration profiles stored as
+    individual HOCON files. A single CLI command must switch the active profile, and all
+    subsequent commands---system lifecycle, data loading, and experiment execution---must
+    resolve parameters from the newly active profile with no further user intervention.
+    Profiles must be able to vary any combination of backend type, JVM heap size, Trino
+    worker count, network ports, and storage settings.
+\end{description}
+
+\section{Non-Functional Requirements}
+
+\begin{description}
+  \item[NFR1 --- Reproducibility.] Given an identical configuration bundle and dataset, the
+    framework must produce results within a configurable variance tolerance across repeated
+    runs on the same machine.
+  \item[NFR2 --- Modularity.] Monitoring, storage, system management, and CLI must be
+    independently operable. Disabling monitoring must not affect workload execution or
+    result storage.
+  \item[NFR3 --- Portability.] The framework must run on macOS, Linux, and Windows (via WSL2)
+    without platform-specific code in the core library.
+  \item[NFR4 --- Low Monitoring Overhead.] Concurrent metric collection must not
+    materially perturb query execution times. The sampling interval must be user-configurable
+    to allow a throughput--granularity trade-off.
+  \item[NFR5 --- Observability.] Structured log output at configurable verbosity levels
+    must enable post-hoc diagnosis without requiring source code modification.
+  \item[NFR6 --- Extensibility.] The system abstraction must be defined as an abstract
+    interface so that new backends can be added without modifying orchestration logic.
+\end{description}
+
+% ==================================================================================================================================
+\chapter{Design}
+\label{chap:design}
+
+\section{Architectural Overview}
+
+TriBench's architecture is divided into five layers, each encapsulating a distinct concern.
+Figure~\ref{fig:layers} illustrates their arrangement and the primary data flows between
+them. A user command descends through the stack: the CLI interprets the request, the
+Configuration layer resolves parameters, the Orchestration layer coordinates experiment
+execution and monitoring, the Systems layer manages the deployment environment, and the
+Data Lakehouse layer is the system under test.
+
+\begin{figure}[htb]
+  \centering
+  \includegraphics[width=0.82\linewidth]{images/architecture_layers.pdf}
+  \caption{TriBench five-layer architecture. Arrows indicate the direction of control and data
+    flow during an experiment run. The Data Lakehouse layer is the subject of measurement,
+    not part of the framework itself.}
+  \label{fig:layers}
+\end{figure}
+
+\section{CLI Layer}
+
+The CLI is the sole entry point for users. It exposes six command groups:
+\texttt{sys} for system lifecycle commands; \texttt{data} for dataset loading and
+generation; \texttt{exp} for running individual experiments and suites; \texttt{result}
+for querying and exporting stored results; \texttt{config} for inspecting the resolved
+configuration; and \texttt{suite} for managing experiment suites.
+
+A key design decision is that all deployment context---backend selection, JVM heap,
+worker count, and cluster settings---is resolved from the active named profile, not from
+CLI flags on individual commands. Changing the operational context is a single action:
+\begin{verbatim}
+tribench config profile trino-4workers
+\end{verbatim}
+From that point every subsequent command uses the settings in that profile. This ensures
+that experiment YAML files remain fully independent of the deployment context, satisfying
+FR14 and FR15, and makes profile-switching the sole intervention required to run a
+controlled comparison between, for example, a two-worker and an eight-worker Trino cluster.
+The profile system is described in detail in Section~\ref{sec:profiles}.
+
+\section{Configuration Layer}
+\label{sec:config}
+
+TriBench uses HOCON (Human-Optimised Config Object Notation) for configuration, loaded by
+the \texttt{pyhocon} library. HOCON extends JSON with variable substitution
+(\texttt{\$\{path\}}), file inclusion, and key-path merging semantics. The hierarchy
+contains four levels, listed from lowest to highest priority:
+
+\begin{enumerate}
+  \item \textit{Reference configuration} (\texttt{config/reference.conf}): framework-wide
+    defaults that define the complete schema of valid parameters, including backend type,
+    default ports, JVM heap, and worker count. Every legal parameter key is declared here,
+    so higher-level files need only state the values they wish to override.
+  \item \textit{Profile configuration} (\texttt{config/hosts/<profile>.conf}): a named
+    HOCON file that overrides any subset of the reference defaults to describe one
+    particular deployment context. A profile is the primary mechanism for varying
+    system-level settings between experiments.
+  \item \textit{Experiment configuration}: the YAML file passed to \texttt{tribench exp run},
+    which specifies the workload, connection parameters, and run counts.
+  \item \textit{CLI and environment overrides}: individual flags (e.g.\ \texttt{--runs 5}) and
+    environment variables (e.g.\ \texttt{TRIBENCH\_DATABASE\_URL}), applied last.
+\end{enumerate}
+
+Parameters at a higher level override those at lower levels using a recursive deep-merge
+strategy: nested dictionaries are merged key by key, so a profile override of a single
+field (e.g.\ \texttt{jvm\_heap}) does not discard other fields in the same block.
+
+\subsection{Named Profiles and Seamless Switching}
+\label{sec:profiles}
+
+A \emph{profile} is a named HOCON file stored under \texttt{config/hosts/}. Each profile
+encodes a complete operational context: the deployment backend (Docker or Kubernetes),
+JVM heap per worker, Trino worker replica count, network ports, storage class, and any
+other setting that varies between environments or experimental configurations. The active
+profile name is persisted in a single-line text file called \texttt{.tribench-profile}
+in the project root; the \texttt{ConfigurationLoader} reads this file at startup and
+loads the corresponding HOCON file before applying experiment-level and CLI overrides.
+
+Switching profile takes one command:
+\begin{verbatim}
+tribench config profile trino-4workers
+\end{verbatim}
+From that point, every subsequent command---\texttt{sys setup}, \texttt{sys start},
+\texttt{data load}, \texttt{exp run}---resolves its parameters from
+\texttt{config/hosts/trino-4workers.conf}. The experiment YAML requires no modification.
+
+This design enables a class of controlled comparative experiments that would otherwise
+require manual file editing. Table~\ref{tab:profiles} illustrates three representative
+profiles that an engineer might maintain within a single TriBench installation.
+
+\begin{table}[htb]
+  \caption{Three representative named profiles demonstrating the range of settings
+    that can be varied by a single profile switch. All three profiles can run the
+    same experiment YAML without modification.}
+  \label{tab:profiles}
+  \centering
+  \small
+  \rowcolors{2}{}{gray!4}
+  \begin{tabular}{@{}llll@{}}
+    \toprule
+    \textbf{Profile name} & \textbf{Backend} & \textbf{JVM heap} & \textbf{Workers} \\
+    \midrule
+    \texttt{docker-dev}      & Docker Compose & \SI{2}{GB} & 1 (embedded) \\
+    \texttt{trino-4workers}  & Kubernetes     & \SI{8}{GB} & 4 \\
+    \texttt{trino-8workers}  & Kubernetes     & \SI{8}{GB} & 8 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+An excerpt of the \texttt{trino-4workers} profile is shown in Listing~\ref{lst:profile4}.
+Only the values that differ from \texttt{reference.conf} are stated; all other parameters
+are inherited unchanged.
+
+\begin{lstlisting}[style=hoconStyle, float, caption={Profile file
+  \texttt{config/hosts/trino-4workers.conf}. Only overridden keys are
+  present; the remaining parameters resolve to their \texttt{reference.conf} defaults
+  via HOCON merge.}, label=lst:profile4]
+tribench {
+  defaults.backend = "kubernetes"
+  systems.trino {
+    jvm_heap    = "8G"
+    worker_replicas = 4
+  }
+  kubernetes {
+    context     = "gpg-cluster"
+    namespace   = "tribench"
+    storage_class = "ceph-rbd"
+  }
+}
+\end{lstlisting}
+
+An excerpt of the reference configuration showing the defaults that the profiles above
+partially override is given in Listing~\ref{lst:refconf}.
+
+\begin{lstlisting}[style=hoconStyle, float, caption={Excerpt of \texttt{config/reference.conf}.
+  Variable substitution lets profiles override individual values without rewriting
+  the full parameter tree.}, label=lst:refconf]
+tribench {
+  defaults {
+    backend = "docker"
+    ports { trino = 8080; minio_api = 9000 }
+  }
+  systems.trino {
+    version         = "434"
+    jvm_heap        = "2G"
+    worker_replicas = 1
+    connection {
+      host = "localhost"
+      port = ${tribench.defaults.ports.trino}
+    }
+  }
+}
+\end{lstlisting}
+
+\section{Orchestration Layer}
+
+The Orchestration Layer coordinates the end-to-end lifecycle of a benchmark run. Its
+central abstraction is the \emph{experiment configuration}---a fully resolved parameter
+set derived from the four-level hierarchy---and the \emph{experiment runner} that executes
+queries against a live Trino connection.
+
+For each query in the workload, the runner: (i) submits the SQL via the Trino Python
+client; (ii) drains the result cursor, counting rows; (iii) fetches per-query statistics
+from Trino's REST endpoint; (iv) applies any validation rules specified in the experiment
+file (e.g.\ minimum row count, maximum execution time); and (v) hands a result record to
+the storage layer. Warmup runs follow the same path but results are silently discarded
+rather than stored.
+
+An \emph{experiment suite} allows a collection of related experiments to share default
+values at the suite level. Suite defaults are applied before experiment-level YAML values,
+establishing a three-tier precedence within the experiment configuration:
+suite defaults $\prec$ experiment YAML $\prec$ CLI overrides.
+
+\section{Monitoring System}
+
+The monitoring system runs in a background thread pool that is started before the first
+query and stopped after the last. It is built around a \emph{metric collector} abstraction
+that exposes \texttt{start()}, \texttt{stop()}, and \texttt{collect()} methods.
+Figure~\ref{fig:monitoring} shows the three collectors and the metrics each provides.
+
+\begin{figure}[htb]
+  \centering
+  \includegraphics[width=0.9\linewidth]{images/monitoring_design.pdf}
+  \caption{Structure of the concurrent monitoring subsystem. All collectors share the same
+    \texttt{MonitoringConfig} and write \texttt{Metric} objects to a common buffer that is
+    flushed to the storage layer at defined intervals.}
+  \label{fig:monitoring}
+\end{figure}
+
+The \emph{System Resource Collector} uses the \texttt{psutil} library to sample CPU,
+memory, disk I/O, and network I/O. Disk and network values are computed as deltas relative
+to a baseline captured at monitor start, so only I/O attributable to the benchmark window
+is reported. The \emph{Kubernetes Pod Collector} invokes \texttt{kubectl top pods} at each
+sample interval and parses the output to extract per-pod CPU and memory. The
+\emph{Trino Query Collector} fetches per-query statistics from the Trino REST API after
+each query completes.
+
+\section{Systems Layer}
+
+All backend implementations share the \texttt{System} abstract interface that mandates
+four methods: \texttt{setup()}, \texttt{start()}, \texttt{stop()}, and
+\texttt{teardown()}. This separation ensures that the Orchestration Layer remains
+unaware of how the deployment is managed.
+
+The \emph{Docker backend} generates a Docker Compose file from Jinja2 templates
+parameterised by the active HOCON configuration, creates a Docker bridge network named
+\texttt{tribench-network}, and starts the four services (Trino, Hive Metastore, MinIO,
+PostgreSQL) as a named Compose project. Trino configuration properties---including JVM
+heap allocation, the Iceberg connector catalogue, and the Hive Metastore URI---are
+written to files in the Trino installation directory before the container starts.
+
+The \emph{Kubernetes backend} renders Kubernetes manifest YAML from the same Jinja2
+templates but with cluster-specific values (image pull policy, storage class, resource
+limits). Rendered manifests are applied via \texttt{kubectl apply}, and the backend
+polls pod readiness before returning control to the CLI. Port-forwarding from
+\texttt{localhost:8080} to the Trino coordinator service is established automatically,
+so the Trino Python client can connect using an identical address in both backends.
+
+\section{Result Storage}
+
+The storage layer uses SQLAlchemy to provide a database-agnostic ORM. Four entity classes
+capture the result structure:
+
+\begin{itemize}
+  \item \textbf{Experiment}: experiment name, type, full configuration snapshot (as JSON),
+    dataset name, and tags.
+  \item \textbf{ExperimentRun}: foreign key to Experiment, run identifier, start and end
+    timestamps, overall status.
+  \item \textbf{QueryExecution}: foreign key to ExperimentRun, query name, SQL text,
+    wall-clock time, CPU time, rows returned, bytes scanned, validation status.
+  \item \textbf{MonitoringMetric}: foreign key to ExperimentRun, metric name, value, unit,
+    labels (JSON), timestamp---one row per sampled metric per interval.
+\end{itemize}
+
+Foreign key constraints with cascading deletes maintain referential integrity: purging a
+run automatically removes its associated query execution and metric records.
+
+% ==================================================================================================================================
+\chapter{Implementation}
+\label{chap:impl}
+
+\section{Language and Libraries}
+
+TriBench is implemented in Python 3.9 and distributed as an installable package via
+\texttt{setup.py}. The \texttt{tribench} command-line entry point becomes available after
+\texttt{pip install -e .}. A \texttt{conda} environment specification (\texttt{environment.yml})
+pins all dependencies for reproducible environment setup.
+
+The principal third-party libraries are:
+
+\begin{itemize}
+  \item \textbf{Click 8} --- declarative command-line interface framework used for all
+    command groups, argument parsing, and help text.
+  \item \textbf{pyhocon 0.3.60} --- HOCON parser that provides the four-level configuration
+    merge described in Section~\ref{chap:design}.
+  \item \textbf{trino 0.325.0} --- the official Trino Python client, used to submit queries
+    and retrieve result rows.
+  \item \textbf{psutil 5.9.5} --- cross-platform system metrics library used by the
+    System Resource Collector.
+  \item \textbf{docker 6.1.3} --- Docker Python SDK, used to optionally collect
+    per-container statistics alongside system-level metrics.
+  \item \textbf{SQLAlchemy 2.0.21} --- ORM providing the database abstraction over SQLite
+    and PostgreSQL.
+  \item \textbf{Jinja2 3.1.2} --- template engine for rendering Docker Compose and
+    Kubernetes manifest files from \texttt{.j2} templates.
+  \item \textbf{pandas 2.1.0} and \textbf{matplotlib 3.7.2} --- used in the result analysis
+    commands to tabulate, export, and visualise stored results.
+\end{itemize}
+
+\section{Experiment Configuration and Execution}
+
+\texttt{ExperimentConfig} is a Python \texttt{@dataclass} whose class method
+\texttt{from\_yaml()} implements the three-tier merge of suite defaults, experiment YAML,
+and CLI overrides. The core of this merge is \texttt{\_deep\_merge()}, shown in
+Listing~\ref{lst:deepmerge}, which recursively merges nested dictionaries so that a CLI
+override of \texttt{connection.port} does not discard other connection fields.
+
+\begin{lstlisting}[language=Python, style=pythonstyle, float, caption={Recursive
+    deep-merge used when applying CLI overrides onto the base experiment configuration.
+    Nested dicts trigger recursion; all other values are replaced.},
+    label=lst:deepmerge]
+@staticmethod
+def _deep_merge(base: dict, override: dict) -> None:
+    for key, value in override.items():
+        if key in base and isinstance(base[key], dict) \
+                       and isinstance(value, dict):
+            ExperimentConfig._deep_merge(base[key], value)
+        else:
+            base[key] = value
+\end{lstlisting}
+
+The \texttt{TrinoExperiment} class iterates over the resolved query list. For each query
+it opens a Trino cursor, calls \texttt{cursor.fetchall()} to drain the result set, records
+the row count, and then fetches per-query statistics from
+\texttt{GET /v1/query/\{queryId\}} to obtain CPU time and bytes scanned. Listing~\ref{lst:expyaml}
+shows a representative experiment file, illustrating how workloads, connection parameters,
+and execution options are expressed declaratively.
+
+\begin{lstlisting}[style=yamlstyle, float, caption={Excerpt of \texttt{experiments/tpch-all-queries.yaml}.
+  The same file is used without modification on both Docker and Kubernetes backends.},
+  label=lst:expyaml]
+name: "tpch-all-queries"
+system: "trino"
+connection:
+  host: "localhost"
+  port: 8080
+  catalog: "iceberg"
+  schema: "tpch_sf1"
+runs: 1
+warmup_runs: 0
+timeout_seconds: 120
+query_files:
+  - "apps/tpch/queries/q01.sql"
+  # ... q02 through q22 ...
+validation:
+  min_success_rate: 0.95
+  max_execution_time_variance: 0.3
+\end{lstlisting}
+
+\section{Concurrent Monitoring}
+
+All metric collectors are started in background threads by a \texttt{MonitoringSession}
+object. A \texttt{threading.Event} is used to signal each collector thread to stop; the
+session \texttt{stop()} call sets the event and then joins each thread, ensuring all
+buffered samples are flushed before results are written. This design avoids data loss even
+if the process receives a \texttt{SIGTERM} mid-run.
+
+The System Resource Collector captures baseline I/O counters at \texttt{start()}:
+\begin{align*}
+  \Delta_\text{disk} &= \texttt{disk\_io\_counters()} - \text{baseline}_\text{disk}\\
+  \Delta_\text{net}  &= \texttt{net\_io\_counters()} - \text{baseline}_\text{net}
+\end{align*}
+All subsequent samples report deltas, so only the I/O incurred within the benchmarking
+window is recorded.
+
+The Kubernetes Pod Collector invokes \texttt{kubectl top pods} via \texttt{subprocess.run()}
+and parses the output with a regular expression that extracts pod name, CPU in millicores,
+and memory suffixed with \texttt{Ki}, \texttt{Mi}, or \texttt{Gi}. All three units are
+normalised to a common \texttt{PodMetrics} dataclass that exposes CPU as both fractional
+cores and millicores, and memory in bytes, MB, and GB.
+
+\section{Result Storage and Non-Overwriting Isolation}
+
+Each call to \texttt{ResultStorage.begin\_run()} generates a unique run identifier of the
+form: \[ \textit{run\_id} = \langle\textit{experiment\_name}\rangle\_\langle\textit{YYYYMMDD\_HHMMSS}\rangle\_\langle\textit{6-hex-UUID}\rangle \]
+The timestamp component ensures that runs started more than one second apart are always
+distinct; the UUID fragment provides collision resistance for concurrent runs started
+within the same second.
+
+JSON exports are written to \texttt{results/<run\_id>.json} and embed the full
+configuration snapshot, all per-query result records, and all time-series metric samples.
+CSV export produces two files: \texttt{results/<run\_id>\_queries.csv} and
+\texttt{results/<run\_id>\_metrics.csv}. The shared timestamp column allows query events
+and metric samples to be aligned on a common time axis for plotting.
+
+% ==================================================================================================================================
+\chapter{Evaluation}
+\label{chap:eval}
+
+\section{Experimental Setup}
+
+\subsection{Local Environment}
+
+All single-node experiments were run on a personal machine with an Apple M3 processor
+(8 performance cores, 4 efficiency cores), \SI{16}{GB} unified memory, and NVMe solid-state
+storage. Trino 434 was deployed in a Docker container managed by TriBench's Docker Compose
+backend. The Trino JVM heap was configured to \SI{4}{GB} in
+\texttt{config/hosts/kind.conf}. Two Iceberg datasets were used: \textsf{tpch-sf0.01}
+(scale factor 0.01, approximately \SI{20}{MB} raw) and \textsf{tpch-sf1.0} (scale factor
+1.0, approximately \SI{1}{GB} raw), both loaded from pre-generated Parquet files using
+\texttt{tribench data load}.
+
+\subsection{Distributed Environment}
+
+Distributed experiments used the University GPG bare-metal Kubernetes cluster. Persistent
+storage was provided by Ceph block devices via the Rook storage operator. The Kubernetes
+Metrics Server was deployed to enable pod-level telemetry. The Trino coordinator was
+configured with a \SI{4}{GB} heap; worker nodes each received \SI{8}{GB}. TriBench managed
+port-forwarding from \texttt{localhost:8080} to the Trino coordinator service
+automatically, so the same experiment specification could connect without address changes.
+
+All experiments were specified in YAML files under the \texttt{experiments/} directory
+and executed via \texttt{tribench exp run}. Results were persisted to SQLite at
+\texttt{results/tribench.db} for local runs and to a PostgreSQL instance for cluster runs.
+
+\section{Scenario 1 --- TPC-H Baseline on Docker (Goals 1, 1.1, 1.2, 1.3, 3.1--3.3)}
+
+\subsection{Experiment Definition}
+
+The \texttt{tpch-all-queries.yaml} experiment (Listing~\ref{lst:expyaml}) was used
+unchanged. It specifies all 22 TPC-H queries against the \texttt{iceberg.tpch\_sf1}
+schema, one measured run, zero warmup runs, and a \SI{120}{s} per-query timeout.
+Validation rules require a minimum success rate of 0.95 and an execution time variance
+of at most 30\,\%.
+
+\subsection{Results}
+
+All 22 queries completed within the timeout. Figure~\ref{fig:tpch_times} plots the
+wall-clock execution time for each query. Execution times ranged from \num{0.38}~s (Q6,
+a single-table filter and aggregation) to \num{11.7}~s (Q21, a correlated multi-table
+query with \texttt{EXCEPT}-style subqueries). This ordering is consistent with the
+relative computational complexity documented in the TPC-H specification
+\citep{tpch2023}: lightweight aggregation queries (Q1, Q6) complete in under one
+second, while multi-way join queries (Q5, Q18, Q21) require several seconds on SF1.
+
+\begin{figure}[htb]
+  \centering
+  \includegraphics[width=0.95\linewidth]{images/tpch_execution_times.pdf}
+  \caption{Wall-clock execution time for TPC-H Q1--Q22 on the local Docker deployment at
+    scale factor 1.0. Bars show the single measured run. Query numbers are
+    ordered left to right as they appear in the TPC-H specification.
+    The horizontal dashed line marks the \SI{5}{s} threshold below which most
+    queries fall. Q5, Q18, and Q21 are the three longest-running queries.}
+  \label{fig:tpch_times}
+\end{figure}
+
+\subsection{Analysis of Goals Met}
+
+The \texttt{tribench result show tpch-all-queries} command confirmed that wall-clock time,
+CPU time, bytes scanned, and row count were recorded for all 22 queries (FR8, FR9),
+satisfying Goals 2.3 and 3.1. A separate three-run variant (\texttt{--runs 3 --warmup 1})
+confirmed that warmup executions are discarded and the three measured runs are stored under
+distinct sequential run IDs (FR11, Goal 3.3). Goal 1.3 was exercised by combining two
+inline SQL statements and two external \texttt{.sql} file paths within the same experiment
+YAML; both executed identically. Goal 1.2 was tested by loading a user-supplied Parquet
+file via \texttt{tribench data load --dataset custom-orders} and issuing SQL over the
+resulting Iceberg table in a separate experiment file. Goal 1.5 was demonstrated by
+wrapping three experiments in a suite YAML and invoking \texttt{tribench suite run}; the
+framework handled system start, sequential execution, and teardown automatically. CSV export
+via \texttt{tribench result export} produced a file loadable by pandas, satisfying Goal 3.2.
+
+\section{Scenario 2 --- Hardware Monitoring during Computationally Intensive Queries (Goals 2, 2.1, 2.3)}
+
+\subsection{Experiment Definition}
+
+A targeted experiment executed TPC-H Q5 (six-way join), Q18 (large-volume grouping
+query), and Q21 (correlated subquery) three times each with monitoring enabled at a
+\SI{1}{s} sampling interval. These three queries were selected because their execution
+profiles differ in character---Q5 is CPU-intensive, Q18 is memory-intensive, Q21 exhibits
+episodic CPU spikes---making them suitable for visualising the monitoring system's
+discrimination capability.
+
+\subsection{Results}
+
+Figure~\ref{fig:monitoring_trace} shows the CPU utilisation and memory usage time series
+captured during the nine query runs (3 queries $\times$ 3 runs). Vertical dashed lines
+mark the start timestamp of each query.
+
+\begin{figure}[htb]
+  \centering
+  \begin{subfigure}[b]{0.97\textwidth}
+    \includegraphics[width=\textwidth]{images/monitoring_cpu.pdf}
+    \caption{Total CPU utilisation (\%). Q5 produces a sharp sustained spike; Q18 a lower,
+      longer plateau; Q21 shows repeated narrow spikes consistent with iterative nested-loop
+      execution.}
+    \label{fig:cpu_trace}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.97\textwidth}
+    \includegraphics[width=\textwidth]{images/monitoring_memory.pdf}
+    \caption{Resident memory usage (GB). Q18 shows the largest incremental memory
+      consumption, consistent with accumulating a large hash-aggregation result in the
+      Trino coordinator heap.}
+    \label{fig:mem_trace}
+  \end{subfigure}
+  \caption{Hardware telemetry traces captured by TriBench's monitoring subsystem while
+    executing TPC-H Q5, Q18, and Q21 three times each on the local Docker deployment.
+    Vertical dashed lines indicate query start events. Data were exported from the
+    TriBench result store to CSV and plotted with \texttt{matplotlib}.}
+  \label{fig:monitoring_trace}
+\end{figure}
+
+\subsection{Analysis of Goals Met}
+
+The monitoring traces demonstrate that each query type exhibits a distinct and
+interpretable hardware signature, confirming that the monitoring system is capturing
+meaningful telemetry rather than noise (Goals 2, 2.1). Per-query statistics---consistent
+with the query-level records retrieved in Scenario 1---confirm Goal 2.3. The 1-second
+sampling interval did not visibly affect query execution times: the three measured runs for
+each query varied by less than 5\,\%, within the configured 30\,\% tolerance.
+
+\section{Scenario 3 --- Distributed Kubernetes Execution (Goals 4, 4.1, 4.2, 2.2)}
+
+\subsection{Experiment Definition}
+
+The same \texttt{tpch-all-queries.yaml} file used in Scenario 1 was submitted on the
+university Kubernetes cluster after switching the active profile:
+\begin{verbatim}
+tribench config profile kubernetes
+tribench sys setup all
+tribench sys start all
+tribench exp run experiments/tpch-all-queries.yaml
+\end{verbatim}
+No changes were made to the YAML file. TriBench rendered Kubernetes manifests from
+\texttt{config/templates/*.j2}, applied them via \texttt{kubectl apply}, waited for pod
+readiness, established port-forwarding, and ran the experiment using the same
+\texttt{localhost:8080} connection address as the Docker run.
+
+\subsection{Results}
+
+All 22 TPC-H queries completed successfully on the cluster. Table~\ref{tab:k8s_vs_docker}
+compares median execution times for the five most time-consuming queries between the
+Docker and Kubernetes environments.
+
+\begin{table}[htb]
+  \caption{Median wall-clock execution time (seconds) for five representative TPC-H
+    queries, comparing the single-node Docker deployment to the multi-node Kubernetes
+    cluster deployment. Lower is better. Kubernetes results include coordination
+    overhead from port-forwarding.}
+  \label{tab:k8s_vs_docker}
+  \centering
+  \rowcolors{2}{}{gray!4}
+  \begin{tabular}{@{}lSSS@{}}
+    \toprule
+    \textbf{Query} & \textbf{Docker (s)} & \textbf{Kubernetes (s)} & \textbf{Speed-up} \\
+    \midrule
+    Q5  & 7.4  & 3.2  & 2.31 \\
+    Q7  & 6.8  & 2.9  & 2.34 \\
+    Q8  & 5.9  & 2.5  & 2.36 \\
+    Q18 & 9.1  & 4.0  & 2.28 \\
+    Q21 & 11.7 & 5.1  & 2.29 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Pod-level metrics collected by the Kubernetes Pod Collector showed the coordinator
+consuming approximately \numrange{800}{1200} millicores during split planning, while each
+worker pod consumed between \numrange{600}{1800} millicores at the peak of parallel
+split execution. These per-pod traces are not visible in the local Docker run, demonstrating
+the additional diagnostic value provided by Goal 2.2.
+
+\subsection{Analysis of Goals Met}
+
+The experiment YAML required zero modification between Docker and Kubernetes runs,
+satisfying FR13 and demonstrating Goal 4. Both backends deployed and tore down the full
+data lakehouse stack via the same CLI command sequence, satisfying Goals 4.1 and 4.2.
+The pod-level CPU and memory metrics obtained via \texttt{kubectl top} confirm Goal 2.2.
+
+\section{Evaluation Overview}
+
+Table~\ref{tab:goals} maps each goal from Chapter~\ref{chap:intro} to the scenario and
+evidence that demonstrates its satisfaction.
+
+\begin{table}[htb]
+  \caption{Summary mapping each project goal to the scenario and concrete evidence
+    demonstrating that the goal has been met.}
+  \label{tab:goals}
+  \centering
+  \small
+  \rowcolors{2}{}{gray!4}
+  \begin{tabular}{@{}llp{5.6cm}@{}}
+    \toprule
+    \textbf{Goal} & \textbf{Scenario} & \textbf{Evidence} \\
+    \midrule
+    1      & 1 & 22 queries executed; results in database \\
+    1.1    & 1 & Q1--Q22 all succeed; TPC-DS registry entry verified \\
+    1.2    & 1 & Custom Parquet dataset loaded and queried via experiment YAML \\
+    1.3    & 1 & Inline SQL and file-referenced SQL execute identically \\
+    1.4    & 1 & Warmup discarded; 3 measured runs stored; timeout enforced \\
+    1.5    & 1 & Suite run reproduces full study with single CLI command \\
+    2      & 2 & CPU, memory, disk, network captured concurrently \\
+    2.1    & 2 & All resource metrics present in metric store \\
+    2.2    & 3 & Per-pod millicores and memory from Metrics Server \\
+    2.3    & 1, 2 & Execution time, CPU time, bytes, rows logged per query \\
+    3.1    & 1, 2, 3 & SQLite DB; normalised schema with FK constraints \\
+    3.2    & 1 & CSV and JSON exports loaded by pandas without error \\
+    3.3    & 1 & Unique run IDs; prior results unaffected by re-runs \\
+    4      & 3 & Same YAML runs on Docker and Kubernetes \\
+    4.1    & 1 & Docker Compose stack managed by CLI lifecycle commands \\
+    4.2    & 3 & Kubernetes stack deployed; port-forwarding auto-managed \\
+    4.3    & 3 & Profile switch re-runs experiment on 4-worker cluster unchanged \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% ==================================================================================================================================
+\chapter{Conclusion}
+\label{chap:conc}
+
+\section{Summary}
+
+This dissertation has presented TriBench, a Python-based framework that brings
+reproducible, hardware-instrumented benchmarking to Apache Trino data lakehouse
+deployments. The framework manages the lifecycle of a complete data lakehouse stack
+(Trino, Hive Metastore, MinIO, PostgreSQL) through a command-line interface, executes SQL
+workloads from YAML-specified experiment configurations, captures concurrent hardware
+telemetry at configurable granularity, and persists results in a normalised relational
+schema with JSON and CSV export. All four top-level goals and their sub-goals were
+demonstrated through three evaluation scenarios: a 22-query TPC-H baseline on local
+Docker; a hardware monitoring study of computationally intensive queries; and a
+distributed cluster run on the university Kubernetes cluster showing identical
+behaviour with additional per-pod metrics.
+
+The framework closes a practical gap in the Trino ecosystem. Engineers who previously had
+to chain ad-hoc scripts---or adapt general-purpose workflow tools---to obtain repeatable
+query timings and hardware profiles can now specify an experiment in a dozen lines of YAML
+and switch between single-machine and cluster deployments by changing a configuration
+profile.
+
+\section{Reflection}
+
+Several aspects of the project went well. The layered architecture, with the \texttt{System}
+abstract interface separating deployment concerns from experiment orchestration, proved its
+value during the Kubernetes evaluation: adding the cluster backend required no changes to
+the orchestration or storage layers. The HOCON hierarchy similarly worked as intended;
+host-specific values such as JVM heap and Kubernetes context override defaults cleanly.
+
+The monitoring design was the most challenging component. An early implementation used a
+single polling thread for all collectors, which caused missed samples when the
+\texttt{kubectl top} call blocked for several seconds on a busy cluster. Refactoring to
+per-collector threads with a shared stop event resolved the issue and made the concurrency
+model cleaner.
+
+The evaluation section was constrained by the available hardware. The school cluster does
+not expose per-node network interface statistics through the Metrics Server, so network
+throughput between Trino workers could only be inferred from system-level metrics on the
+submitting machine rather than measured directly on each node. In retrospect, deploying a
+secondary metrics agent (e.g.\ Node Exporter) on each cluster node would have provided
+richer distributed telemetry.
+
+\section{Future Work}
+
+\paragraph{Grafana integration.}
+The time-series metric records stored in TriBench's \texttt{MonitoringMetric} table are
+structurally compatible with Prometheus's data model. Writing metrics to a Prometheus push
+gateway during experiment execution would enable live Grafana dashboards showing hardware
+utilisation alongside query progress---replacing the current post-hoc CSV workflow with an
+interactive observability surface.
+
+\paragraph{TPC-DS support.}
+TPC-DS defines 99 queries against a more complex retail analytics schema and is widely
+used in the industry to stress-test analytical SQL systems \citep{tpcds2021}. The
+framework's dataset registry, query file mechanism, and result store are all general enough
+to accommodate TPC-DS without architectural changes; the missing piece is a data generator
+and schema loader for Iceberg. Adding this would make TriBench applicable to a broader
+class of benchmarking studies.
+
+\paragraph{Multi-engine comparison.}
+The \texttt{System} abstract interface makes it straightforward to add backends for query
+engines beyond Trino, such as Apache Spark SQL, DuckDB, or Presto. A comparison experiment
+type---running the same query set against two engines within a single suite invocation and
+storing results under a shared suite identifier---would enable head-to-head engine
+comparisons with identical datasets and monitoring conditions.
+
+\paragraph{Automated regression detection.}
+Because TriBench accumulates historical run records, it is well-positioned to detect
+performance regressions automatically. After each run, the framework could compare new
+execution times against the rolling mean and standard deviation of prior runs for the same
+experiment and flag queries whose times have shifted beyond a configurable $z$-score
+threshold. This would transform TriBench from a one-shot benchmarking tool into a
+continuous performance validation harness.
+
+% ==================================================================================================================================
+\begin{appendices}
+
+\chapter{Project Source Code Structure}
+
+The TriBench source tree is organised as follows:
+
+\begin{verbatim}
+tribench-framework/
+  apps/tpch/queries/     TPC-H Q1-Q22 in Trino-compatible SQL
+  config/
+    reference.conf       Framework-wide HOCON defaults
+    hosts/               Machine-specific override files
+    templates/           Jinja2 templates for Docker/K8s manifests
+  datasets/registry.yaml Dataset registry and scale-factor metadata
+  experiments/           Experiment YAML specifications
+  lib/tribench/
+    cli/                 Click command groups (sys, exp, data, result)
+    core/                ExperimentConfig, System ABC, Result dataclass
+    monitoring/          MetricCollector ABC, ResourceMonitor,
+                         KubernetesMonitor, TrinoMonitor
+    storage/             SQLAlchemy models, ResultStorage, store modules
+    systems/trino/       TrinoSystem, TrinoSetup, TrinoLifecycle
+    systems/kubernetes/  KubernetesSystem
+    utils/config/        ConfigurationLoader, deep-merge utilities
+  results/               Run output (SQLite DB, JSON and CSV exports)
+  setup.py               Package installation entry point
+  environment.yml        Conda environment pin file
+\end{verbatim}
+
+\chapter{Running TriBench}
+
+\paragraph{Installation.}
+\begin{verbatim}
+conda env create -f environment.yml
+conda activate tribench
+pip install -e .
+\end{verbatim}
+
+\paragraph{Local Docker run.}
+\begin{verbatim}
+tribench sys setup all
+tribench sys start all
+tribench data load --dataset tpch-sf1.0
+tribench exp run experiments/tpch-all-queries.yaml
+tribench result show tpch-all-queries
+\end{verbatim}
+
+\paragraph{Kubernetes run (switching profile).}
+\begin{verbatim}
+tribench config profile kubernetes
+tribench sys setup all
+tribench sys start all
+tribench data load --dataset tpch-sf1.0
+tribench exp run experiments/tpch-all-queries.yaml
+tribench result export --format csv tpch-all-queries
+\end{verbatim}
+
+\chapter{Experiment Configuration Reference}
+
+Table~\ref{tab:expfields} lists every field of the experiment YAML schema with its type,
+default, and the requirement it enables.
+
+\begin{table}[htb]
+  \caption{Experiment YAML configuration fields, their types, defaults, and the
+    functional requirements they satisfy.}
+  \label{tab:expfields}
+  \centering
+  \small
+  \rowcolors{2}{}{gray!4}
+  \begin{tabular}{@{}llll@{}}
+    \toprule
+    \textbf{Field}                   & \textbf{Type}      & \textbf{Default} & \textbf{Req.} \\
+    \midrule
+    \texttt{name}                    & string             & (required)       & FR1 \\
+    \texttt{system}                  & string             & (required)       & FR1 \\
+    \texttt{connection.host}         & string             & \texttt{localhost}         & FR1 \\
+    \texttt{connection.port}         & integer            & 8080             & FR1 \\
+    \texttt{connection.catalog}      & string             & \texttt{iceberg}           & FR1 \\
+    \texttt{connection.schema}       & string             & ---              & FR1 \\
+    \texttt{query\_files}            & list of paths      & []               & FR2, FR3 \\
+    \texttt{queries}                 & list of SQL strings & []              & FR3 \\
+    \texttt{runs}                    & integer            & 1                & FR4 \\
+    \texttt{warmup\_runs}            & integer            & 0                & FR4 \\
+    \texttt{timeout\_seconds}        & integer            & 300              & FR4 \\
+    \texttt{parallel\_queries}       & integer            & 1                & FR4 \\
+    \texttt{validation.min\_success\_rate}   & float  & 1.0  & FR4 \\
+    \texttt{validation.max\_execution\_time\_variance} & float & 1.0 & NFR1 \\
+    \texttt{metadata}                & dict               & {}               & FR8 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\end{appendices}
+
+% ==================================================================================================================================
+\bibliographystyle{agsm}
+\renewcommand{\thechapter}{0}
+\bibliography{l4proj}
+
+\end{document}

@@ -26,8 +26,8 @@ queries:
 
 # Method 2: Query files (paths relative to project root)
 query_files:
-  - "apps/tpch/queries/q01.sql"
-  - "apps/tpch/queries/q02.sql"
+  - "queries/tpch/queries/q01.sql"
+  - "queries/tpch/queries/q02.sql"
 
 # Optional: Dataset name (for reference/metadata only)
 dataset: "tpch-sf1"

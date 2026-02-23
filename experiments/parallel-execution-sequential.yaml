@@ -38,10 +38,10 @@ monitoring:
 
 # Query selection: Mix of simple, medium, and complex queries
 query_files:
-  - "apps/tpch/queries/q01.sql"  # Simple scan
-  - "apps/tpch/queries/q03.sql"  # Medium join
-  - "apps/tpch/queries/q06.sql"  # Simple filter
-  - "apps/tpch/queries/q09.sql"  # Complex join
+  - "queries/tpch/queries/q01.sql"  # Simple scan
+  - "queries/tpch/queries/q03.sql"  # Medium join
+  - "queries/tpch/queries/q06.sql"  # Simple filter
+  - "queries/tpch/queries/q09.sql"  # Complex join
 
 # Validation
 validation:

@@ -1,6 +1,8 @@
 # TriBench - Trino Benchmarking Framework
 
-A framework for benchmarking SQL workloads on distributed data lakehouses using Apache Trino, inspired by the PEEL framework architecture.
+A **cross-platform** framework for benchmarking SQL workloads on distributed data lakehouses using Apache Trino, inspired by the PEEL framework architecture.
+
+**Supported Platforms:** Linux • macOS • Windows (WSL2)
 
 ## Overview
 
@@ -10,6 +12,14 @@ TriBench provides a systematic approach to:
 - **Monitor** hardware resource usage and system performance
 - **Analyze** results with structured reporting and visualization
 - **Share** reproducible benchmark bundles
+
+**Key Features:**
+-  **Cross-Platform**: Works on Linux, macOS, and Windows (via WSL2)
+-  **Flexible Deployment**: Docker, Kubernetes, or cloud (GKE)
+-  **Built-in Benchmarks**: TPC-H, TPC-DS out-of-the-box
+-  **Custom Datasets**: Zero-config loading of any Parquet files
+-  **Comprehensive Monitoring**: System metrics + Kubernetes metrics
+-  **Reproducible**: Configuration-driven experiments with bundled results
 
 ## Architecture
 
@@ -32,9 +42,13 @@ tribench-framework/
 
 ## Prerequisites
 
-### Foundation Tools (Required for All Users)
+TriBench is **cross-platform** and runs on **Linux, macOS, and Windows (via WSL2)**. All core dependencies are available on all platforms.
 
-**macOS Users:**
+### Foundation Tools (Required for All Platforms)
+
+<details>
+<summary><b>macOS</b></summary>
+
 ```bash
 # Install Homebrew (if not already installed)
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -46,53 +60,237 @@ xcode-select --install
 brew install git
 ```
 
-**Verify Foundation Setup:**
+**Verify:**
 ```bash
 brew --version                      # Should show Homebrew version
 git --version                       # Should show Git version
 ```
+</details>
+
+<details>
+<summary><b>Linux (Ubuntu/Debian)</b></summary>
+
+```bash
+# Update package lists
+sudo apt-get update
+
+# Install Git and build essentials
+sudo apt-get install -y git build-essential curl
+```
+
+**Verify:**
+```bash
+git --version                       # Should show Git version
+```
+</details>
+
+<details>
+<summary><b>Windows</b></summary>
+
+TriBench runs on Windows via **WSL2 (Windows Subsystem for Linux)**:
+
+```powershell
+# Install WSL2 (run in PowerShell as Administrator)
+wsl --install
+
+# Install Ubuntu from Microsoft Store
+# Then open Ubuntu terminal and follow Linux instructions above
+```
+
+All commands should be run inside the WSL2 Ubuntu terminal.
+</details>
+
+---
 
 ### Backend-Specific Dependencies
 
-Before setting up TriBench, install the required backend tools:
+Before setting up TriBench, install the required backend tools for your platform:
 
-**Required (Docker Backend):**
+#### Required: Docker Backend
+
+<details>
+<summary><b>macOS</b></summary>
+
 ```bash
 brew install --cask docker          # Docker Desktop (includes Docker Compose)
 ```
 
-**Required (Kubernetes Backend):**
-```bash
-brew install kubectl                # Kubernetes CLI
-brew install helm                   # Helm package manager for Kubernetes
-```
-
-**Optional (Local Kubernetes Development):**
-```bash
-brew install kind                   # Kind (Kubernetes in Docker)
-```
-
-**Optional (GCP/GKE Deployments):**
-```bash
-brew install --cask google-cloud-sdk  # gcloud CLI for GCP
-```
-
-**Optional (MinIO S3 Operations):**
-```bash
-brew install minio/stable/mc        # MinIO Client for S3 operations
-```
-
-### Verify Docker Installation
+**Verify:**
 ```bash
 docker --version                    # Should show Docker version
 docker compose version              # Should show Docker Compose version
 ```
+</details>
+
+<details>
+<summary><b>Linux (Ubuntu/Debian)</b></summary>
+
+```bash
+# Install Docker Engine
+sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+# Add your user to docker group (to run without sudo)
+sudo usermod -aG docker $USER
+newgrp docker
+
+# Install Docker Compose
+sudo apt-get install -y docker-compose
+```
+
+**Verify:**
+```bash
+docker --version                    # Should show Docker version
+docker compose version              # Should show Docker Compose version
+```
+</details>
+
+<details>
+<summary><b>Windows (WSL2)</b></summary>
+
+```bash
+# Install Docker Desktop for Windows from: https://docs.docker.com/desktop/install/windows-install/
+# Enable WSL2 integration in Docker Desktop settings
+
+# Inside WSL2 Ubuntu terminal, verify:
+docker --version                    # Should show Docker version
+docker compose version              # Should show Docker Compose version
+```
+</details>
+
+---
+
+#### Optional: Kubernetes Backend
+
+<details>
+<summary><b>macOS</b></summary>
+
+```bash
+brew install kubectl                # Kubernetes CLI
+brew install helm                   # Helm package manager for Kubernetes
+brew install kind                   # Kind (Kubernetes in Docker) - for local development
+```
+
+**Verify:**
+```bash
+kubectl version --client            # Should show kubectl version
+helm version                        # Should show Helm version
+kind --version                      # Should show Kind version
+```
+</details>
+
+<details>
+<summary><b>Linux (Ubuntu/Debian)</b></summary>
+
+```bash
+# Install kubectl
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+
+# Install Helm
+curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+sudo apt-get update
+sudo apt-get install -y helm
+
+# Install Kind (Kubernetes in Docker)
+curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+chmod +x ./kind
+sudo mv ./kind /usr/local/bin/kind
+```
+
+**Verify:**
+```bash
+kubectl version --client            # Should show kubectl version
+helm version                        # Should show Helm version
+kind --version                      # Should show Kind version
+```
+</details>
+
+<details>
+<summary><b>Windows (WSL2)</b></summary>
+
+```bash
+# Inside WSL2 Ubuntu terminal, follow Linux instructions above
+# Or use kubectl/helm from Docker Desktop (automatically available in WSL2)
+
+# Verify:
+kubectl version --client            # Should show kubectl version
+helm version                        # Should show Helm version
+```
+</details>
+
+---
+
+#### Optional: Cloud Deployments (GCP/GKE)
+
+<details>
+<summary><b>macOS</b></summary>
+
+```bash
+brew install --cask google-cloud-sdk  # gcloud CLI for GCP
+```
+</details>
+
+<details>
+<summary><b>Linux (Ubuntu/Debian)</b></summary>
+
+```bash
+# Install gcloud SDK
+echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+sudo apt-get update && sudo apt-get install -y google-cloud-cli
+```
+</details>
+
+<details>
+<summary><b>Windows (WSL2)</b></summary>
+
+```bash
+# Inside WSL2, follow Linux instructions above
+```
+</details>
+
+---
+
+#### Optional: MinIO Client (S3 Operations)
+
+<details>
+<summary><b>macOS</b></summary>
+
+```bash
+brew install minio/stable/mc        # MinIO Client for S3 operations
+```
+</details>
+
+<details>
+<summary><b>Linux (Ubuntu/Debian)</b></summary>
+
+```bash
+curl https://dl.min.io/client/mc/release/linux-amd64/mc -o mc
+chmod +x mc
+sudo mv mc /usr/local/bin/mc
+```
+</details>
+
+<details>
+<summary><b>Windows (WSL2)</b></summary>
+
+```bash
+# Inside WSL2, follow Linux instructions above
+```
+</details>
 
 ## Quick Start
 
+> **Note:** All commands below work identically on Linux, macOS, and Windows (WSL2). Make sure you've completed the [Prerequisites](#prerequisites) for your platform.
+
 1. **Setup Environment:**
    ```bash
-   # Setup Python environment with Conda
+   # Setup Python environment with Conda (https://docs.conda.io/en/latest/miniconda.html)
    conda env create -f environment.yml
    conda activate tribench
    

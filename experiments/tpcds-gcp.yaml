@@ -12,16 +12,16 @@ warmup_runs: 1
 timeout_seconds: 600
 max_retries: 2
 query_files:
-  - "apps/tpcds/queries/q01.sql"
-  - "apps/tpcds/queries/q03.sql"
-  - "apps/tpcds/queries/q07.sql"
-  - "apps/tpcds/queries/q19.sql"
-  - "apps/tpcds/queries/q27.sql"
-  - "apps/tpcds/queries/q42.sql"
-  - "apps/tpcds/queries/q52.sql"
-  - "apps/tpcds/queries/q55.sql"
-  - "apps/tpcds/queries/q73.sql"
-  - "apps/tpcds/queries/q96.sql"
+  - "queries/tpcds/queries/q01.sql"
+  - "queries/tpcds/queries/q03.sql"
+  - "queries/tpcds/queries/q07.sql"
+  - "queries/tpcds/queries/q19.sql"
+  - "queries/tpcds/queries/q27.sql"
+  - "queries/tpcds/queries/q42.sql"
+  - "queries/tpcds/queries/q52.sql"
+  - "queries/tpcds/queries/q55.sql"
+  - "queries/tpcds/queries/q73.sql"
+  - "queries/tpcds/queries/q96.sql"
 monitoring:
   enabled: true
   interval_seconds: 5.0
