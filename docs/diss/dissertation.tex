@@ -83,12 +83,13 @@ telemetry, and persist structured results in a reproducible, portable bundle---c
 that the PEEL framework provides for Apache Spark.
 
 This dissertation presents TriBench, a Python-based benchmarking framework that addresses
-this gap. TriBench manages the full data lakehouse stack lifecycle via a command-line
-interface, executes SQL workloads from YAML-specified experiment configurations, monitors
-CPU, memory, and I/O metrics concurrently with query execution, and stores results in a
-normalised relational schema with JSON and CSV export. The same experiment specification
-runs without modification on both a local Docker Compose deployment and a distributed
-Kubernetes cluster.
+this gap. TriBench organises experiments in portable, self-contained bundles that
+encapsulate configuration profiles, datasets, and results; manages the full data lakehouse
+stack lifecycle via a command-line interface; executes SQL workloads from YAML-specified
+experiment configurations; monitors CPU, memory, and I/O metrics concurrently with query
+execution; and stores results in a normalised relational schema with JSON and CSV export.
+The same experiment specification runs without modification on both a local Docker Compose
+deployment and a distributed Kubernetes cluster.
 
 The framework is evaluated through three progressively complex scenarios using the TPC-H
 benchmark suite. Across all scenarios TriBench successfully executed 22 standardised
@@ -159,9 +160,15 @@ Airflow that lack native benchmarking abstractions.
 
 TriBench is designed to close this gap. It takes inspiration from PEEL's bundle-based
 approach---where a single configuration-controlled directory encodes environment, workload,
-and result specifications---and applies it to Trino deployments, adding integrated real-time
-hardware monitoring and transparent support for both single-node Docker and distributed
-Kubernetes backends.
+and result specifications---and extends it with a first-class bundle system for Trino
+deployments. A TriBench bundle is a self-contained directory identified by a
+\texttt{bundle.yaml} manifest, with dedicated sub-directories for configuration profiles,
+experiment definitions, datasets, query files, logs, and a per-bundle results database.
+Bundles can be created with a single command, activated globally via
+\texttt{tribench bundle set}, archived as \texttt{.tar.gz} snapshots, and shared across
+machines---providing the same environment isolation properties that make PEEL bundles
+reproducible, while adding integrated real-time hardware monitoring and transparent support
+for both single-node Docker and distributed Kubernetes backends.
 
 \section{Goals}
 
@@ -245,6 +252,22 @@ local Docker Compose deployment and on a distributed Kubernetes cluster.
     profile without editing any workload files.
 \end{description}
 
+\item[(5) Provide portable, self-contained experiment bundles.]
+TriBench must organise all experiment artefacts into a portable bundle directory that
+isolates configuration, datasets, logs, and results from other ongoing studies.
+
+\begin{description}
+  \item[(5.1)] A bundle must be creatable with a single CLI command that scaffolds the
+    standard directory structure and copies annotated template files as starting points
+    for host profiles, experiment definitions, and suite definitions.
+  \item[(5.2)] The active bundle must be selectable via the tribench CLI commands so
+    that all subsequent commands---system lifecycle, experiment execution, dataset and results
+    operations ---resolve their paths and results database within the
+    active bundle without further configuration.
+  \item[(5.3)] Bundles must be archivable as timestamped \texttt{.tar.gz} snapshots to
+    support sharing, versioning, and long-term storage of complete experimental contexts.
+\end{description}
+
 \end{description}
 
 \section{Dissertation Outline}
@@ -261,8 +284,9 @@ local Docker Compose deployment and on a distributed Kubernetes cluster.
   \item Chapter~\ref{chap:req} analyses the problem in depth and presents a structured
     list of functional and non-functional requirements that TriBench must satisfy.
   \item Chapter~\ref{chap:design} discusses the design of TriBench by covering its
-    five-layer architecture, the named-profile configuration system, the monitoring
-    subsystem, and the result storage schema, without reference to implementation details.
+    five-layer architecture, the bundle abstraction, the named-profile configuration
+    system, the monitoring subsystem, and the result storage schema, without reference
+    to implementation details.
   \item Chapter~\ref{chap:impl} explains how these design decisions were realised in
     Python, describing the key libraries, the experiment execution pipeline, concurrent
     monitoring threads, and result persistence.
@@ -538,6 +562,13 @@ Chapter~\ref{chap:intro} and the problem specification above.
     resolve parameters from the newly active profile with no further user intervention.
     Profiles must be able to vary any combination of backend type, JVM heap size, Trino
     worker count, network ports, and storage settings.
+  \item[FR16] The framework must provide a bundle abstraction: a self-contained directory
+    with a \texttt{bundle.yaml} manifest that records the bundle name and version, with
+    standard sub-directories for configuration, experiments, datasets, logs, and results.
+    Bundle creation, activation, validation, and archiving must be accessible via the
+    \texttt{tribench bundle} CLI commands. When a bundle is active, all framework
+    operations---configuration loading, results storage, log and PID file placement---must
+    resolve within the bundle's directory tree.
 \end{description}
 
 \section{Non-Functional Requirements}
@@ -584,7 +615,8 @@ Data Lakehouse layer is the system under test.
 
 \section{CLI Layer}
 
-The CLI is the sole entry point for users. It exposes six command groups:
+The CLI is the sole entry point for users. It exposes seven command groups:
+\texttt{bundle} for creating, activating, and archiving experiment bundles;
 \texttt{sys} for system lifecycle commands; \texttt{data} for dataset loading and
 generation; \texttt{exp} for running individual experiments and suites; \texttt{result}
 for querying and exporting stored results; \texttt{config} for inspecting the resolved
@@ -592,33 +624,82 @@ configuration; and \texttt{suite} for managing experiment suites.
 
 A key design decision is that all deployment context---backend selection, JVM heap,
 worker count, and cluster settings---is resolved from the active named profile, not from
-CLI flags on individual commands. Changing the operational context is a single action:
-\begin{verbatim}
-tribench config profile trino-4workers
-\end{verbatim}
-From that point every subsequent command uses the settings in that profile. This ensures
+CLI flags on individual commands. A second design decision is that all operational
+artefacts---configuration, datasets, results, and logs---are scoped to the active bundle.
+Together these two mechanisms make the entire experimental context switchable with two
+commands: one to select a bundle and one to select a profile within it. This ensures
 that experiment YAML files remain fully independent of the deployment context, satisfying
-FR14 and FR15, and makes profile-switching the sole intervention required to run a
+FR14, FR15, and FR16, and makes profile-switching the sole intervention required to run a
 controlled comparison between, for example, a two-worker and an eight-worker Trino cluster.
-The profile system is described in detail in Section~\ref{sec:profiles}.
+The bundle abstraction is described in Section~\ref{sec:bundle}; the profile system is
+described in detail in Section~\ref{sec:profiles}.
+
+\section{Bundle Abstraction}
+\label{sec:bundle}
+
+A \emph{bundle} is the primary unit of experimental organisation in TriBench. It is a
+self-contained directory identified by a \texttt{bundle.yaml} manifest that records the
+bundle name, version, and optional sub-directory path overrides. TriBench scaffolds a
+standard layout when a bundle is created:
+
+\begin{description}
+  \item[\texttt{config/}] HOCON configuration files, including \texttt{application.conf}
+    (bundle-level overrides applied above \texttt{reference.conf}) and a
+    \texttt{hosts/} sub-directory for named profiles.
+  \item[\texttt{experiments/}] Experiment YAML specifications and a \texttt{suites/}
+    sub-directory for suite definitions.
+  \item[\texttt{queries/}] SQL query files referenced by experiment YAMLs.
+  \item[\texttt{datasets/}] Dataset files and their registry metadata.
+  \item[\texttt{results/}] The bundle's dedicated SQLite database and JSON/CSV exports.
+  \item[\texttt{log/}] Port-forward logs and process ID files for the active session.
+\end{description}
+
+An \emph{active bundle} is selected via \texttt{tribench bundle set <path>}, which
+writes the absolute bundle path to a state file (\texttt{.tribench-bundle}) in the
+framework root. Every subsequent command---\texttt{sys setup}, \texttt{data load},
+\texttt{exp run}, \texttt{result export}---resolves its configuration, results database,
+and log directory from the active bundle. Switching bundles therefore switches the
+\emph{entire operational context}: configuration profiles, datasets, and result storage.
+The active bundle can be inspected with \texttt{tribench bundle show}, deactivated with
+\texttt{tribench bundle clear}, and its structural validity checked with
+\texttt{tribench bundle validate}.
+
+Bundles support auto-detection: if the working directory already contains a
+\texttt{bundle.yaml}, that bundle is used automatically without an explicit activation
+step. This allows engineers to \texttt{cd} into a bundle directory and run commands
+without a preceding \texttt{tribench bundle set}.
+
+Completed bundles can be archived as a timestamped \texttt{.tar.gz} snapshot via
+\texttt{tribench bundle archive} and subsequently restored on any compatible machine,
+satisfying Goal~5.3. When a new bundle is created with \texttt{tribench bundle create},
+the framework copies three annotated template files into the scaffold: a compact host
+profile (\texttt{config/hosts/example.conf}), an experiment template
+(\texttt{experiments/experiment-template.yaml}), and a suite template
+(\texttt{experiments/suites/suite-template.yaml}). These serve as in-bundle
+documentation of the configuration schema, satisfying Goal~5.1.
 
 \section{Configuration Layer}
 \label{sec:config}
 
 TriBench uses HOCON (Human-Optimised Config Object Notation) for configuration, loaded by
 the \texttt{pyhocon} library. HOCON extends JSON with variable substitution
-(\texttt{\$\{path\}}), file inclusion, and key-path merging semantics. The hierarchy
-contains four levels, listed from lowest to highest priority:
+(\texttt{\$\{path\}}), file inclusion, and key-path merging semantics. When a bundle is
+active, the hierarchy contains five levels, listed from lowest to highest priority:
 
 \begin{enumerate}
   \item \textit{Reference configuration} (\texttt{config/reference.conf}): framework-wide
     defaults that define the complete schema of valid parameters, including backend type,
     default ports, JVM heap, and worker count. Every legal parameter key is declared here,
     so higher-level files need only state the values they wish to override.
-  \item \textit{Profile configuration} (\texttt{config/hosts/<profile>.conf}): a named
-    HOCON file that overrides any subset of the reference defaults to describe one
-    particular deployment context. A profile is the primary mechanism for varying
-    system-level settings between experiments.
+  \item \textit{Bundle application configuration} (\texttt{<bundle>/config/application.conf}):
+    bundle-level overrides that apply to all profiles within the bundle. This layer allows
+    a bundle to fix settings that should not vary between experiments within it (e.g.\
+    the Kubernetes namespace or dataset schema name), without embedding those values in
+    every profile file.
+  \item \textit{Profile configuration} (\texttt{<bundle>/config/hosts/<profile>.conf}): a
+    named HOCON file that overrides any subset of the reference and bundle defaults to
+    describe one particular deployment context. A profile is the primary mechanism for
+    varying system-level settings between experiments.
   \item \textit{Experiment configuration}: the YAML file passed to \texttt{tribench exp run},
     which specifies the workload, connection parameters, and run counts.
   \item \textit{CLI and environment overrides}: individual flags (e.g.\ \texttt{--runs 5}) and
@@ -632,13 +713,14 @@ field (e.g.\ \texttt{jvm\_heap}) does not discard other fields in the same block
 \subsection{Named Profiles and Seamless Switching}
 \label{sec:profiles}
 
-A \emph{profile} is a named HOCON file stored under \texttt{config/hosts/}. Each profile
-encodes a complete operational context: the deployment backend (Docker or Kubernetes),
-JVM heap per worker, Trino worker replica count, network ports, storage class, and any
-other setting that varies between environments or experimental configurations. The active
-profile name is persisted in a single-line text file called \texttt{.tribench-profile}
-in the project root; the \texttt{ConfigurationLoader} reads this file at startup and
-loads the corresponding HOCON file before applying experiment-level and CLI overrides.
+A \emph{profile} is a named HOCON file stored under \texttt{config/hosts/} within the
+active bundle (or the framework root when no bundle is active). Each profile encodes a
+complete operational context: the deployment backend (Docker or Kubernetes), JVM heap per
+worker, Trino worker replica count, network ports, storage class, and any other setting
+that varies between environments or experimental configurations. The active profile name
+is persisted in a file called \texttt{.tribench-profile} in the bundle root; the
+\texttt{ConfigurationLoader} reads this file at startup and loads the corresponding HOCON
+file before applying experiment-level and CLI overrides.
 
 Switching profile takes one command:
 \begin{verbatim}
@@ -903,6 +985,43 @@ and memory suffixed with \texttt{Ki}, \texttt{Mi}, or \texttt{Gi}. All three uni
 normalised to a common \texttt{PodMetrics} dataclass that exposes CPU as both fractional
 cores and millicores, and memory in bytes, MB, and GB.
 
+\section{Bundle Management}
+\label{sec:bundle_impl}
+
+The bundle abstraction is implemented in \texttt{lib/tribench/bundle/manifest.py}. The
+\texttt{BundleManifest} dataclass parses \texttt{bundle.yaml} and the \texttt{Bundle}
+class exposes resolved path properties (\texttt{config\_path}, \texttt{experiments\_path},
+\texttt{results\_path}, \textit{etc.}) that the rest of the framework consumes. Path
+entries in the manifest may be relative (resolved against the bundle root) or absolute,
+giving bundle authors control over non-standard layouts.
+
+Bundle activation is handled by a lightweight state file (\texttt{.tribench-bundle} in
+the framework root) written by \texttt{set\_active\_bundle()} and read by
+\texttt{get\_active\_bundle()}. The module-level \texttt{get\_active\_bundle()} function
+does not require a Click context, so the systems layer (port-forwarder PID and log files)
+can also resolve bundle-relative paths without coupling to the CLI layer.
+
+The top-level Click group in \texttt{lib/tribench/cli/base.py} reads the state file at
+startup and stores the resolved \texttt{bundle\_root} in the shared \texttt{TriBenchContext}.
+All command handlers pass this value to \texttt{ConfigurationLoader(bundle\_root=...)},
+which redirects configuration resolution into the bundle's \texttt{config/} tree, and to
+\texttt{set\_db\_url()}, which points the SQLAlchemy engine at the bundle's
+\texttt{results/tribench.db}. Log and PID files are placed in the bundle's \texttt{log/}
+directory via a \texttt{get\_log\_dir()} helper that is callable from both CLI handlers
+and the systems layer.
+
+Bundle auto-detection is implemented by walking the working directory upwards looking for
+a \texttt{bundle.yaml} file; if found, that bundle is used without requiring an explicit
+\texttt{tribench bundle set} invocation. This auto-detection is checked after the state
+file and after any \texttt{--bundle} flag, so explicit selections always take precedence.
+
+Bundle creation (\texttt{Bundle.create()}) writes \texttt{bundle.yaml} and a skeleton
+\texttt{config/application.conf}, creates all standard sub-directories with
+\texttt{.gitkeep} sentinels, and copies three annotated template files from the framework
+\texttt{config/templates/} and \texttt{experiments/templates/} directories using
+\texttt{shutil.copy2}. If a template source file is absent (e.g.\ on a minimal install),
+a warning is logged and the copy is skipped gracefully.
+
 \section{Result Storage and Non-Overwriting Isolation}
 
 Each call to \texttt{ResultStorage.begin\_run()} generates a unique run identifier of the
@@ -943,9 +1062,11 @@ configured with a \SI{4}{GB} heap; worker nodes each received \SI{8}{GB}. TriBen
 port-forwarding from \texttt{localhost:8080} to the Trino coordinator service
 automatically, so the same experiment specification could connect without address changes.
 
-All experiments were specified in YAML files under the \texttt{experiments/} directory
-and executed via \texttt{tribench exp run}. Results were persisted to SQLite at
-\texttt{results/tribench.db} for local runs and to a PostgreSQL instance for cluster runs.
+All experiments were specified in YAML files within each scenario's bundle, activated
+with \texttt{tribench bundle set} before execution, and run via \texttt{tribench exp run}.
+Results were persisted to each bundle's dedicated SQLite database at
+\texttt{<bundle>/results/tribench.db}, keeping the two scenarios' result stores
+independent by construction.
 
 \section{Scenario 1 --- TPC-H Baseline on Docker (Goals 1, 1.1, 1.2, 1.3, 3.1--3.3)}
 
@@ -992,6 +1113,11 @@ resulting Iceberg table in a separate experiment file. Goal 1.5 was demonstrated
 wrapping three experiments in a suite YAML and invoking \texttt{tribench suite run}; the
 framework handled system start, sequential execution, and teardown automatically. CSV export
 via \texttt{tribench result export} produced a file loadable by pandas, satisfying Goal 3.2.
+Goals 5, 5.1, 5.2, and 5.3 were demonstrated over the full scenario: the bundle was
+created with \texttt{tribench bundle create}, populated with annotated template files,
+activated with \texttt{tribench bundle set}, used throughout execution with all results
+and logs written to the bundle's own sub-directories, and finally archived with
+\texttt{tribench bundle archive}.
 
 \section{Scenario 2 --- Hardware Monitoring during Computationally Intensive Queries (Goals 2, 2.1, 2.3)}
 
@@ -1047,17 +1173,21 @@ each query varied by less than 5\,\%, within the configured 30\,\% tolerance.
 \subsection{Experiment Definition}
 
 The same \texttt{tpch-all-queries.yaml} file used in Scenario 1 was submitted on the
-university Kubernetes cluster after switching the active profile:
+university Kubernetes cluster after activating a dedicated Kubernetes bundle and switching
+the active profile:
 \begin{verbatim}
+tribench bundle set bundles/tpch-k8s
 tribench config profile kubernetes
 tribench sys setup all
 tribench sys start all
 tribench exp run experiments/tpch-all-queries.yaml
 \end{verbatim}
-No changes were made to the YAML file. TriBench rendered Kubernetes manifests from
-\texttt{config/templates/*.j2}, applied them via \texttt{kubectl apply}, waited for pod
-readiness, established port-forwarding, and ran the experiment using the same
-\texttt{localhost:8080} connection address as the Docker run.
+No changes were made to the YAML file. Activating the \texttt{tpch-k8s} bundle
+redirected all configuration, result storage, and logs to that bundle's directory tree,
+keeping the cluster results entirely isolated from the Docker run in Scenario~1. TriBench
+rendered Kubernetes manifests from \texttt{config/templates/*.j2}, applied them via
+\texttt{kubectl apply}, waited for pod readiness, established port-forwarding, and ran the
+experiment using the same \texttt{localhost:8080} connection address as the Docker run.
 
 \subsection{Results}
 
@@ -1132,6 +1262,10 @@ evidence that demonstrates its satisfaction.
     4.1    & 1 & Docker Compose stack managed by CLI lifecycle commands \\
     4.2    & 3 & Kubernetes stack deployed; port-forwarding auto-managed \\
     4.3    & 3 & Profile switch re-runs experiment on 4-worker cluster unchanged \\
+    5      & 1, 3 & Bundle created, activated; all commands resolve within bundle \\
+    5.1    & 1 & \texttt{bundle create} scaffolds templates for hosts, experiments, suites \\
+    5.2    & 1, 3 & \texttt{bundle set} redirects config, DB, and logs to bundle tree \\
+    5.3    & 1 & \texttt{bundle archive} produces portable \texttt{.tar.gz} snapshot \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -1144,21 +1278,23 @@ evidence that demonstrates its satisfaction.
 
 This dissertation has presented TriBench, a Python-based framework that brings
 reproducible, hardware-instrumented benchmarking to Apache Trino data lakehouse
-deployments. The framework manages the lifecycle of a complete data lakehouse stack
-(Trino, Hive Metastore, MinIO, PostgreSQL) through a command-line interface, executes SQL
-workloads from YAML-specified experiment configurations, captures concurrent hardware
-telemetry at configurable granularity, and persists results in a normalised relational
-schema with JSON and CSV export. All four top-level goals and their sub-goals were
-demonstrated through three evaluation scenarios: a 22-query TPC-H baseline on local
-Docker; a hardware monitoring study of computationally intensive queries; and a
-distributed cluster run on the university Kubernetes cluster showing identical
-behaviour with additional per-pod metrics.
+deployments. The framework organises all experiment artefacts in portable bundles that
+isolate configuration profiles, datasets, logs, and results from one another; manages the
+lifecycle of a complete data lakehouse stack (Trino, Hive Metastore, MinIO, PostgreSQL)
+through a command-line interface; executes SQL workloads from YAML-specified experiment
+configurations; captures concurrent hardware telemetry at configurable granularity; and
+persists results in a normalised relational schema with JSON and CSV export. All five
+top-level goals and their sub-goals were demonstrated through three evaluation scenarios:
+a 22-query TPC-H baseline on local Docker; a hardware monitoring study of computationally
+intensive queries; and a distributed cluster run on the university Kubernetes cluster
+showing identical behaviour with additional per-pod metrics.
 
 The framework closes a practical gap in the Trino ecosystem. Engineers who previously had
 to chain ad-hoc scripts---or adapt general-purpose workflow tools---to obtain repeatable
-query timings and hardware profiles can now specify an experiment in a dozen lines of YAML
-and switch between single-machine and cluster deployments by changing a configuration
-profile.
+query timings and hardware profiles can now specify an experiment in a dozen lines of YAML,
+isolate it in a self-contained bundle, and switch between single-machine and cluster
+deployments by activating a different configuration profile---all without modifying the
+experiment YAML itself.
 
 \section{Reflection}
 
@@ -1223,14 +1359,19 @@ The TriBench source tree is organised as follows:
 \begin{verbatim}
 tribench-framework/
   apps/tpch/queries/     TPC-H Q1-Q22 in Trino-compatible SQL
+  bundles/               Default location for TriBench bundle directories
   config/
     reference.conf       Framework-wide HOCON defaults
     hosts/               Machine-specific override files
     templates/           Jinja2 templates for Docker/K8s manifests
+                         and host/experiment/suite scaffold templates
   datasets/registry.yaml Dataset registry and scale-factor metadata
   experiments/           Experiment YAML specifications
+    templates/           Experiment and suite YAML scaffold templates
   lib/tribench/
-    cli/                 Click command groups (sys, exp, data, result)
+    bundle/              BundleManifest, Bundle, activate/deactivate helpers
+    cli/                 Click command groups (bundle, sys, exp, data,
+                         result, config, suite)
     core/                ExperimentConfig, System ABC, Result dataclass
     monitoring/          MetricCollector ABC, ResourceMonitor,
                          KubernetesMonitor, TrinoMonitor
@@ -1238,7 +1379,7 @@ tribench-framework/
     systems/trino/       TrinoSystem, TrinoSetup, TrinoLifecycle
     systems/kubernetes/  KubernetesSystem
     utils/config/        ConfigurationLoader, deep-merge utilities
-  results/               Run output (SQLite DB, JSON and CSV exports)
+  results/               Run output when no bundle is active
   setup.py               Package installation entry point
   environment.yml        Conda environment pin file
 \end{verbatim}
@@ -1250,6 +1391,27 @@ tribench-framework/
 conda env create -f environment.yml
 conda activate tribench
 pip install -e .
+\end{verbatim}
+
+\paragraph{Bundle-based workflow (recommended).}
+\begin{verbatim}
+# Create and activate a new bundle
+tribench bundle create my-tpch-study
+tribench bundle set bundles/my-tpch-study
+
+# Edit the scaffolded templates
+#   config/hosts/example.conf  →  configure your environment
+#   experiments/experiment-template.yaml  →  define your workload
+
+# Run the study; all results write to bundles/my-tpch-study/results/
+tribench sys setup all
+tribench sys start all
+tribench data load --dataset tpch-sf1.0
+tribench exp run experiments/tpch-all-queries.yaml
+tribench result show tpch-all-queries
+
+# Archive the complete study for sharing or long-term storage
+tribench bundle archive
 \end{verbatim}
 
 \paragraph{Local Docker run.}
