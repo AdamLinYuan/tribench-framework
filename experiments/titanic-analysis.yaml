@@ -8,7 +8,7 @@ connection:
   port: 8080
   user: "tribench"
   catalog: "iceberg"
-  schema: "titanic"
+  schema: "boat"
 
 runs: 3
 warmup_runs: 1

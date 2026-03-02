@@ -119,16 +119,25 @@ def bundle_set(bundle_path: str):
 
     Once set, TriBench uses this bundle automatically without needing
     the --bundle flag on every command.
+    
+    You can pass just the bundle name and TriBench will look for it
+    inside the bundles/ directory automatically.
 
     \b
     Examples:
+        tribench bundle set tpch
         tribench bundle set bundles/tpch
         tribench bundle set /data/bundles/tpcds
     """
     root = Path(bundle_path).resolve()
     if not root.exists():
-        click.secho(f"✗ Directory not found: {root}", fg='red', err=True)
-        raise SystemExit(1)
+        # Try bundles/<name> relative to CWD
+        candidate = (Path.cwd() / 'bundles' / bundle_path).resolve()
+        if candidate.exists():
+            root = candidate
+        else:
+            click.secho(f"✗ Directory not found: {root}", fg='red', err=True)
+            raise SystemExit(1)
     if not (root / Bundle.MANIFEST_FILENAME).exists():
         click.secho(
             f"✗ No bundle.yaml found in {root}. "

@@ -1,0 +1,113 @@
+# TriBench Experiment Suite Configuration Template
+# This file shows all available configuration options for experiment suites
+
+# ==============================================================================
+# REQUIRED FIELDS
+# ==============================================================================
+
+# Unique name for this suite
+name: "suite-name"
+
+# Human-readable description
+description: "Description of what this suite benchmarks"
+
+# List of experiments (at least one required)
+experiments:
+  # Method 1: Simple path reference (inherits all suite defaults)
+  - path: "experiments/experiment1.yaml"
+  
+  # Method 2: Path with per-experiment overrides
+  - path: "experiments/experiment2.yaml"
+    runs: 5                    # Override suite default for this experiment
+    timeout_seconds: 600       # Override suite default for this experiment
+    description: "Custom description for this experiment"
+
+
+# ==============================================================================
+# OPTIONAL SUITE-LEVEL DEFAULTS
+# ==============================================================================
+# All defaults are inherited by experiments unless overridden
+
+defaults:
+  # System to benchmark
+  system: "trino"
+  
+  # Execution parameters
+  runs: 3
+  warmup_runs: 1
+  timeout_seconds: 300
+  max_retries: 2
+  parallel_queries: 1
+  
+  # Connection parameters (merged with experiment-specific connection)
+  connection:
+    host: "localhost"
+    port: 8080
+    user: "admin"
+    catalog: "iceberg"
+  
+  # Monitoring configuration
+  monitoring:
+    enabled: true
+    interval_seconds: 5.0
+    kubernetes:
+      enabled: false
+      context: "kind-tribench"
+      namespace: "tribench"
+  
+  # Validation rules
+  validation:
+    min_success_rate: 0.95
+    max_execution_time_variance: 0.3
+  
+  # Metadata (merged with experiment-specific metadata)
+  metadata:
+    suite: "suite-name"
+    benchmark_version: "1.0"
+    tags: ["benchmark", "suite"]
+
+
+# ==============================================================================
+# EXAMPLE: Complete Suite Configuration
+# ==============================================================================
+
+# Example with multiple experiments and different override patterns:
+#
+# name: "tpch-scalability-suite"
+# description: "TPC-H queries at different scale factors"
+#
+# defaults:
+#   system: trino
+#   runs: 3
+#   warmup_runs: 1
+#   timeout_seconds: 600
+#   connection:
+#     host: "localhost"
+#     port: 8080
+#     user: "admin"
+#     catalog: "iceberg"
+#   validation:
+#     min_success_rate: 0.95
+#   metadata:
+#     suite: "tpch-scalability"
+#     benchmark: "TPC-H"
+#
+# experiments:
+#   # SF1 - quick queries
+#   - path: "experiments/tpch-sf1.yaml"
+#     timeout_seconds: 300
+#     metadata:
+#       scale_factor: 1
+#
+#   # SF10 - medium queries
+#   - path: "experiments/tpch-sf10.yaml"
+#     runs: 5
+#     metadata:
+#       scale_factor: 10
+#
+#   # SF100 - long queries
+#   - path: "experiments/tpch-sf100.yaml"
+#     runs: 2
+#     timeout_seconds: 1800
+#     metadata:
+#       scale_factor: 100

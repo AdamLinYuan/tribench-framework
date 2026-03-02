@@ -21,7 +21,7 @@ def experiment_group():
 
 
 @experiment_group.command(name="run")
-@click.argument("experiment", type=click.Path(exists=True))
+@click.argument("experiment")
 @click.option('--name', help='Override experiment name/ID for this run.')
 @click.option('--runs', type=int, help='Override number of runs to execute.')
 @click.option('--warmup', type=int, help='Override number of warmup runs.')
@@ -48,15 +48,13 @@ def run(ctx, experiment, name, runs, warmup, timeout, host, port, parallel, no_m
     
     \b
     Examples:
-        tribench exp run experiments/tpch-sf1.yaml       # Uses backend from active profile
-        tribench exp run experiments/tpch-sf1.yaml --name trial_1
-        tribench exp run experiments/tpch-sf1.yaml --runs 3 --warmup 1
-        tribench exp run experiments/test-simple.yaml --timeout 60 --dry-run
-        tribench exp run experiments/tpch-sf1.yaml --no-monitoring
-        tribench exp run experiments/tpch-iceberg-tiny.yaml --save-json
-        tribench exp run experiments/tpch-sf1.yaml --no-storage
-        tribench exp run experiments/tpch-sf1.yaml --host localhost --port 8080
-        tribench exp run experiments/tpch-sf1.yaml --parallel 4
+        tribench exp run my-exp.yaml                             # Resolves from active bundle's experiments/
+        tribench exp run experiments/tpch-sf1.yaml               # Full path also works
+        tribench exp run my-exp.yaml --name trial_1
+        tribench exp run my-exp.yaml --runs 3 --warmup 1
+        tribench exp run my-exp.yaml --timeout 60 --dry-run
+        tribench exp run my-exp.yaml --no-monitoring
+        tribench exp run my-exp.yaml --parallel 4
     """
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
@@ -69,6 +67,19 @@ def run(ctx, experiment, name, runs, warmup, timeout, host, port, parallel, no_m
     # Load configuration to determine backend
     from tribench.utils.config import ConfigurationLoader
     bundle_root = getattr(ctx.obj, 'bundle_root', None)
+
+    # Resolve experiment path — if not found as-is, look in bundle's experiments/ dir
+    exp_path = Path(experiment)
+    if not exp_path.exists() and bundle_root is not None:
+        candidate = Path(bundle_root) / 'experiments' / experiment
+        if candidate.exists():
+            exp_path = candidate
+    if not exp_path.exists():
+        click.secho(f"✗ Experiment file not found: {experiment}", fg='red')
+        if bundle_root:
+            click.secho(f"  Looked in: . and {Path(bundle_root) / 'experiments'}", fg='red')
+        sys.exit(1)
+
     config_loader = ConfigurationLoader(bundle_root=bundle_root)
     full_config = config_loader.load(experiment_config=config) if config else config_loader.load()
     
@@ -88,8 +99,6 @@ def run(ctx, experiment, name, runs, warmup, timeout, host, port, parallel, no_m
         logging.basicConfig(level=logging.DEBUG, format='%(levelname)s: %(message)s')
     else:
         logging.basicConfig(level=logging.INFO, format='%(message)s')
-    
-    exp_path = Path(experiment)
     
     try:
         # Build CLI overrides dictionary

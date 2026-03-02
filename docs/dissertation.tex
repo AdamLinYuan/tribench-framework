@@ -880,13 +880,11 @@ both local and cluster deployments. MinIO offers a self-hosted, container-friend
 S3-compatible interface that allows the same object-store semantics to be used in Docker
 Compose and Kubernetes. The Hive Metastore Service provides a widely-supported catalogue
 interface that Trino can consult to resolve Iceberg table locations deterministically.
-These component choices combine to form a coherent data lakehouse stack that reliably
-supports Trino and provides a solid foundation for benchmarking. MinIO supplies an
-S3‑compatible object store for Iceberg data and metadata, the Hive Metastore backed by
-PostgreSQL offers a durable, queryable catalogue, and Trino provides a mature
-distributed SQL engine with native Iceberg integration. Together they create a
-reproducible, portable environment that TriBench can manage, instrument, and use to run
-controlled experiments.
+PostgreSQL is used as a robust relational backing store for the metastore, keeping
+catalogue state durable and easy to reset between experimental runs. Trino is selected as
+the system under test because it provides a mature distributed SQL execution model with
+native Iceberg connectivity, aligning with the project focus on benchmarking interactive
+lakehouse queries.
 
 The \emph{Kubernetes backend} renders Kubernetes manifest YAML from the same Jinja2
 templates but with cluster-specific values (image pull policy, storage class, resource

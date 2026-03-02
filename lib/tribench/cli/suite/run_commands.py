@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 @click.command(name="run")
-@click.argument("suite", type=click.Path(exists=True))
+@click.argument("suite")
 @click.option('--exp', '--experiment', 'experiment_filter',
               help='Run only experiments matching this name pattern.')
 @click.option('--runs', type=int, help='Override number of runs for all experiments.')
@@ -33,15 +33,29 @@ def run_suite(ctx, suite, experiment_filter, runs, timeout, config, dry_run, ver
     
     \b
     Examples:
-        tribench suite run experiments/suites/tpch-suite.yaml            # Uses backend from active profile
-        tribench suite run experiments/suites/tpch-suite.yaml --exp tpch-q1
-        tribench suite run experiments/suites/tpch-suite.yaml --runs 5 --dry-run
+        tribench suite run my-suite.yaml                         # Resolves from active bundle's experiments/suites/
+        tribench suite run experiments/suites/tpch-suite.yaml    # Full path also works
+        tribench suite run my-suite.yaml --exp tpch-q1
+        tribench suite run my-suite.yaml --runs 5 --dry-run
     """
     ctx.obj.dry_run = dry_run or ctx.obj.dry_run
     ctx.obj.verbose = verbose or ctx.obj.verbose
     
     # Load configuration to determine backend
     bundle_root = getattr(ctx.obj, 'bundle_root', None)
+
+    # Resolve suite path — if not found as-is, look in bundle's experiments/suites/ dir
+    suite_path = Path(suite)
+    if not suite_path.exists() and bundle_root is not None:
+        candidate = Path(bundle_root) / 'experiments' / 'suites' / suite
+        if candidate.exists():
+            suite_path = candidate
+    if not suite_path.exists():
+        click.secho(f"✗ Suite file not found: {suite}", fg='red')
+        if bundle_root:
+            click.secho(f"  Looked in: . and {Path(bundle_root) / 'experiments' / 'suites'}", fg='red')
+        sys.exit(1)
+
     config_loader = ConfigurationLoader(bundle_root=bundle_root)
     full_config = config_loader.load(experiment_config=config) if config else config_loader.load()
     
@@ -61,8 +75,6 @@ def run_suite(ctx, suite, experiment_filter, runs, timeout, config, dry_run, ver
         logging.basicConfig(level=logging.DEBUG, format='%(levelname)s: %(message)s')
     else:
         logging.basicConfig(level=logging.INFO, format='%(message)s')
-    
-    suite_path = Path(suite)
     
     try:
         # Load suite
