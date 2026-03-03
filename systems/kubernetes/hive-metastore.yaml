@@ -173,14 +173,9 @@ spec:
       labels:
         app: hive-metastore
     spec:
-      tolerations:
-      - key: "kubernetes.io/arch"
-        operator: "Equal"
-        value: "arm64"
-        effect: "NoSchedule"
       containers:
       - name: metastore
-        image: us-central1-docker.pkg.dev/tribench/tribench/hive-metastore:4.0.0-arm64
+        image: adamlinyuan/hive-metastore:4.0.0-amd64
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 9083

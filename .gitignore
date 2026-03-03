@@ -130,3 +130,6 @@ Thumbs.db
 *.bak
 *.backup
 *~
+
+#
+bundles/
