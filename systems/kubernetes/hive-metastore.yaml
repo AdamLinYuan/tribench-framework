@@ -173,6 +173,11 @@ spec:
       labels:
         app: hive-metastore
     spec:
+      tolerations:
+      - key: "kubernetes.io/arch"
+        operator: "Equal"
+        value: "arm64"
+        effect: "NoSchedule"
       containers:
       - name: metastore
         image: adamlinyuan/hive-metastore:4.0.0-amd64

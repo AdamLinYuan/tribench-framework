@@ -10,9 +10,11 @@ No benchmark-specific logic needed. No slow batch INSERTs.
 """
 
 import logging
+import time
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
+import click
 import pyarrow.parquet as pq
 from trino.dbapi import connect
 
@@ -77,57 +79,85 @@ class UniversalIcebergLoader:
         logger.info(f"Universal CTAS loading: {benchmark_type.upper()} dataset")
         logger.info(f"Source: {dataset_path}")
         logger.info(f"Target: {catalog}.{schema}")
-        
+
+        click.echo(f"Loading {benchmark_type.upper()} (from {dataset_path.name}) → {catalog}.{schema}")
+
         # Connect to Trino
         conn = self._get_connection(catalog, schema)
         cursor = conn.cursor()
-        
+
         # Create Iceberg schema if needed
         self._create_schema(cursor, catalog, schema, storage_location)
-        
+
         # Create Hive staging schema if needed
         self._create_staging_schema(cursor)
-        
+
         partition_specs = partition_specs or {}
-        row_counts = {}
-        
-        # Load each table
+
+        # Collect tables that have parquet files
+        tables_to_load = []
         for table_name in dataset_schema.get_tables():
-            logger.info(f"Loading table: {table_name}")
-            
             parquet_file = dataset_path / f"{table_name}.parquet"
             if not parquet_file.exists():
                 logger.warning(f"Parquet file not found: {parquet_file}, skipping")
                 continue
-            
+            tables_to_load.append((table_name, parquet_file))
+
+        # --- Phase 1: Upload Parquet files to MinIO -------------------------
+        click.echo(f"  Uploading Parquet files to MinIO...")
+        s3_paths: Dict[str, str] = {}
+        for table_name, parquet_file in tables_to_load:
+            click.echo(f"    \u2192 uploading {table_name} ...", nl=False)
+            t0 = time.time()
+            s3_path = self._ensure_file_in_minio(parquet_file, minio_bucket, schema, table_name)
+            s3_paths[table_name] = s3_path
+            click.echo(f" done ({time.time() - t0:.0f}s)")
+
+        # --- Phase 2: CTAS each table into Iceberg --------------------------
+        click.echo(f"  Creating Iceberg tables via Trino CTAS ...")
+        row_counts: Dict[str, int] = {}
+        for table_name, parquet_file in tables_to_load:
+            click.echo(f"    \u2192 {table_name} ...", nl=False)
+            t0 = time.time()
             try:
-                # Get table schema
-                table_schema = dataset_schema.get_schema(table_name)
+                table_schema_def = dataset_schema.get_schema(table_name)
                 partitioning = partition_specs.get(table_name)
-                
-                # Load via Hive staging + CTAS
-                row_count = self._load_table_via_hive_ctas(
+                timestamp = int(time.time() * 1000)
+                staging_table = f"hive.staging.{table_name}_{timestamp}"
+                self._create_hive_external_table(
                     cursor=cursor,
-                    table_name=table_name,
-                    parquet_file=parquet_file,
-                    table_schema=table_schema,
-                    catalog=catalog,
-                    schema=schema,
-                    minio_bucket=minio_bucket,
-                    partitioning=partitioning,
-                    storage_location=storage_location
+                    table_name=staging_table,
+                    s3_path=s3_paths[table_name],
+                    table_schema=table_schema_def,
                 )
-                
+                try:
+                    iceberg_table = f"{catalog}.{schema}.{table_name}"
+                    cursor.execute(f"DROP TABLE IF EXISTS {iceberg_table}")
+                    self._ctas_to_iceberg(
+                        cursor=cursor,
+                        source_table=staging_table,
+                        target_table=iceberg_table,
+                        partitioning=partitioning,
+                        storage_location=storage_location,
+                        table_name=table_name,
+                    )
+                    cursor.execute(f"SELECT COUNT(*) FROM {iceberg_table}")
+                    row_count = cursor.fetchone()[0]
+                finally:
+                    try:
+                        cursor.execute(f"DROP TABLE IF EXISTS {staging_table}")
+                    except Exception:
+                        pass
                 row_counts[table_name] = row_count
-                logger.info(f"✓ Loaded {table_name}: {row_count:,} rows")
-                
+                click.echo(f" {row_count:,} rows ({time.time() - t0:.0f}s)")
             except Exception as e:
+                click.echo(f" FAILED: {e}")
                 logger.error(f"Failed to load {table_name}: {e}")
                 raise
-        
+
         cursor.close()
         conn.close()
-        
+
         return row_counts
     
     def _load_table_via_hive_ctas(
@@ -147,8 +177,6 @@ class UniversalIcebergLoader:
         
         This is fast (streaming copy) and works for any dataset.
         """
-        import time
-        
         # S3 path in MinIO for Parquet file
         # Upload if not already in MinIO
         s3_path = self._ensure_file_in_minio(parquet_file, minio_bucket, schema, table_name)
@@ -273,7 +301,7 @@ class UniversalIcebergLoader:
             pass
         
         # Upload file
-        logger.info(f"Uploading {parquet_file.name} to MinIO...")
+        logger.debug(f"Uploading {parquet_file.name} to MinIO...")
         try:
             subprocess.run(
                 ['mc', 'cp', str(parquet_file), f'local/{bucket}/{schema}/{table_name}/'],

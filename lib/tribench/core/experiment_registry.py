@@ -42,7 +42,8 @@ class ExperimentRegistry:
             # Fallback: hardcoded for now until full registry implemented
             if config.system.lower() == 'trino':
                 from tribench.experiments import TrinoExperiment
-                return TrinoExperiment(config)
+                enable_monitoring = config.raw_config.get('monitoring', {}).get('enabled', True)
+                return TrinoExperiment(config, enable_monitoring=enable_monitoring)
             
             available = list(cls._experiments.keys())
             raise ValueError(
@@ -50,7 +51,8 @@ class ExperimentRegistry:
                 f"Supported: {available if available else ['trino']}"
             )
         
-        return exp_class(config)
+        enable_monitoring = config.raw_config.get('monitoring', {}).get('enabled', True)
+        return exp_class(config, enable_monitoring=enable_monitoring)
 
 
 # Auto-register known implementations

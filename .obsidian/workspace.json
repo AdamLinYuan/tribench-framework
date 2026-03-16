@@ -4,21 +4,17 @@
     "type": "split",
     "children": [
       {
-        "id": "9d5ee11101e27135",
+        "id": "85a4cdba2697e107",
         "type": "tabs",
         "children": [
           {
-            "id": "56f8c044014ed4d3",
+            "id": "1bbcc2d921f327f7",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "docs/DISSERTATION_DRAFT.md",
-                "mode": "source",
-                "source": false
-              },
+              "type": "empty",
+              "state": {},
               "icon": "lucide-file",
-              "title": "DISSERTATION_DRAFT"
+              "title": "New tab"
             }
           }
         ]
@@ -168,6 +164,6 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "56f8c044014ed4d3",
+  "active": "1bbcc2d921f327f7",
   "lastOpenFiles": []
 }

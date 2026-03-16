@@ -1,0 +1,93 @@
+\chapter{CLI Command Reference}
+\label{ch:appendix_cli}
+
+This appendix provides a complete reference for all TriBench CLI command groups, their sub-commands, and arguments. The framework is operated entirely through this interface.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{2.5cm}p{11.5cm}}
+\hline
+\textbf{Command} & \textbf{Description} \\
+\hline
+\multicolumn{2}{l}{\textbf{bundle} -- Bundle management commands} \\
+\hline
+\texttt{archive}   & Archive the bundle's results and logs \\
+\texttt{clear}     & Clear the active bundle state \\
+\texttt{create}    & Scaffold a new bundle directory \\
+\texttt{info}      & Show bundle metadata and resolved paths \\
+\texttt{list}      & List all experiment YAML files in the bundle \\
+\texttt{set}       & Set a bundle as active persistently \\
+\texttt{show}      & Show the currently active bundle \\
+\texttt{validate}  & Check that the bundle has all required elements \\
+\hline
+\multicolumn{2}{l}{\textbf{sys} -- System lifecycle management commands} \\
+\hline
+\texttt{cluster}   & Manage the Kind Kubernetes cluster \\
+\texttt{logs}      & Show system component logs \\
+\texttt{port-forward} & Manage Kubernetes port forwarding tunnels \\
+\texttt{setup}     & Set up the lakehouse system components \\
+\texttt{start}     & Start the system and poll for readiness \\
+\texttt{status}    & Check current system status \\
+\texttt{stop}      & Stop the system gracefully \\
+\texttt{teardown}  & Tear down the system (destructive operation) \\
+\hline
+\multicolumn{2}{l}{\textbf{exp} -- Experiment execution commands} \\
+\hline
+\texttt{cancel}    & Cancel a currently running experiment \\
+\texttt{config}    & Show the configuration for a specific experiment \\
+\texttt{list}      & List available experiments \\
+\texttt{run}       & Execute an experiment end-to-end \\
+\texttt{status}    & Check the status of a running experiment \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{2.5cm}p{11.5cm}}
+\hline
+\textbf{Command} & \textbf{Description} \\
+\hline
+\multicolumn{2}{l}{\textbf{res} -- Result viewing and basic analysis commands} \\
+\hline
+\texttt{analyze}   & Analyze experiment results (statistics, performance, scalability, etc.) \\
+\texttt{archive}   & Archive old experiment results \\
+\texttt{delete}    & Delete an experiment result by ID \\
+\texttt{export}    & Export experiment results to CSV, JSON, or Parquet \\
+\texttt{list}      & List all recorded experiment results \\
+\texttt{monitoring} & Show hardware monitoring telemetry for an experiment \\
+\texttt{queries}   & Show detailed per-query execution data \\
+\texttt{reset-db}  & Reset the SQLite database by deleting all runs \\
+\texttt{show}      & Show high-level summary of an experiment result \\
+\texttt{suite-summary} & Show an aggregated summary across a suite of runs \\
+\texttt{summary}   & Generate comparison summary for experiments \\
+\hline
+\multicolumn{2}{l}{\textbf{data} -- Dataset management commands} \\
+\hline
+\texttt{generate}  & Generate a benchmark dataset \\
+\texttt{info}      & Show detailed dataset information \\
+\texttt{list}      & List available datasets \\
+\texttt{load}      & Load a dataset into the deployed system \\
+\texttt{validate}  & Validate dataset integrity \\
+\texttt{validate-iceberg} & Validate Iceberg tables in the catalog \\
+\hline
+\multicolumn{2}{l}{\textbf{config} -- Configuration management commands} \\
+\hline
+\texttt{defaults}  & Show framework defaults \\
+\texttt{profile}   & Manage active configuration profile \\
+\texttt{show}      & Show the current merged configuration \\
+\texttt{trace}     & Trace where a specific configuration value originated \\
+\texttt{validate}  & Validate the complete configuration for errors \\
+\hline
+\multicolumn{2}{l}{\textbf{suite} -- Experiment suite execution commands} \\
+\hline
+\texttt{list}      & List available experiment suites \\
+\texttt{run}       & Execute all experiments in a designated suite \\
+\texttt{show}      & Show detailed information about a suite \\
+\hline
+\end{tabular}
+\caption{Complete reference of TriBench CLI commands, split across two tables.}
+\label{tab:full_cli_reference}
+\end{table}

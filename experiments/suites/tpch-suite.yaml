@@ -20,7 +20,7 @@ defaults:
 # Experiments in this suite
 experiments:
   # Iceberg-based experiment
-  - path: ../tpch-gcp.yaml
+  - path: ../tpch-all-queries.yaml
     runs: 2
     description: "TPC-H queries on Iceberg format"
 

@@ -8,8 +8,7 @@ needed to reproduce a benchmark experiment:
     ├── bundle.yaml           # Manifest (name, version, optional path overrides)
     ├── queries/              # Workload query directories (e.g. tpch/, tpcds/)
     ├── config/
-    │   ├── application.conf  # Bundle-level HOCON overrides
-    │   └── hosts/            # Machine-specific overrides
+    │   └── hosts/            # Machine-specific HOCON overrides
     ├── datasets/             # Static dataset files
     ├── experiments/          # Experiment YAML definitions
     ├── log/                  # Execution logs

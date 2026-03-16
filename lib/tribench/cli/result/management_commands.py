@@ -57,8 +57,13 @@ def delete(ctx, experiment_id, verbose):
             return
         
         # Delete the experiment (cascades to runs and query executions)
+        from tribench.storage.models import Experiment
         with get_db_session() as session:
-            session.delete(experiment)
+            orm_exp = session.query(Experiment).filter(Experiment.id == experiment['id']).first()
+            if orm_exp is None:
+                click.secho(f"✗ Experiment not found in database: {experiment_id}", fg='red')
+                return
+            session.delete(orm_exp)
             session.commit()
         
         click.secho(f"✓ Deleted experiment: {experiment['name']} (ID: {experiment['id']})", fg='green')

@@ -177,30 +177,18 @@ class Bundle:
         for key, default_dir in _DEFAULTS.items():
             subdir = bundle_root / default_dir
             subdir.mkdir(parents=True, exist_ok=True)
-            # Add a .gitkeep so the directory is tracked by git
-            (subdir / ".gitkeep").touch()
 
         # Create config/hosts/ sub-directory
         hosts_dir = bundle_root / "config" / "hosts"
         hosts_dir.mkdir(parents=True, exist_ok=True)
-        (hosts_dir / ".gitkeep").touch()
 
         # Create experiments/suites/ sub-directory
         suites_dir = bundle_root / "experiments" / "suites"
         suites_dir.mkdir(parents=True, exist_ok=True)
-        (suites_dir / ".gitkeep").touch()
 
         # Write bundle.yaml
         with manifest_path.open("w") as fh:
             yaml.dump(manifest.to_dict(), fh, default_flow_style=False, sort_keys=False)
-
-        # Write empty application.conf
-        app_conf = bundle_root / "config" / "application.conf"
-        app_conf.write_text(
-            "# Bundle-level configuration overrides.\n"
-            "# These are applied on top of reference.conf and before host configs.\n"
-            "# See tribench's config/reference.conf for all available settings.\n"
-        )
 
         # Copy scaffold templates from the framework root
         _fw_root = Path(__file__).parent.parent.parent.parent

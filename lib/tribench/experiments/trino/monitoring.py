@@ -63,10 +63,14 @@ class ExperimentMonitoringMixin:
             return
             
         try:
-            # Create monitoring config
+            # Create monitoring config — read interval from experiment YAML if present
+            raw_monitoring = getattr(self, 'config', None)
+            raw_monitoring = raw_monitoring.raw_config.get('monitoring', {}) if raw_monitoring else {}
+            interval = float(raw_monitoring.get('interval_seconds', 2.0))
+
             monitoring_config = MonitoringConfig(
                 enabled=True,
-                interval_seconds=1.0,  # 1 second sampling
+                interval_seconds=interval,
             )
             
             # Create collectors

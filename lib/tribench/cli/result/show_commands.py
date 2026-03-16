@@ -6,6 +6,8 @@ Commands for showing and listing experiment results.
 
 import click
 import json
+import statistics
+from pathlib import Path
 from tribench.cli.base import verbose_option
 from .utils import get_storage
 
@@ -422,3 +424,254 @@ def list_results(ctx, suite, status, limit, sort, verbose):
         if ctx.obj.verbose:
             import traceback
             click.echo(traceback.format_exc())
+
+
+@click.command(name="suite-summary")
+@click.argument("suite_id")
+@click.option('--format',
+              type=click.Choice(['table', 'json']),
+              default='table',
+              help='Output format.')
+@click.option('--warmup/--no-warmup',
+              default=False,
+              help='Include warmup runs in aggregation (default: measured runs only).')
+@verbose_option
+@click.pass_context
+def suite_summary(ctx, suite_id, format, warmup, verbose):
+    """Show aggregated results summary for all experiments in a suite.
+
+    SUITE_ID can be a suite name (resolved from the active bundle's
+    experiments/suites/ directory), a bare filename, or a full path.
+
+    \b
+    Examples:
+        tribench res suite-summary gke-suite
+        tribench res suite-summary gke-suite.yaml
+        tribench res suite-summary experiments/suites/gke-suite.yaml
+        tribench res suite-summary gke-suite --format json
+        tribench res suite-summary gke-suite --warmup
+    """
+    ctx.obj.verbose = verbose or ctx.obj.verbose
+
+    # Resolve suite path using the same logic as `tribench suite run`:
+    # 1. As-is (absolute or relative from cwd)
+    # 2. With .yaml appended
+    # 3. Inside bundle_root/experiments/suites/
+    # 4. Inside bundle_root/experiments/suites/ with .yaml appended
+    bundle_root = getattr(ctx.obj, 'bundle_root', None)
+
+    def _candidates(sid):
+        p = Path(sid)
+        yield p
+        if p.suffix != '.yaml':
+            yield p.with_suffix('.yaml')
+        if bundle_root:
+            base = Path(bundle_root) / 'experiments' / 'suites'
+            yield base / p
+            if p.suffix != '.yaml':
+                yield base / p.with_suffix('.yaml')
+
+    suite_path = None
+    for candidate in _candidates(suite_id):
+        if candidate.exists():
+            suite_path = candidate
+            break
+
+    if suite_path is None:
+        click.secho(f"✗ Suite not found: {suite_id}", fg='red')
+        if bundle_root:
+            click.secho(
+                f"  Looked in: . and {Path(bundle_root) / 'experiments' / 'suites'}", fg='red'
+            )
+        return
+
+    # Load suite definition
+    try:
+        from tribench.core.experiment_suite import ExperimentSuite
+        suite = ExperimentSuite.from_yaml(str(suite_path))
+    except Exception as e:
+        click.secho(f"✗ Failed to load suite '{suite_id}': {e}", fg='red')
+        if ctx.obj.verbose:
+            import traceback
+            click.echo(traceback.format_exc())
+        return
+
+    storage = get_storage()
+    if not storage:
+        return
+
+    # ------------------------------------------------------------------ #
+    # Collect per-experiment statistics                                    #
+    # ------------------------------------------------------------------ #
+    experiment_stats = []
+
+    for exp_config in suite.experiments:
+        exp_name = exp_config.name
+        experiment = storage.get_experiment_by_name(exp_name)
+
+        if not experiment:
+            experiment_stats.append({
+                'name': exp_name,
+                'status': 'NOT_FOUND',
+                'total_runs': 0,
+                'total_queries': 0,
+                'succeeded': 0,
+                'failed': 0,
+                'mean_exec_ms': None,
+                'median_exec_ms': None,
+                'p95_exec_ms': None,
+                'min_exec_ms': None,
+                'max_exec_ms': None,
+                'total_cpu_s': 0.0,
+                'total_data_gb': 0.0,
+            })
+            continue
+
+        runs = storage.get_experiment_runs(experiment['id'])
+
+        # Keep only measured runs unless --warmup flag is set
+        if not warmup:
+            measured = [r for r in runs if r.get('run_type') != 'warmup']
+            if not measured:
+                measured = runs  # fallback: no run_type metadata stored
+        else:
+            measured = runs
+
+        all_exec_ms = []
+        total_queries = 0
+        total_succeeded = 0
+        total_failed = 0
+        total_cpu_ms = 0.0
+        total_input_bytes = 0
+
+        for run in measured:
+            query_execs = storage.get_run_query_executions(run['id'])
+            for qe in query_execs:
+                total_queries += 1
+                if qe.get('status') == 'success':
+                    total_succeeded += 1
+                    if qe.get('execution_time') is not None:
+                        all_exec_ms.append(qe['execution_time'] * 1000.0)
+                else:
+                    total_failed += 1
+                total_cpu_ms += qe.get('cpu_time_ms') or 0.0
+                total_input_bytes += qe.get('input_bytes') or 0
+
+        if all_exec_ms:
+            sorted_ms = sorted(all_exec_ms)
+            n = len(sorted_ms)
+            mean_ms = sum(sorted_ms) / n
+            median_ms = statistics.median(sorted_ms)
+            p95_ms = sorted_ms[min(int(n * 0.95), n - 1)]
+            min_ms = sorted_ms[0]
+            max_ms = sorted_ms[-1]
+        else:
+            mean_ms = median_ms = p95_ms = min_ms = max_ms = None
+
+        experiment_stats.append({
+            'name': exp_name,
+            'exp_id': experiment['id'],
+            'status': 'OK',
+            'total_runs': len(measured),
+            'total_queries': total_queries,
+            'succeeded': total_succeeded,
+            'failed': total_failed,
+            'mean_exec_ms': mean_ms,
+            'median_exec_ms': median_ms,
+            'p95_exec_ms': p95_ms,
+            'min_exec_ms': min_ms,
+            'max_exec_ms': max_ms,
+            'total_cpu_s': total_cpu_ms / 1000.0,
+            'total_data_gb': total_input_bytes / (1024 ** 3),
+        })
+
+    # ------------------------------------------------------------------ #
+    # Output                                                               #
+    # ------------------------------------------------------------------ #
+    if format == 'json':
+        output = {
+            'suite': suite.name,
+            'suite_id': suite_id,
+            'suite_path': str(suite_path),
+            'description': getattr(suite, 'description', None),
+            'include_warmup': warmup,
+            'experiments': experiment_stats,
+        }
+        click.echo(json.dumps(output, indent=2, default=str))
+        return
+
+    # Table output
+    W = 138
+    click.echo("\n" + "=" * W)
+    click.echo(f"Suite Summary: {suite.name}")
+    if getattr(suite, 'description', None):
+        click.echo(f"Description:   {suite.description}")
+    click.echo(f"Suite Path:    {suite_path}")
+    click.echo(f"Experiments:   {len(suite.experiments)}"
+               + ("  (warmup runs included)" if warmup else "  (measured runs only)"))
+    click.echo("=" * W)
+
+    hdr = (f"\n{'Experiment':<34} {'Runs':<6} {'Queries':<10} {'Succ%':<8}"
+           f" {'Mean(ms)':<12} {'Median(ms)':<12} {'P95(ms)':<11}"
+           f" {'Min(ms)':<10} {'Max(ms)':<10} {'CPU(s)':<10} {'Data(GB)':<9}")
+    click.echo(hdr)
+    click.echo("-" * W)
+
+    def _fmt(val, decimals=1):
+        return f"{val:.{decimals}f}" if val is not None else "N/A"
+
+    ok_stats = []
+    for s in experiment_stats:
+        if s['status'] == 'NOT_FOUND':
+            click.secho(
+                f"  {s['name'][:32]:<34} {'—':<6} {'—':<10} {'—':<8}"
+                f" {'—':<12} {'—':<12} {'—':<11} {'—':<10} {'—':<10} {'—':<10} {'—':<9}"
+                f"  ← not in DB",
+                fg='yellow',
+            )
+            continue
+
+        ok_stats.append(s)
+        succ_pct = (f"{100.0 * s['succeeded'] / s['total_queries']:.1f}%"
+                    if s['total_queries'] > 0 else "N/A")
+
+        click.echo(
+            f"  {s['name'][:32]:<34} {s['total_runs']:<6} {s['total_queries']:<10} {succ_pct:<8}"
+            f" {_fmt(s['mean_exec_ms']):<12} {_fmt(s['median_exec_ms']):<12}"
+            f" {_fmt(s['p95_exec_ms']):<11} {_fmt(s['min_exec_ms']):<10}"
+            f" {_fmt(s['max_exec_ms']):<10} {_fmt(s['total_cpu_s']):<10}"
+            f" {_fmt(s['total_data_gb'], 3):<9}"
+        )
+
+    click.echo("-" * W)
+
+    # Totals row
+    if ok_stats:
+        tot_runs = sum(s['total_runs'] for s in ok_stats)
+        tot_q = sum(s['total_queries'] for s in ok_stats)
+        tot_succ = sum(s['succeeded'] for s in ok_stats)
+        tot_fail = sum(s['failed'] for s in ok_stats)
+        means = [s['mean_exec_ms'] for s in ok_stats if s['mean_exec_ms'] is not None]
+        overall_mean = sum(means) / len(means) if means else None
+        overall_cpu = sum(s['total_cpu_s'] for s in ok_stats)
+        overall_gb = sum(s['total_data_gb'] for s in ok_stats)
+        overall_pct = (f"{100.0 * tot_succ / tot_q:.1f}%" if tot_q > 0 else "N/A")
+
+        click.echo(
+            f"  {'TOTAL':<34} {tot_runs:<6} {tot_q:<10} {overall_pct:<8}"
+            f" {_fmt(overall_mean):<12} {'—':<12} {'—':<11} {'—':<10} {'—':<10}"
+            f" {_fmt(overall_cpu):<10} {_fmt(overall_gb, 3):<9}"
+        )
+
+    click.echo("=" * W)
+
+    not_found = [s['name'] for s in experiment_stats if s['status'] == 'NOT_FOUND']
+    if ok_stats:
+        click.echo(
+            f"\nTotal failed queries: {sum(s['failed'] for s in ok_stats)}"
+        )
+    if not_found:
+        click.secho(
+            f"Experiments not yet in DB: {', '.join(not_found)}", fg='yellow'
+        )
+    click.echo("Use --format json for full data export")

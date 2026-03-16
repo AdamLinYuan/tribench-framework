@@ -18,6 +18,9 @@ s3.region={{ config.tribench.systems.minio.region }}
 iceberg.file-format=PARQUET
 iceberg.compression-codec=SNAPPY
 
+# Table location
+iceberg.unique-table-location=true
+
 # Performance tuning
 iceberg.max-partitions-per-writer=1000
 iceberg.target-max-file-size=1GB

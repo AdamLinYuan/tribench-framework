@@ -1,0 +1,4 @@
+DO NOT use filler words. Try to be concise and to the point
+Avoid to use \texttt unless is necessary to do so, instead use straight forward simple english
+Try to avoid to be overly technical, some technical is fine eg tool and librarys being used or referenced can be said such as HOCON, PEEL, SQLite etc
+Dont breaklines for the writing unless is a new paragraph

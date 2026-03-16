@@ -13,6 +13,7 @@ from tribench.cli.result import (
     show,
     show_queries,
     list_results,
+    suite_summary,
     export,
     summary,
     analyze_group,
@@ -43,6 +44,7 @@ def result_group():
 result_group.add_command(show)
 result_group.add_command(show_queries)
 result_group.add_command(list_results)
+result_group.add_command(suite_summary)
 result_group.add_command(summary)
 result_group.add_command(export)
 result_group.add_command(analyze_group)

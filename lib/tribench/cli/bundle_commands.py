@@ -36,7 +36,6 @@ def bundle_group():
         ├── bundle.yaml       ← manifest (name, version, path overrides)
         ├── queries/          ← workload query directories (apps)
         ├── config/
-        │   ├── application.conf
         │   └── hosts/        ← machine-specific .conf files
         ├── datasets/
         ├── experiments/      ← experiment YAML definitions

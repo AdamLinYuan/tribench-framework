@@ -151,9 +151,13 @@ def run(ctx, experiment, name, runs, warmup, timeout, host, port, parallel, no_m
         enable_database = not no_storage  # Database enabled by default unless --no-storage
         enable_json = save_json and not no_storage  # JSON only if --save-json AND storage is not disabled
         
-        # Show monitoring and storage status
-        monitoring_enabled = not no_monitoring
-        click.echo(f"Monitoring: {'enabled' if monitoring_enabled else 'disabled'}")
+        # Determine monitoring: YAML setting is the default; --no-monitoring CLI flag always disables it
+        yaml_monitoring = exp_config.raw_config.get('monitoring', {}).get('enabled', True)
+        monitoring_enabled = yaml_monitoring and not no_monitoring
+        click.echo(f"Monitoring: {'enabled' if monitoring_enabled else 'disabled'}"
+                   + ("" if yaml_monitoring else " (disabled in experiment YAML)")
+                   + ("" if not no_monitoring else " (--no-monitoring flag)"))
+
         
         if no_storage:
             click.echo(f"Result storage: disabled (monitoring only)")
@@ -178,7 +182,7 @@ def run(ctx, experiment, name, runs, warmup, timeout, host, port, parallel, no_m
         click.echo(f"\nPreparing experiment...")
         experiment = TrinoExperiment(
             exp_config, 
-            enable_monitoring=not no_monitoring,
+            enable_monitoring=monitoring_enabled,
             enable_database=enable_database,
             enable_json=enable_json
         )

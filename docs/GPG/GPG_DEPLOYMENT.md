@@ -4,6 +4,8 @@ Guide for deploying TriBench to a single GPG node using Kubernetes (kubeadm).
 
 > **Scope:** This guide covers a single-node setup where you are building the Kubernetes cluster yourself from scratch. You do not need Ceph, Rook, or worker nodes for this. TriBench brings its own storage via MinIO.
 
+> **Multi-node setup:** To add worker nodes and run genuine distributed Trino workers, see [GPG_MULTINODE_DEPLOYMENT.md](GPG_MULTINODE_DEPLOYMENT.md).
+
 ## Prerequisites
 
 - SSH access to a GPG node (via DCS SSH gateway)
