@@ -68,12 +68,15 @@ EXP = {
         "overhead_off": 6,
     },
     "gcp-4w": {
-        "portability":  4,
-        "overhead_on":  3,
-        "overhead_off": 2,
-        "tpch_sf1":     9,
-        "tpch_sf10":    10,
-        "tpch_sf100":   11,
+        "portability":   4,
+        "overhead_on":   3,
+        "overhead_off":  2,
+        "tpcds":         6,
+        "custom":        7,
+        "tpch_sf_tiny":  8,
+        "tpch_sf1":      9,
+        "tpch_sf10":     10,
+        "tpch_sf100":    11,
     },
 }
 
@@ -523,9 +526,9 @@ def fig75(out: Path) -> None:
 
 def fig76(out: Path) -> None:
     exp_map = {
-        "Overhead (off)": EXP["gcp-4w"]["overhead_off"],
-        "Overhead (on)":  EXP["gcp-4w"]["overhead_on"],
-        "Portability":    EXP["gcp-4w"]["portability"],
+        "TPC-DS":         EXP["gcp-4w"]["tpcds"],
+        "Custom":         EXP["gcp-4w"]["custom"],
+        "TPC-H SF-tiny":  EXP["gcp-4w"]["tpch_sf_tiny"],
         "TPC-H SF1":      EXP["gcp-4w"]["tpch_sf1"],
         "TPC-H SF10":     EXP["gcp-4w"]["tpch_sf10"],
         "TPC-H SF100":    EXP["gcp-4w"]["tpch_sf100"],
@@ -629,7 +632,7 @@ def fig77(out: Path) -> None:
 
     # Value labels — above bar if positive, below if negative
     for xi, (m, s) in enumerate(zip(means, stds)):
-        offset = s + 0.4
+        offset = s + 0.15
         va     = "bottom" if m >= 0 else "top"
         ypos   = m + offset if m >= 0 else m - offset
         ax.text(xi, ypos, f"{m:.1f}%", ha="center", va=va,
