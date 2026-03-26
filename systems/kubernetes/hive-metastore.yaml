@@ -180,7 +180,7 @@ spec:
         effect: "NoSchedule"
       containers:
       - name: metastore
-        image: adamlinyuan/hive-metastore:4.0.0-amd64
+        image: us-central1-docker.pkg.dev/tribench/tribench/hive-metastore:4.0.0-arm64
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 9083

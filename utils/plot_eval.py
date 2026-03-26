@@ -503,13 +503,15 @@ def fig75(out: Path) -> None:
     fig, ax = plt.subplots(figsize=(5, 3.5))
     ax.plot(worker_counts, means, marker="o", lw=2, color=C["blue"])
     ax.fill_between(worker_counts,
-                    [m - s for m, s in zip(means, stds)],
-                    [m + s for m, s in zip(means, stds)],
+                    [m - 1 * s for m, s in zip(means, stds)],
+                    [m + 1 * s for m, s in zip(means, stds)],
                     color=C["blue"], alpha=0.15, label="±1 std dev")
     for w, m in zip(worker_counts, means):
         ax.annotate(f"{m:.2f}s", (w, m), textcoords="offset points",
                     xytext=(0, 8), ha="center", fontsize=8)
 
+    ax.set_ylim(0, max(means) * 1.4)
+    ax.autoscale(enable=False)
     ax.set_xticks(worker_counts)
     ax.set_xticklabels([f"{w}w" for w in worker_counts])
     ax.set_xlabel("GKE worker count")
@@ -676,6 +678,102 @@ def fig78(out: Path) -> None:
     print(f"  Fig 7.8 saved  ({len(rows)} queries)")
 
 # ---------------------------------------------------------------------------
+# Fig 7.9 — Per-pod CPU over time during TPC-H SF1 (GKE 4w)
+# ---------------------------------------------------------------------------
+
+def fig79(out: Path) -> None:
+    """Stacked area: coordinator vs 4 workers CPU (millicores) over time — GKE 4w, SF1."""
+    exp_id = EXP["gcp-4w"]["tpch_sf1"]
+    run_ids = measured_run_ids("gcp-4w", exp_id)
+    if not run_ids:
+        print("Fig 7.9: no run data — skipping"); return
+
+    rid = run_ids[0]
+    c = _conn("gcp-4w")
+
+    # Per-pod CPU millicores
+    rows = c.execute(
+        "SELECT timestamp, value, labels FROM monitoring_metrics "
+        "WHERE run_id=? AND metric_name='pod_cpu_millicores' ORDER BY timestamp",
+        (rid,)
+    ).fetchall()
+
+    # Query start times relative to run start
+    run_start = c.execute("SELECT start_time FROM experiment_runs WHERE id=?", (rid,)).fetchone()
+    q_rows = c.execute(
+        "SELECT query_name, start_time FROM query_executions "
+        "WHERE run_id=? AND status='completed' ORDER BY start_time",
+        (rid,)
+    ).fetchall()
+    c.close()
+
+    if not rows:
+        print("Fig 7.9: no pod CPU data — skipping"); return
+
+    # Build per-pod time series
+    pod_data: dict[str, tuple[list, list]] = {}
+    for ts_raw, val, labels_json in rows:
+        try:
+            meta = json.loads(labels_json or "{}")
+            pod  = meta.get("pod", "unknown")
+            comp = meta.get("component", "worker")
+        except (json.JSONDecodeError, TypeError):
+            pod, comp = "unknown", "worker"
+        pod_data.setdefault(pod, {"comp": comp, "ts": [], "vs": []})
+        pod_data[pod]["ts"].append(_ts(ts_raw))
+        pod_data[pod]["vs"].append(val)
+
+    if not pod_data:
+        print("Fig 7.9: empty pod data — skipping"); return
+
+    # Common time grid
+    all_ts = sorted({t for d in pod_data.values() for t in d["ts"]})
+    t0 = all_ts[0]
+    rel_ts = [t - t0 for t in all_ts]
+
+    # Separate coordinator and workers
+    coord_keys  = [p for p, d in pod_data.items() if d["comp"] == "coordinator"]
+    worker_keys = [p for p, d in pod_data.items() if d["comp"] == "worker"]
+
+    def interp_pod(key):
+        d = pod_data[key]
+        pts = d["ts"]
+        pvs = d["vs"]
+        if len(pts) < 2:
+            return np.zeros(len(all_ts))
+        return np.interp(all_ts, pts, pvs)
+
+    coord_series  = np.sum([interp_pod(k) for k in coord_keys],  axis=0) if coord_keys  else np.zeros(len(all_ts))
+    worker_series = np.sum([interp_pod(k) for k in worker_keys], axis=0) if worker_keys else np.zeros(len(all_ts))
+
+    fig, ax = plt.subplots(figsize=(9, 3.5))
+    ax.stackplot(rel_ts,
+                 [coord_series, worker_series],
+                 labels=[f"Coordinator (×{len(coord_keys)})", f"Workers (×{len(worker_keys)})"],
+                 colors=[C["orange"], C["blue"]],
+                 alpha=0.80)
+
+    # Query boundaries (every 4th labelled)
+    if run_start:
+        r0 = _ts(run_start[0])
+        for i, (qname, qstart) in enumerate(q_rows):
+            offset = _ts(qstart) - r0
+            ax.axvline(x=offset, color=C["grey"], lw=0.7, ls=":", alpha=0.5)
+            if i % 4 == 0:
+                ax.text(offset + 0.3, ax.get_ylim()[1] * 0.97 if ax.get_ylim()[1] > 0 else 300,
+                        short_name(qname), fontsize=7, color=C["grey"], va="top")
+
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("CPU (millicores)")
+    ax.set_ylim(bottom=0)
+    ax.set_title(f"Per-Pod CPU During TPC-H SF1 — GKE 4-Worker Cluster ({len(worker_keys)} workers)")
+    ax.legend(loc="upper right")
+    fig.tight_layout()
+    save(fig, out, "fig7_9_gke_pod_cpu")
+    print(f"  Fig 7.9 saved  ({len(coord_keys)} coordinator, {len(worker_keys)} workers)")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -697,6 +795,7 @@ def main() -> None:
     fig76(out)
     fig77(out)
     fig78(out)
+    fig79(out)
     print(f"\nDone. PDFs + PNGs written to: {out.resolve()}/")
 
 

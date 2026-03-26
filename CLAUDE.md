@@ -4,3 +4,4 @@ Try to avoid to be overly technical, some technical is fine eg tool and librarys
 Dont breaklines for the writing unless is a new paragraph
 Use the IDA-single-1.txt and ECO-Leaf.txt as a reference for the style of writing and structure, but do not copy them
 Write in UK English
+Dont use Emm dashs (— / ---)
