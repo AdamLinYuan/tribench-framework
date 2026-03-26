@@ -138,3 +138,8 @@ bundles/
 figures/
 docs/diss/
 papers/
+
+# Project-local config and planning
+CLAUDE.md
+IMPLEMENTATION_PLAN.md
+.obsidian/
