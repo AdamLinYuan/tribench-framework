@@ -133,3 +133,8 @@ Thumbs.db
 
 #
 bundles/
+
+# Dissertation and figures (tracked separately)
+figures/
+docs/diss/
+papers/
