@@ -13,94 +13,6 @@ from .utils import get_datasets_root, get_all_datasets_roots, get_trino_connecti
 logger = logging.getLogger(__name__)
 
 
-def _load_builtin(ctx, dataset, catalog, schema, storage, partition,
-                  config, full_config, use_k8s, dry_run):
-    """Handle --builtin loading for tpch-* and tpcds-* datasets."""
-    from tribench.data.iceberg.builtin_loader import (
-        load_tpch_builtin, load_tpcds_duckdb,
-    )
-    from tribench.cli.base import ensure_k8s_port_forwarding, auto_ensure_trino_connection
-
-    # Parse benchmark type and scale factor from dataset name
-    # Accepted forms: tpch-sf100, tpch-sf1, tpch-tiny, tpcds-sf100, …
-    name = dataset.lower().strip()
-    if name.startswith("tpch"):
-        benchmark = "tpch"
-    elif name.startswith("tpcds"):
-        benchmark = "tpcds"
-    else:
-        click.secho(f"✗ --builtin only supports tpch-* and tpcds-* dataset names, got: {dataset}", fg='red')
-        return
-
-    sf_part = name.split("-", 1)[1] if "-" in name else ""
-    sf_map = {"tiny": 0.01, "sf0_01": 0.01, "sf1": 1.0, "sf10": 10.0, "sf100": 100.0}
-    if sf_part not in sf_map:
-        click.secho(f"✗ Unrecognised scale factor '{sf_part}'. "
-                    f"Valid options: {', '.join(sf_map)}", fg='red')
-        return
-    scale_factor = sf_map[sf_part]
-
-    if dry_run:
-        click.echo(f"[DRY RUN] Would load {dataset} (SF{scale_factor}) via built-in connector")
-        click.echo(f"[DRY RUN] Target: {catalog}.{schema}  partition={partition}")
-        return
-
-    # Ensure Trino is reachable
-    if use_k8s:
-        if not ensure_k8s_port_forwarding(full_config):
-            return
-    else:
-        auto_ensure_trino_connection(full_config)
-
-    connection_params = get_trino_connection_params(config)
-
-    # Get MinIO endpoint from config (for TPC-DS DuckDB path)
-    minio_cfg = (full_config.get("tribench", {})
-                            .get("systems", {})
-                            .get("minio", {}))
-    minio_endpoint = minio_cfg.get("endpoint", "localhost:9000")
-    minio_access   = minio_cfg.get("access_key", "minioadmin")
-    minio_secret   = minio_cfg.get("secret_key", "minioadmin")
-    minio_bucket   = minio_cfg.get("bucket", "warehouse")
-
-    click.echo(f"Loading {dataset} (SF{scale_factor}) via built-in connector → {catalog}.{schema}")
-
-    try:
-        if benchmark == "tpch":
-            row_counts = load_tpch_builtin(
-                connection_params=connection_params,
-                schema=schema,
-                scale_factor=scale_factor,
-                catalog=catalog,
-                partition=partition,
-                storage_location=storage,
-            )
-        else:
-            row_counts = load_tpcds_duckdb(
-                connection_params=connection_params,
-                schema=schema,
-                scale_factor=scale_factor,
-                catalog=catalog,
-                partition=partition,
-                storage_location=storage,
-                minio_endpoint=minio_endpoint,
-                minio_access_key=minio_access,
-                minio_secret_key=minio_secret,
-                minio_bucket=minio_bucket,
-            )
-
-        click.secho(f"\n✓ {dataset} loaded successfully", fg='green')
-        click.echo("\nLoaded tables:")
-        for table, count in row_counts.items():
-            click.echo(f"  - {table}: {count:,} rows")
-
-    except Exception as e:
-        click.secho(f"✗ Built-in load failed: {e}", fg='red')
-        if ctx.obj.verbose:
-            import traceback
-            traceback.print_exc()
-
-
 @click.command(name="load")
 @click.argument("dataset")
 @click.option('--system', 
@@ -113,37 +25,25 @@ def _load_builtin(ctx, dataset, catalog, schema, storage, partition,
 @click.option('--partition/--no-partition', default=True, 
               help='Partition large tables by date (Iceberg only).')
 @click.option('--validate', is_flag=True, help='Validate data after loading.')
-@click.option('--builtin', is_flag=True,
-              help='Generate data from the built-in benchmark connector instead of '
-                   'uploading local parquet files. '
-                   'TPC-H uses Trino\'s tpch connector (pure CTAS, no local disk). '
-                   'TPC-DS uses DuckDB to generate data and write parquet directly '
-                   'to MinIO, then CTAS into Iceberg.')
 @config_option
 @dry_run_option
 @verbose_option
 @click.pass_context
-def load(ctx, dataset, system, catalog, schema, storage, partition, validate, builtin, config, dry_run, verbose):
+def load(ctx, dataset, system, catalog, schema, storage, partition, validate, config, dry_run, verbose):
     """Load a dataset into a system.
-    
+
     Uses universal Hive CTAS loading for Iceberg catalog. Works for any benchmark
     (TPC-H, TPC-DS, custom datasets) with fast streaming performance via:
       1. Upload Parquet to MinIO
       2. Create Hive external table (staging)
       3. CTAS from Hive → Iceberg (fast streaming copy)
-    
-    Use --builtin to generate data from the benchmark connector directly — no local
-    parquet files required.  TPC-H uses Trino's built-in tpch connector; TPC-DS uses
-    DuckDB to write data straight to MinIO.
-    
+
     Backend selection (Docker/Kubernetes) is configured in host config files.
     Use 'tribench config profile <name>' to set your preferred backend.
-    
+
     \b
     Examples:
-        tribench data load tpch-tiny                              # local parquet
-        tribench data load tpch-sf100 --schema tpch_sf100 --builtin   # pure CTAS, no disk
-        tribench data load tpcds-sf100 --schema tpcds_sf100 --builtin --no-partition
+        tribench data load tpch-tiny
         tribench data load tpch-sf1 --no-partition
         tribench data load tpch-sf1 --storage s3://warehouse/tpch/ --validate
     """
@@ -161,12 +61,6 @@ def load(ctx, dataset, system, catalog, schema, storage, partition, validate, bu
     # Determine backend
     use_k8s = should_use_kubernetes(full_config)
 
-    # --builtin path: no local parquet files needed
-    if builtin:
-        _load_builtin(ctx, dataset, catalog, schema, storage, partition,
-                      config, full_config, use_k8s, dry_run)
-        return
-    
     # Handle Kubernetes port forwarding
     if use_k8s:
         if not ensure_k8s_port_forwarding(full_config):

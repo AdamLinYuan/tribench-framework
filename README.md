@@ -1,780 +1,163 @@
-# TriBench - Trino Benchmarking Framework
+# TriBench
 
-A **cross-platform** framework for benchmarking SQL workloads on distributed data lakehouses using Apache Trino, inspired by the PEEL framework architecture.
-
-**Supported Platforms:** Linux • macOS • Windows (WSL2)
+A cross-platform benchmarking framework for SQL workloads on distributed data lakehouses using Apache Trino and Apache Iceberg.
 
 ## Overview
 
-TriBench provides a systematic approach to:
-- **Define** benchmark experiments with structured configurations
-- **Execute** SQL workloads on Trino clusters with proper lifecycle management
-- **Monitor** hardware resource usage and system performance
-- **Analyze** results with structured reporting and visualization
-- **Share** reproducible benchmark bundles
+TriBench manages the full lifecycle of a Trino lakehouse benchmark: provisioning the stack, loading data, executing queries, collecting hardware telemetry, and storing results — all from a single declarative experiment definition. The same definition runs unchanged on a local Docker deployment or a multi-node Kubernetes cluster by switching a single configuration profile.
 
-**Key Features:**
--  **Cross-Platform**: Works on Linux, macOS, and Windows (via WSL2)
--  **Flexible Deployment**: Docker, Kubernetes, or cloud (GKE)
--  **Built-in Benchmarks**: TPC-H, TPC-DS out-of-the-box
--  **Custom Datasets**: Zero-config loading of any Parquet files
--  **Comprehensive Monitoring**: System metrics + Kubernetes metrics
--  **Reproducible**: Configuration-driven experiments with bundled results
+**Stack:** Trino 434 · Apache Iceberg · Hive Metastore 4.0.0 · MinIO · PostgreSQL 15
 
-## Architecture
+**Backends:** Docker Compose (single-node) · Kubernetes (local KinD, bare-metal, GKE)
 
-This framework follows a bundle-based architecture similar to PEEL:
-
-```
-tribench-framework/
-├── bin/                    # Command-line interface
-├── apps/                   # Benchmark applications and SQL workloads
-├── config/                 # Environment and experiment configurations
-├── datagens/              # Data generators (TPC-DS, TPC-H, custom)
-├── datasets/              # Static datasets
-├── downloads/             # System binaries and archives
-├── lib/                   # Framework libraries
-├── log/                   # Execution logs
-├── results/               # Benchmark results and reports
-├── systems/               # Running system installations
-└── utils/                 # Utility scripts and tools
-```
+**Built-in benchmarks:** TPC-H (22 queries) · TPC-DS (99 queries) · custom Parquet datasets
 
 ## Prerequisites
 
-TriBench is **cross-platform** and runs on **Linux, macOS, and Windows (via WSL2)**. All core dependencies are available on all platforms.
+- [Anaconda](https://www.anaconda.com/download) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
+- Docker Desktop (Docker backend)
+- MinIO Client (`mc`) — for object storage operations
+- `kubectl` (Kubernetes backend)
+- `gcloud` CLI (GKE only)
 
-### Foundation Tools (Required for All Platforms)
-
-<details>
-<summary><b>macOS</b></summary>
-
-```bash
-# Install Homebrew (if not already installed)
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# Install Xcode Command Line Tools (provides git, compilers, etc.)
-xcode-select --install
-
-# Install Git (if not included in Xcode tools)
-brew install git
-```
-
-**Verify:**
-```bash
-brew --version                      # Should show Homebrew version
-git --version                       # Should show Git version
-```
-</details>
-
-<details>
-<summary><b>Linux (Ubuntu/Debian)</b></summary>
+## Installation
 
 ```bash
-# Update package lists
-sudo apt-get update
-
-# Install Git and build essentials
-sudo apt-get install -y git build-essential curl
+conda env create -f environment.yml
+conda activate tribench
+pip install -e .
+tribench --version
 ```
-
-**Verify:**
-```bash
-git --version                       # Should show Git version
-```
-</details>
-
-<details>
-<summary><b>Windows</b></summary>
-
-TriBench runs on Windows via **WSL2 (Windows Subsystem for Linux)**:
-
-```powershell
-# Install WSL2 (run in PowerShell as Administrator)
-wsl --install
-
-# Install Ubuntu from Microsoft Store
-# Then open Ubuntu terminal and follow Linux instructions above
-```
-
-All commands should be run inside the WSL2 Ubuntu terminal.
-</details>
-
----
-
-### Backend-Specific Dependencies
-
-Before setting up TriBench, install the required backend tools for your platform:
-
-#### Required: Docker Backend
-
-<details>
-<summary><b>macOS</b></summary>
-
-```bash
-brew install --cask docker          # Docker Desktop (includes Docker Compose)
-```
-
-**Verify:**
-```bash
-docker --version                    # Should show Docker version
-docker compose version              # Should show Docker Compose version
-```
-</details>
-
-<details>
-<summary><b>Linux (Ubuntu/Debian)</b></summary>
-
-```bash
-# Install Docker Engine
-sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-sudo apt-get update
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-
-# Add your user to docker group (to run without sudo)
-sudo usermod -aG docker $USER
-newgrp docker
-
-# Install Docker Compose
-sudo apt-get install -y docker-compose
-```
-
-**Verify:**
-```bash
-docker --version                    # Should show Docker version
-docker compose version              # Should show Docker Compose version
-```
-</details>
-
-<details>
-<summary><b>Windows (WSL2)</b></summary>
-
-```bash
-# Install Docker Desktop for Windows from: https://docs.docker.com/desktop/install/windows-install/
-# Enable WSL2 integration in Docker Desktop settings
-
-# Inside WSL2 Ubuntu terminal, verify:
-docker --version                    # Should show Docker version
-docker compose version              # Should show Docker Compose version
-```
-</details>
-
----
-
-#### Optional: Kubernetes Backend
-
-<details>
-<summary><b>macOS</b></summary>
-
-```bash
-brew install kubectl                # Kubernetes CLI
-brew install helm                   # Helm package manager for Kubernetes
-brew install kind                   # Kind (Kubernetes in Docker) - for local development
-```
-
-**Verify:**
-```bash
-kubectl version --client            # Should show kubectl version
-helm version                        # Should show Helm version
-kind --version                      # Should show Kind version
-```
-</details>
-
-<details>
-<summary><b>Linux (Ubuntu/Debian)</b></summary>
-
-```bash
-# Install kubectl
-curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-
-# Install Helm
-curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
-sudo apt-get update
-sudo apt-get install -y helm
-
-# Install Kind (Kubernetes in Docker)
-curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
-chmod +x ./kind
-sudo mv ./kind /usr/local/bin/kind
-```
-
-**Verify:**
-```bash
-kubectl version --client            # Should show kubectl version
-helm version                        # Should show Helm version
-kind --version                      # Should show Kind version
-```
-</details>
-
-<details>
-<summary><b>Windows (WSL2)</b></summary>
-
-```bash
-# Inside WSL2 Ubuntu terminal, follow Linux instructions above
-# Or use kubectl/helm from Docker Desktop (automatically available in WSL2)
-
-# Verify:
-kubectl version --client            # Should show kubectl version
-helm version                        # Should show Helm version
-```
-</details>
-
----
-
-#### Optional: Cloud Deployments (GCP/GKE)
-
-<details>
-<summary><b>macOS</b></summary>
-
-```bash
-brew install --cask google-cloud-sdk  # gcloud CLI for GCP
-```
-</details>
-
-<details>
-<summary><b>Linux (Ubuntu/Debian)</b></summary>
-
-```bash
-# Install gcloud SDK
-echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
-curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
-sudo apt-get update && sudo apt-get install -y google-cloud-cli
-```
-</details>
-
-<details>
-<summary><b>Windows (WSL2)</b></summary>
-
-```bash
-# Inside WSL2, follow Linux instructions above
-```
-</details>
-
----
-
-#### Optional: MinIO Client (S3 Operations)
-
-<details>
-<summary><b>macOS</b></summary>
-
-```bash
-brew install minio/stable/mc        # MinIO Client for S3 operations
-```
-</details>
-
-<details>
-<summary><b>Linux (Ubuntu/Debian)</b></summary>
-
-```bash
-curl https://dl.min.io/client/mc/release/linux-amd64/mc -o mc
-chmod +x mc
-sudo mv mc /usr/local/bin/mc
-```
-</details>
-
-<details>
-<summary><b>Windows (WSL2)</b></summary>
-
-```bash
-# Inside WSL2, follow Linux instructions above
-```
-</details>
 
 ## Quick Start
 
-> **Note:** All commands below work identically on Linux, macOS, and Windows (WSL2). Make sure you've completed the [Prerequisites](#prerequisites) for your platform.
-
-1. **Setup Environment:**
-   ```bash
-   # Setup Python environment with Conda (https://docs.conda.io/en/latest/miniconda.html)
-   conda env create -f environment.yml
-   conda activate tribench
-   
-   # Install TriBench in development mode
-   pip install -e .
-   
-   # Verify installation
-   tribench --version
-   ```
-
-2. **Configure Backend (Docker or Kubernetes):**
-   
-   TriBench supports both Docker Compose and Kubernetes backends. Configure your preferred backend once:
-   
-   ```bash
-   # For local development (Docker Compose - default)
-   tribench config profile local
-   
-   # For local Kubernetes (kind cluster)
-   tribench config profile kind
-   
-   # For GCP/GKE deployments
-   tribench config profile gcp-gke
-   
-   # Check active configuration
-   tribench config show
-   ```
-   
-   The backend configuration is stored in `config/hosts/<profile>.conf` and controls:
-   - System deployment method (Docker Compose vs Kubernetes)
-   - Connection endpoints and ports
-   - Resource allocation settings
-   
-   **Note:** All commands (`sys`, `data`, `exp`, `suite`) automatically use the configured backend.
-
-3. **Configure Systems:**
-   ```bash
-   # Setup infrastructure for Iceberg support
-   tribench sys setup postgresql
-   tribench sys setup minio
-   tribench sys setup hive-metastore
-   
-   # Setup and start Trino with Iceberg catalog
-   tribench sys setup trino
-   tribench sys start trino
-   
-   # Check system status
-   tribench sys status trino
-   tribench sys status hive-metastore
-   ```
-
-4. **Run Benchmark:**
-   ```bash
-   # Execute an experiment
-   tribench exp run experiments/tpch-sf1.yaml
-   
-   # Run with dry-run mode
-   tribench exp run experiments/tpch-sf1.yaml --dry-run
-   
-   # Run with multiple iterations
-   tribench exp run experiments/tpch-sf1.yaml --runs 3 --warmup 1
-   ```
-
-5. **Analyze Results:**
-   ```bash
-   # Show experiment results
-   tribench res show exp-001
-   
-   # List all results
-   tribench res list
-   
-   # Analyze suite results
-   tribench res analyze tpch-sf1 --report detailed
-   
-   # Export results
-   tribench res export exp-001 --format csv
-   ```
-
-## Command Line Interface
-
-TriBench provides a comprehensive CLI with the following command groups:
-
-### System Management (`sys`)
 ```bash
-tribench sys setup <system>      # Setup a system (trino, postgresql, minio, hive-metastore)
-tribench sys start <system>      # Start a system
-tribench sys stop <system>       # Stop a system
-tribench sys status <system>     # Check system status
-tribench sys teardown <system>   # Tear down a system
-tribench sys logs <system>       # View system logs
+# 1. Create and activate a bundle
+tribench bundle create my-benchmark
+tribench bundle set my-benchmark
+
+# 2. Start the lakehouse stack (Docker)
+tribench config profile docker
+tribench sys start all
+
+# 3. Generate and load a dataset (TPC-DS requires generation; TPC-H loads directly)
+tribench data generate tpcds-sf1 --format parquet
+tribench data load tpch-sf1 --schema tpch_sf1
+
+# For custom datasets: place Parquet files inside a named folder under datasets/
+# (either inside the active bundle or the framework root), then run:
+tribench data load my_dataset --schema my_schema
+
+# 4. Run an experiment
+tribench exp run experiments/tpch-all.yaml
+
+# 5. View results
+tribench res show
+tribench res export --format csv
 ```
-
-### Experiment Execution (`exp`)
-```bash
-tribench exp run <file>          # Execute an experiment
-tribench exp list                # List available experiments
-tribench exp status <id>         # Check experiment status
-tribench exp cancel <id>         # Cancel running experiment
-tribench exp config <file>       # Show experiment configuration
-```
-
-### Experiment Suites (`suite`)
-```bash
-tribench suite run <file>        # Execute all experiments in a suite
-tribench suite list              # List available experiment suites
-tribench suite show <file>       # Show suite details and configuration
-```
-
-### Dataset Management (`data`)
-```bash
-tribench data generate <dataset> # Generate a dataset (tpch-sf1, etc.)
-tribench data load <dataset>     # Load dataset into system
-tribench data load-iceberg <dataset>  # Load dataset into Iceberg tables
-tribench data list               # List available datasets
-tribench data info <dataset>     # Show dataset information
-tribench data validate <dataset> # Validate dataset integrity
-tribench data validate-iceberg   # Validate Iceberg tables
-```
-
-### Result Analysis (`res`)
-```bash
-tribench res show <id>           # Show experiment results
-tribench res list                # List all results
-tribench res compare <ids...>    # Compare multiple results
-tribench res export <id>         # Export results to file
-tribench res analyze <suite>     # Analyze suite results
-tribench res delete <id>         # Delete experiment results
-```
-
-### Common Options
-```bash
---dry-run                        # Show what would be done without executing
---verbose, -v                    # Enable verbose output
---config, -c <file>              # Specify configuration file
---help                           # Show command help
-```
-
-### Examples
-
-```bash
-# Setup infrastructure stack for Iceberg
-tribench sys setup postgresql --dry-run
-tribench sys setup minio
-tribench sys setup hive-metastore
-tribench sys start postgresql
-tribench sys start minio
-tribench sys start hive-metastore
-
-# Setup and start Trino with Iceberg catalog
-tribench sys setup trino --version 434 --dry-run
-tribench sys start trino --verbose
-
-# Generate and load TPC-H data into Iceberg
-tribench data generate tpch-sf1 --format parquet
-tribench data load-iceberg tpch-sf1 --catalog iceberg --schema tpch
-tribench data load-iceberg tpch-sf1 --no-partition --validate
-tribench data validate-iceberg --scale-factor 1 --detailed
-
-# View Iceberg dataset metadata
-tribench data list
-tribench data info tpch-sf1-iceberg
-tribench data info tpch-sf1-iceberg --detailed
-
-# Run individual experiments
-tribench exp run experiments/tpch-sf1.yaml --runs 3
-tribench exp status exp-001 --follow
-
-# Run experiment suites
-tribench suite run experiments/suites/tpch-suite.yaml
-tribench suite run experiments/suites/tpch-suite.yaml --runs 5 --timeout 600
-tribench suite run experiments/suites/tpch-suite.yaml --filter "q1,q6" --dry-run
-tribench suite show experiments/suites/tpch-suite.yaml
-
-# Analyze results
-tribench res compare exp-001 exp-002 exp-003
-tribench res analyze tpch-sf1 --report performance --plot
-tribench res export exp-001 --format json --output results.json
-
-# System management
-tribench sys status trino
-tribench sys logs hive-metastore --tail 50
-tribench sys stop trino
-tribench sys teardown minio
-```
-
-## Supported Systems
-
-- **Apache Trino**: Distributed SQL query engine (v434+)
-- **Apache Iceberg**: Open table format for data lakehouses with full integration
-- **Apache Hive Metastore**: Catalog service for Iceberg table metadata (v4.0.0)
-- **MinIO**: S3-compatible object storage for Iceberg table data
-- **PostgreSQL**: Metastore backend and results database (v15)
-- **Grafana**: Monitoring and visualization (optional)
-
-## Supported Benchmarks
-
-- **TPC-H**: Decision support benchmark
-- **TPC-DS**: Data warehousing benchmark  
-- **Custom SQL**: User-defined workloads
-- **Microbenchmarks**: Individual query performance tests
-
-## Key Features
-
-- **Structured Experiment Definition**: YAML-based experiment configurations
-- **Experiment Suites**: Group related experiments with shared configuration defaults
-- **Configuration Hierarchy**: Environment variables → Config files → Defaults
-- **Cloud-Agnostic Deployment**: Works on Kind (local), GKE, AKS, EKS without code changes
-- **Environment Management**: Host-specific configurations and system lifecycle
-- **Apache Iceberg Integration**: Full support for Iceberg tables with metadata tracking
-  - Automated catalog configuration with Hive Metastore
-  - Data loading from Parquet to Iceberg format
-  - Snapshot and versioning support
-  - Comprehensive validation framework
-  - Registry-based metadata persistence
-- **Resource Monitoring**: CPU, memory, I/O, and network usage tracking
-- **Kubernetes Monitoring**: Pod-level metrics collection for cloud deployments
-- **Result Storage**: Structured storage in databases for analysis
-- **Reproducibility**: Version-controlled bundles for sharing
-- **Extensibility**: Plugin architecture for custom benchmarks
 
 ## Configuration
 
-TriBench uses a hierarchical configuration system that allows deployment across different environments without code changes.
+Parameters are resolved through four layers, each overriding the one below:
 
-### Configuration Priority
+| Layer | File | Purpose |
+|---|---|---|
+| 1 | `config/reference.conf` | Framework defaults — do not edit |
+| 2 | `config/hosts/<profile>.conf` | Machine-specific settings (backend, heap, cluster address) |
+| 3 | `experiments/<name>.yaml` | Workload settings (runs, timeout, queries) |
+| 4 | CLI flags / env vars | Per-run overrides |
 
-Values are resolved in this order (highest to lowest):
+Switch deployment environment by changing the active profile. TriBench ships with example profiles in `config/hosts/` that can be used as-is or adapted as a starting point for your own environment:
 
-1. **Environment Variables** (highest priority)
-2. **Configuration Files** (via `--config` flag)
-3. **Hardcoded Defaults** (fallback)
-
-### Environment Variables
-
-**Kubernetes Configuration:**
 ```bash
-# Override Kubernetes context
-export TRIBENCH_K8S_CONTEXT="gke_tribench_us-central1-a_tribench-cluster"
-
-# Override namespace
-export TRIBENCH_K8S_NAMESPACE="production"
+tribench config profile set docker          # local Docker Compose
+tribench config profile set gpg-multinode   # bare-metal Kubernetes
+tribench config profile set gcp-gke-4w      # GKE, 4 workers
 ```
 
-**Quick Examples:**
-```bash
-# Local development (Docker Compose - default)
-tribench config profile local
-tribench sys setup all
+## Bundles
 
-# Local Kubernetes (kind cluster)
-tribench config profile kind
-tribench sys setup all
+A bundle packages all experiment artefacts into a portable, self-contained directory:
 
-# Google Cloud (GKE)
-export TRIBENCH_K8S_CONTEXT="gke_tribench_us-central1-a_tribench-cluster"
-tribench config profile gcp-gke
-tribench sys setup all
-
-# Azure (AKS)
-export TRIBENCH_K8S_CONTEXT="aks-tribench-cluster"
-tribench config profile azure-aks
-tribench sys setup all
-
-# AWS (EKS)
-export TRIBENCH_K8S_CONTEXT="arn:aws:eks:us-east-1:123456789012:cluster/tribench"
-tribench config profile aws-eks
-tribench sys setup all
+```
+my-benchmark/
+├── bundle.yaml
+├── config/hosts/       # deployment profiles
+├── experiments/        # experiment YAML files
+├── apps/               # SQL query files
+├── datasets/           # dataset registry and files
+├── log/                # execution logs
+└── results/
+    └── tribench.db     # SQLite result database
 ```
 
-For complete configuration documentation, see [CONFIGURATION.md](docs/CONFIGURATION.md).
+All bundles used in the dissertation evaluation (`docker`, `gpg`, `gcp-1w`, `gcp-2w`, `gcp-4w`) are included in `bundles/`. The full datasets were removed from the repository due to size constraints. Small reference datasets (TPC-H SF0.01, TPC-DS SF0.01, and the custom e-commerce dataset) are included in `datasets/` and can be used to verify the setup.
 
-## Experiment Suites
+To reproduce an evaluation bundle, activate it and generate the datasets referenced by its experiments:
 
-TriBench supports grouping related experiments into suites with shared configuration:
+```bash
+tribench bundle set docker          # or gpg, gcp-4w, etc.
+tribench data generate tpch-sf1 --schema tpch_sf1
+tribench data generate tpcds-sf10 --schema tpcds_sf10
+```
+
+## CLI Reference
+
+| Group | Commands | Purpose |
+|---|---|---|
+| `bundle` | `create` `set` `archive` | Create, activate, and package bundles |
+| `sys` | `start` `stop` `setup` `teardown` `status` | Manage the lakehouse stack |
+| `data` | `generate` `load` `list` `info` | Generate and load datasets into Iceberg |
+| `exp` | `run` | Execute a single experiment |
+| `suite` | `run` `list` `show` | Run grouped experiment suites |
+| `result` | `show` `list` `export` `analyze` `delete` | Inspect and export results |
+| `config` | `profile` `show` `trace` | Switch profiles and inspect resolved config |
+
+### Experiment definition
 
 ```yaml
-# experiments/suites/tpch-suite.yaml
-name: tpch-suite
-description: TPC-H benchmark queries with suite-level defaults
-
-defaults:
-  system: trino
-  runs: 3
-  warmup_runs: 1
-  timeout_seconds: 300
-  validation:
-    min_success_rate: 0.95
-
-experiments:
-  - path: ../tpch-q1-tiny.yaml
-    # Uses all suite defaults
-  
-  - path: ../test-simple.yaml
-    timeout_seconds: 60  # Override just this field
-  
-  - path: ../tpch-q1-sf1.yaml
-    runs: 10  # More runs for larger dataset
-    warmup_runs: 2
+name: "tpch-sf1"
+system: "trino"
+connection:
+  host: "localhost"
+  port: 8080
+  catalog: "iceberg"
+  schema: "tpch_sf1"
+runs: 3
+warmup_runs: 1
+timeout_seconds: 60
+monitoring:
+  enabled: true
+  interval_seconds: 2.0
+query_files:
+  - "queries/tpch/queries/q01.sql"
+validation:
+  min_success_rate: 0.95
 ```
 
-**Configuration Precedence** (highest precedence last):
-1. Global defaults (in framework)
-2. Suite defaults (from suite YAML)
-3. Experiment YAML (individual experiment file)
-4. CLI overrides (command-line flags)
-
-**Running Suites**:
-```bash
-# Run all experiments in suite
-tribench suite run experiments/suites/tpch-suite.yaml
-
-# Override suite/experiment settings via CLI (applies to all experiments)
-tribench suite run experiments/suites/tpch-suite.yaml --runs 10 --timeout 1200
-
-# Run only specific experiments from suite
-tribench suite run experiments/suites/tpch-suite.yaml --filter "q1,q6,q17"
-
-# Preview configuration without execution
-tribench suite run experiments/suites/tpch-suite.yaml --dry-run
-```
-
-See `CONFIG_HIERARCHY.md` for complete documentation on configuration merging behavior.
-
-## Apache Iceberg Integration
-
-TriBench provides comprehensive support for Apache Iceberg tables with full metadata tracking and versioning capabilities.
-
-### Infrastructure Stack
-
-The Iceberg integration consists of four interconnected systems:
-
-```
-Trino (Query Engine)
-  ↓ queries
-Iceberg Catalog (Hive Metastore)
-  ↓ metadata storage         ↓ data location
-PostgreSQL                 MinIO (S3A)
-  (table schemas,            (Parquet files,
-   partitions,               data files,
-   statistics)               manifest files)
-```
-
-### Setup Iceberg Infrastructure
+### Analysis commands
 
 ```bash
-# 1. Setup PostgreSQL (Metastore backend)
-tribench sys setup postgresql
-tribench sys start postgresql
-
-# 2. Setup MinIO (Object storage)
-tribench sys setup minio
-tribench sys start minio
-
-# 3. Setup Hive Metastore (Iceberg catalog)
-tribench sys setup hive-metastore
-tribench sys start hive-metastore
-
-# 4. Setup Trino (automatically configures Iceberg catalog)
-tribench sys setup trino
-tribench sys start trino
-
-# Verify all systems are running
-tribench sys status postgresql
-tribench sys status minio
-tribench sys status hive-metastore
-tribench sys status trino
+tribench res analyze statistics  <run-id>              # mean, median, P95, P99 per query
+tribench res analyze performance <run-id>              # throughput and per-query breakdown
+tribench res analyze compare     <run-id-a> <run-id-b> # t-test comparison between two runs
+tribench res analyze scalability <run-id-a> <run-id-b> # speed-up and parallel efficiency
+tribench res analyze regression  <run-id-a> <run-id-b> # regression detection with severity
 ```
 
-### Loading Data into Iceberg
+## Kubernetes Deployment
+
+For step-by-step deployment guides see:
+
+- [GPG bare-metal cluster](docs/GPG/GPG_DEPLOYMENT.md)
+- [Google Kubernetes Engine (GKE)](docs/GKE/GCP_DEPLOYMENT.md)
+
+## Testing
 
 ```bash
-# Generate TPC-H dataset in Parquet format (if not already generated)
-tribench data generate tpch-sf0.01 --format parquet
-
-# Load into Iceberg tables
-tribench data load-iceberg tpch-tiny \
-  --catalog iceberg \
-  --schema tpch \
-  --no-partition \
-  --validate
-
-# Options:
-#   --catalog: Iceberg catalog name (default: iceberg)
-#   --schema: Schema/database name (default: tpch)
-#   --storage: Custom S3 location (optional)
-#   --partition: Enable partitioning for large tables (default: true)
-#   --no-partition: Disable partitioning (recommended for small datasets)
-#   --validate: Validate tables after loading
+pytest                  # run all 267 unit tests
+pytest --cov=lib/       # with coverage report
 ```
-
-### Viewing Iceberg Metadata
-
-```bash
-# List all datasets (shows both Parquet and Iceberg)
-tribench data list
-
-# View Iceberg dataset metadata
-tribench data info tpch-tiny-iceberg
-
-# Output includes:
-#   - Catalog and schema information
-#   - Iceberg format version (v1 or v2)
-#   - Snapshot IDs and timestamps for each table
-#   - Manifest file counts
-#   - Storage location
-#   - Row counts per table
-
-# View detailed metadata
-tribench data info tpch-tiny-iceberg --detailed
-```
-
-### Validating Iceberg Tables
-
-```bash
-# Validate all tables for a scale factor
-tribench data validate-iceberg --scale-factor tiny
-
-# Validate specific tables
-tribench data validate-iceberg \
-  --scale-factor 1 \
-  --tables customer,orders,lineitem \
-  --detailed
-
-# Validation checks:
-#   - Table existence in catalog
-#   - Row count accuracy
-#   - Schema integrity
-#   - Iceberg metadata (snapshots, data files)
-```
-
-### Iceberg Features Supported
-
-- ✅ **Table Creation**: Automatic schema inference from Parquet
-- ✅ **Data Loading**: Batch inserts with configurable batch size
-- ✅ **Partitioning**: Optional partitioning for large tables
-- ✅ **Snapshots**: Automatic snapshot creation and tracking
-- ✅ **Metadata Tracking**: Registry-based persistence of Iceberg metadata
-- ✅ **Validation**: Comprehensive table and metadata validation
-- ✅ **Format Versions**: Support for Iceberg v1 and v2 tables
-- ✅ **Storage**: S3-compatible storage via MinIO
-
-### Iceberg Dataset Registry
-
-Iceberg datasets are registered with comprehensive metadata:
-
-```yaml
-# Example: datasets/registry.yaml
-tpch-tiny-iceberg:
-  name: tpch-tiny-iceberg
-  format: iceberg
-  benchmark_type: tpch
-  scale_factor: 0.01
-  location: iceberg.tpch
-  iceberg_catalog: iceberg
-  iceberg_schema: tpch
-  format_version: 2
-  snapshot_ids:
-    customer: 5597780913108285715
-    lineitem: 4233068895913014946
-    # ... other tables
-  snapshot_timestamps:
-    customer: '2025-10-30 22:01:20.730000+00:00'
-    lineitem: '2025-10-30 22:04:25.263000+00:00'
-    # ... other tables
-  properties:
-    source_dataset: tpch-tiny
-    partitioned: false
-    storage_location: default
-```
-
-### Future Iceberg Features
-
-Planned enhancements for upcoming releases:
-
-- 🔄 **Time Travel**: Query historical snapshots
-- 🔄 **Schema Evolution**: Track and test schema changes
-- 🔄 **Partition Evolution**: Test partition strategy changes
-- 🔄 **Compaction**: Optimize file layouts
-- 🔄 **Metadata Refresh**: Update registry with current snapshot state
-- 🔄 **Snapshot Comparison**: Diff between snapshots
-
-## Development Status
-
-This framework is currently under development as part of a dissertation project on benchmarking SQL workloads on distributed data lakehouses.
 
 ## License
 
